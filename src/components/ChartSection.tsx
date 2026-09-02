@@ -1,350 +1,252 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ArrowDown,
-  ArrowUp,
-  BarChart3,
-  ChevronDown,
-  Layers,
-  Maximize2,
-  TrendingDown,
   TrendingUp,
+  TrendingDown,
+  Maximize2,
+  Minimize2,
+  LineChart,
+  Compass,
+  CheckCircle2,
+  Clock,
+  Layers,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
-import { KlineCandle, OrderBook, PositionRisk, TickerData } from '../types/binance';
+import { strategyService } from '../services/strategyService';
+import { TickerData } from '../types/binance';
+import { GoogleSheetStrategyRow } from '../types/strategy';
+import { TradingViewWidget } from './TradingViewWidget';
+
+interface TimeframeOption {
+  label: string;
+  value: string;
+  isDefault?: boolean;
+}
+
+const TIMEFRAMES: TimeframeOption[] = [
+  { label: '15m', value: '15' },
+  { label: '1H', value: '60' },
+  { label: '4H (Default)', value: '240', isDefault: true },
+  { label: '1D', value: 'D' },
+  { label: '1W', value: 'W' },
+];
 
 export const ChartSection: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
   const [ticker, setTicker] = useState<TickerData>(binanceWs.getTicker());
-  const [candles, setCandles] = useState<KlineCandle[]>(binanceWs.getCandles());
-  const [orderBook, setOrderBook] = useState<OrderBook>(binanceWs.getOrderBook());
-  const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
-  const [timeframe, setTimeframe] = useState<string>('1m');
-  const [showOrderBook, setShowOrderBook] = useState<boolean>(true);
-  const [hoverData, setHoverData] = useState<{ price: number; time: string } | null>(null);
+  const [activeStrategy, setActiveStrategy] = useState<GoogleSheetStrategyRow | undefined>(
+    strategyService.getActiveStrategy()
+  );
+  const [allStrategies, setAllStrategies] = useState<GoogleSheetStrategyRow[]>(
+    strategyService.getStrategies()
+  );
+  const [timeframe, setTimeframe] = useState<string>('240'); // 4H default as instructed
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   useEffect(() => {
-    const unsub = binanceWs.subscribe(() => {
+    const unsubWs = binanceWs.subscribe(() => {
       setTicker(binanceWs.getTicker());
-      setCandles(binanceWs.getCandles());
-      setOrderBook(binanceWs.getOrderBook());
-      setPositions(binanceWs.getPositions());
     });
-    return () => unsub();
+
+    const unsubStrat = strategyService.subscribe(() => {
+      setActiveStrategy(strategyService.getActiveStrategy());
+      setAllStrategies(strategyService.getStrategies());
+    });
+
+    return () => {
+      unsubWs();
+      unsubStrat();
+    };
   }, []);
 
-  // Responsive canvas resizing & rendering loop
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  // Symbol derived from active strategy or binanceWs current symbol
+  const currentSymbol = activeStrategy?.par || ticker.symbol || 'ZECUSDT';
+  const isPositive = (ticker.priceChangePercent ?? 0) >= 0;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const render = () => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      ctx.scale(dpr, dpr);
-
-      const width = rect.width;
-      const height = rect.height;
-
-      // Background
-      ctx.fillStyle = '#0a0a0a';
-      ctx.fillRect(0, 0, width, height);
-
-      if (candles.length === 0) return;
-
-      // Calculate price domain
-      const visibleCandles = candles.slice(-60);
-      let minPrice = Infinity;
-      let maxPrice = -Infinity;
-      let maxVol = 0;
-
-      visibleCandles.forEach(c => {
-        if (c.low < minPrice) minPrice = c.low;
-        if (c.high > maxPrice) maxPrice = c.high;
-        if (c.volume > maxVol) maxVol = c.volume;
-      });
-
-      // Price buffer
-      const padding = (maxPrice - minPrice) * 0.1 || 10;
-      minPrice -= padding;
-      maxPrice += padding;
-      const priceRange = maxPrice - minPrice;
-
-      // Dimensions
-      const chartHeight = height * 0.75;
-      const volumeHeight = height * 0.2;
-      const volumeTop = chartHeight + height * 0.05;
-
-      const candleSpacing = width / visibleCandles.length;
-      const candleWidth = Math.max(2, candleSpacing * 0.7);
-
-      // Draw horizontal price gridlines
-      ctx.strokeStyle = '#262626';
-      ctx.lineWidth = 1;
-      ctx.font = '10px JetBrains Mono, monospace';
-      ctx.fillStyle = '#737373';
-      ctx.textAlign = 'right';
-
-      const gridSteps = 5;
-      for (let i = 0; i <= gridSteps; i++) {
-        const p = minPrice + (priceRange * i) / gridSteps;
-        const y = chartHeight - ((p - minPrice) / priceRange) * chartHeight;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(width - 55, y);
-        ctx.stroke();
-        ctx.fillText(`$${p.toFixed(2)}`, width - 8, y + 3);
-      }
-
-      // Draw Candlesticks & Volume
-      visibleCandles.forEach((c, idx) => {
-        const x = idx * candleSpacing + candleSpacing / 2;
-        const isUp = c.close >= c.open;
-        const color = isUp ? '#10b981' : '#f43f5e'; // Emerald & Rose
-
-        // Volume Bar
-        const vHeight = maxVol > 0 ? (c.volume / maxVol) * volumeHeight : 0;
-        ctx.fillStyle = isUp ? 'rgba(16, 185, 129, 0.25)' : 'rgba(244, 63, 94, 0.25)';
-        ctx.fillRect(x - candleWidth / 2, height - vHeight, candleWidth, vHeight);
-
-        // Candlestick Wick
-        const yHigh = chartHeight - ((c.high - minPrice) / priceRange) * chartHeight;
-        const yLow = chartHeight - ((c.low - minPrice) / priceRange) * chartHeight;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(x, yHigh);
-        ctx.lineTo(x, yLow);
-        ctx.stroke();
-
-        // Candlestick Body
-        const yOpen = chartHeight - ((c.open - minPrice) / priceRange) * chartHeight;
-        const yClose = chartHeight - ((c.close - minPrice) / priceRange) * chartHeight;
-        const bodyTop = Math.min(yOpen, yClose);
-        const bodyHeight = Math.max(1.5, Math.abs(yOpen - yClose));
-
-        ctx.fillStyle = color;
-        ctx.fillRect(x - candleWidth / 2, bodyTop, candleWidth, bodyHeight);
-      });
-
-      // Current Price Line
-      const currentPriceY = chartHeight - ((ticker.lastPrice - minPrice) / priceRange) * chartHeight;
-      if (currentPriceY >= 0 && currentPriceY <= chartHeight) {
-        ctx.strokeStyle = '#f59e0b'; // Amber
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(0, currentPriceY);
-        ctx.lineTo(width - 60, currentPriceY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Tag
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillRect(width - 60, currentPriceY - 9, 58, 18);
-        ctx.fillStyle = '#0a0a0a';
-        ctx.font = 'bold 10px JetBrains Mono, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(ticker.lastPrice.toFixed(2), width - 31, currentPriceY + 3);
-      }
-
-      // Draw Open Position Overlay
-      const currentPos = positions.find(p => p.symbol === ticker.symbol);
-      if (currentPos && currentPos.entryPrice) {
-        const entryY = chartHeight - ((currentPos.entryPrice - minPrice) / priceRange) * chartHeight;
-        if (entryY >= 0 && entryY <= chartHeight) {
-          ctx.strokeStyle = '#3b82f6'; // Blue
-          ctx.setLineDash([2, 2]);
-          ctx.lineWidth = 1.2;
-          ctx.beginPath();
-          ctx.moveTo(0, entryY);
-          ctx.lineTo(width - 60, entryY);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          ctx.fillStyle = '#3b82f6';
-          ctx.fillRect(width - 60, entryY - 8, 58, 16);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '9px JetBrains Mono, monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText(`ENT $${currentPos.entryPrice.toFixed(1)}`, width - 31, entryY + 4);
-        }
-
-        // Draw Liquidation Price Line
-        if (currentPos.liquidationPrice) {
-          const liqY = chartHeight - ((currentPos.liquidationPrice - minPrice) / priceRange) * chartHeight;
-          if (liqY >= 0 && liqY <= chartHeight) {
-            ctx.strokeStyle = '#e11d48'; // Bright red
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.moveTo(0, liqY);
-            ctx.lineTo(width - 60, liqY);
-            ctx.stroke();
-
-            ctx.fillStyle = '#e11d48';
-            ctx.fillRect(width - 60, liqY - 8, 58, 16);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 9px JetBrains Mono, monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(`LIQ $${currentPos.liquidationPrice.toFixed(1)}`, width - 31, liqY + 4);
-          }
-        }
-      }
-    };
-
-    render();
-
-    const handleResize = () => render();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [candles, ticker, positions]);
-
-  const priceColor = ticker.change24h >= 0 ? 'text-emerald-400' : 'text-rose-400';
-  const spread = ticker.bestAsk && ticker.bestBid ? (ticker.bestAsk - ticker.bestBid).toFixed(2) : '1.00';
+  const handleSelectStrategy = (strat: GoogleSheetStrategyRow) => {
+    strategyService.setActiveStrategyById(strat.noEstrategia);
+  };
 
   return (
-    <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-xl overflow-hidden flex flex-col">
-      {/* Top Bar: Symbol Ticker Stats & Timeframe */}
-      <div className="p-3 border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-3 bg-neutral-900">
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Symbol & Price */}
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-base font-bold text-white tracking-wide">{ticker.symbol}</h2>
-            <span className={`text-xl font-bold font-mono ${priceColor}`}>
-              ${ticker.lastPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    <div
+      id="tradingview_chart_section"
+      className={`bg-neutral-900/90 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl flex flex-col transition-all duration-200 ${
+        isExpanded ? 'fixed inset-3 z-50 bg-neutral-950/98 max-w-none' : ''
+      }`}
+    >
+      {/* Chart Header Bar */}
+      <div className="bg-neutral-950 px-4 py-3 border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-3">
+        {/* Symbol & Active Strategy Info */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-base sm:text-lg font-bold font-mono tracking-tight text-neutral-100 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              {currentSymbol}
             </span>
-            <span className={`flex items-center text-xs font-mono font-medium ${priceColor}`}>
-              {ticker.change24h >= 0 ? '+' : ''}{ticker.change24hPercent.toFixed(2)}%
+            <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              PERPETUAL
+            </span>
+            <span className="hidden sm:inline-flex text-[11px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
+              TradingView 4H
             </span>
           </div>
 
-          <div className="hidden sm:flex items-center gap-4 text-xs font-mono text-neutral-400">
-            <div>
-              <span className="text-neutral-400 block text-[10px]">24h Alto</span>
-              <span className="text-neutral-200">${ticker.high24h.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div>
-              <span className="text-neutral-400 block text-[10px]">24h Bajo</span>
-              <span className="text-neutral-200">${ticker.low24h.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div>
-              <span className="text-neutral-400 block text-[10px]">24h Vol (USDT)</span>
-              <span className="text-neutral-200">${(ticker.volume24h * ticker.lastPrice / 1000000).toFixed(1)}M</span>
-            </div>
-            <div>
-              <span className="text-neutral-400 block text-[10px]">Mark / Index</span>
-              <span className="text-amber-400">${ticker.markPrice.toFixed(2)}</span>
-            </div>
+          {/* Live Price Display */}
+          <div className="flex items-baseline gap-2 border-l border-neutral-800 pl-3">
+            <span
+              className={`font-mono text-base sm:text-lg font-bold tracking-tight transition-colors ${
+                isPositive ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              ${ticker.lastPrice > 0 ? ticker.lastPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : '---'}
+            </span>
+            <span
+              className={`text-xs font-mono flex items-center gap-0.5 ${
+                isPositive ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {isPositive ? '+' : ''}
+              {ticker.priceChangePercent ? ticker.priceChangePercent.toFixed(2) : '0.00'}%
+            </span>
           </div>
         </div>
 
-        {/* Timeframes & Toggle Orderbook */}
+        {/* 24h Stats Mini Chips */}
+        <div className="hidden md:flex items-center gap-4 text-xs font-mono text-neutral-400">
+          <div>
+            <span className="text-neutral-500 text-[10px] block">24h Alto</span>
+            <span className="text-neutral-200">
+              ${ticker.highPrice ? ticker.highPrice.toLocaleString() : '---'}
+            </span>
+          </div>
+          <div>
+            <span className="text-neutral-500 text-[10px] block">24h Bajo</span>
+            <span className="text-neutral-200">
+              ${ticker.lowPrice ? ticker.lowPrice.toLocaleString() : '---'}
+            </span>
+          </div>
+          <div>
+            <span className="text-neutral-500 text-[10px] block">Volumen 24h</span>
+            <span className="text-neutral-200">
+              {ticker.volume ? ticker.volume.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '---'}
+            </span>
+          </div>
+        </div>
+
+        {/* Controls: Timeframe selector (Default 4H) & Fullscreen Toggle */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs">
-            {['1m', '5m', '15m', '1h', '4h', '1D'].map(tf => (
-              <button
-                key={tf}
-                onClick={() => setTimeframe(tf)}
-                className={`px-2 py-0.5 rounded font-mono text-xs transition-colors ${
-                  timeframe === tf ? 'bg-neutral-800 text-amber-400 font-bold' : 'text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                {tf}
-              </button>
-            ))}
+          {/* Timeframe Buttons */}
+          <div className="flex items-center bg-neutral-900 rounded-lg p-0.5 border border-neutral-800 text-xs font-mono">
+            {TIMEFRAMES.map(tf => {
+              const isActive = timeframe === tf.value;
+              return (
+                <button
+                  key={tf.value}
+                  id={`tf-btn-${tf.value}`}
+                  onClick={() => setTimeframe(tf.value)}
+                  className={`px-2.5 py-1 rounded transition-all whitespace-nowrap text-xs ${
+                    isActive
+                      ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/40 shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
+                  }`}
+                  title={tf.isDefault ? 'Temporalidad por defecto (4H)' : `Cambiar a ${tf.label}`}
+                >
+                  {tf.label}
+                </button>
+              );
+            })}
           </div>
 
+          {/* Expand/Collapse Screen */}
           <button
-            onClick={() => setShowOrderBook(!showOrderBook)}
-            className={`px-2 py-1 rounded-lg border text-xs font-medium flex items-center gap-1 transition-colors ${
-              showOrderBook
-                ? 'bg-neutral-800 text-amber-300 border-neutral-700'
-                : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-neutral-200'
-            }`}
-            title="Mostrar / Ocultar Libro de Órdenes"
+            id="expand-chart-btn"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 transition-colors"
+            title={isExpanded ? 'Reducir gráfico' : 'Pantalla completa'}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">Libro</span>
+            {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
           </button>
         </div>
       </div>
 
-      {/* Main Area: Canvas Chart + Mini Orderbook */}
-      <div className="flex flex-col lg:flex-row h-[420px] w-full relative">
-        {/* Candlestick Canvas */}
-        <div ref={containerRef} className="flex-1 h-full relative bg-neutral-950">
-          <canvas ref={canvasRef} className="w-full h-full block" />
-
-          {/* Quick Indicator Tag in Chart */}
-          <div className="absolute top-3 left-3 flex items-center gap-2 pointer-events-none">
-            <span className="px-2 py-0.5 rounded bg-neutral-900/80 border border-neutral-800 text-[11px] font-mono text-neutral-400">
-              MA(7) • MA(25) • Vol
-            </span>
-            <span className="px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-800/80 text-[11px] font-mono text-emerald-400">
-              ● Live WS Ticks
-            </span>
-          </div>
+      {/* Active Strategy Context Bar */}
+      <div className="bg-neutral-950/70 px-4 py-2 border-b border-neutral-800/50 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-1 text-amber-400 font-mono font-medium">
+            <Compass size={13} />
+            Estrategia en Revisión:
+          </span>
+          {activeStrategy ? (
+            <div className="flex items-center gap-2 font-mono">
+              <span className="px-2 py-0.5 rounded bg-neutral-800 text-amber-300 font-bold border border-neutral-700">
+                {activeStrategy.noEstrategia}
+              </span>
+              <span className="text-neutral-300 font-medium truncate max-w-[280px] sm:max-w-[450px]">
+                {activeStrategy.nombreDeEstrategia}
+              </span>
+              <span className="text-neutral-500 hidden sm:inline">•</span>
+              <span className="text-neutral-400 hidden sm:inline">
+                {activeStrategy.temporalidad || '4H'}
+              </span>
+            </div>
+          ) : (
+            <span className="text-neutral-500 font-mono">Seleccione una estrategia para sincronizar gráfico</span>
+          )}
         </div>
 
-        {/* Mini Orderbook / Depth Ladder */}
-        {showOrderBook && (
-          <div className="w-full lg:w-64 border-t lg:border-t-0 lg:border-l border-neutral-800/80 bg-neutral-950/90 flex flex-col justify-between p-2 text-xs font-mono select-none overflow-hidden">
-            <div className="flex items-center justify-between text-neutral-400 pb-1 border-b border-neutral-900 text-[11px]">
-              <span>Precio (USDT)</span>
-              <span>Tamaño</span>
-              <span>Total</span>
-            </div>
+        {/* Quick Strategy Switcher Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
+          <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider mr-1 hidden lg:inline">
+            Estrategias:
+          </span>
+          {allStrategies.map(strat => {
+            const isCurrent = strat.noEstrategia === activeStrategy?.noEstrategia;
+            const parBadge = strat.par.replace('USDT', '');
+            return (
+              <button
+                key={strat.noEstrategia}
+                id={`strat-chip-${strat.noEstrategia}`}
+                onClick={() => handleSelectStrategy(strat)}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all flex items-center gap-1 ${
+                  isCurrent
+                    ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 font-bold shadow-sm'
+                    : 'bg-neutral-800/80 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 border border-neutral-700/60'
+                }`}
+                title={`Revisar ${strat.noEstrategia}: ${strat.nombreDeEstrategia}`}
+              >
+                {isCurrent && <CheckCircle2 size={10} className="text-amber-400" />}
+                <span>{parBadge}</span>
+                <span className="text-[10px] text-neutral-400">({strat.noEstrategia})</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-            {/* Asks (Ventas - Red) */}
-            <div className="flex flex-col-reverse gap-0.5 overflow-hidden py-1">
-              {orderBook.asks.slice(0, 6).map((ask, i) => (
-                <div key={i} className="flex justify-between items-center relative py-0.5 text-[11px]">
-                  <div
-                    className="absolute right-0 top-0 bottom-0 bg-rose-500/10 pointer-events-none"
-                    style={{ width: `${Math.min(100, (ask.amount / 2) * 100)}%` }}
-                  />
-                  <span className="text-rose-400 font-semibold">${ask.price.toFixed(2)}</span>
-                  <span className="text-neutral-300">{ask.amount.toFixed(3)}</span>
-                  <span className="text-neutral-400">{ask.total.toFixed(3)}</span>
-                </div>
-              ))}
-            </div>
+      {/* Main TradingView Chart Container (No Order Book, 100% TradingView) */}
+      <div className="relative flex-1 w-full min-h-[500px] bg-neutral-950">
+        <TradingViewWidget
+          symbol={currentSymbol}
+          interval={timeframe}
+          theme="dark"
+          height={isExpanded ? 'calc(100vh - 110px)' : '520px'}
+        />
+      </div>
 
-            {/* Middle Spread Banner */}
-            <div className="py-1.5 px-2 my-1 rounded bg-neutral-900 border border-neutral-800 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className={`font-bold text-sm ${priceColor}`}>${ticker.lastPrice.toFixed(2)}</span>
-                {ticker.change24h >= 0 ? (
-                  <ArrowUp className="w-3.5 h-3.5 text-emerald-400" />
-                ) : (
-                  <ArrowDown className="w-3.5 h-3.5 text-rose-400" />
-                )}
-              </div>
-              <span className="text-[10px] text-neutral-400">Spread: ${spread}</span>
-            </div>
-
-            {/* Bids (Compras - Green) */}
-            <div className="flex flex-col gap-0.5 overflow-hidden py-1">
-              {orderBook.bids.slice(0, 6).map((bid, i) => (
-                <div key={i} className="flex justify-between items-center relative py-0.5 text-[11px]">
-                  <div
-                    className="absolute right-0 top-0 bottom-0 bg-emerald-500/10 pointer-events-none"
-                    style={{ width: `${Math.min(100, (bid.amount / 2) * 100)}%` }}
-                  />
-                  <span className="text-emerald-400 font-semibold">${bid.price.toFixed(2)}</span>
-                  <span className="text-neutral-300">{bid.amount.toFixed(3)}</span>
-                  <span className="text-neutral-400">{bid.total.toFixed(3)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+      {/* Footer Status Bar with Protocol Adherence */}
+      <div className="bg-neutral-950 px-4 py-1.5 border-t border-neutral-800/80 text-[11px] font-mono text-neutral-500 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-neutral-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            TradingView Advanced Real-Time Chart
+          </span>
+          <span>•</span>
+          <span>Símbolo: <strong className="text-neutral-300">BINANCE:{currentSymbol}</strong></span>
+          <span>•</span>
+          <span>Temporalidad: <strong className="text-amber-400 font-semibold">{timeframe === '240' ? '4 Horas (4H)' : timeframe}</strong></span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-neutral-400">Modo: Velas Japonesas + Herramientas de Análisis</span>
+        </div>
       </div>
     </div>
   );
