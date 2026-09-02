@@ -117,10 +117,13 @@ class BinanceWsEngine {
   private alerts: VolatilityAlert[] = [];
   private wsLogs: WsLogFrame[] = [];
 
-  // Production Real-Balance Sync state
+  // Production Real-Balance & Account Data Sync state
   private lastBalanceSyncTime: number = 0;
   private isFetchingBalance: boolean = false;
   private lastBalanceError: string | null = null;
+  private isSyncingData: boolean = false;
+  private lastDataSyncTime: number = 0;
+  private lastDataSyncError: string | null = null;
   private balanceSyncInterval: any = null;
 
   // Listeners
@@ -202,6 +205,11 @@ class BinanceWsEngine {
       if (savedAlerts) {
         this.alerts = JSON.parse(savedAlerts);
       }
+
+      // If in simulation mode and arrays are empty, load initial demo state
+      if (this.mode === 'simulation' && this.positions.length === 0 && this.openOrders.length === 0 && this.tradeHistory.length === 0) {
+        this.loadSimulationDemoData();
+      }
     } catch (e) {
       console.warn('Error loading state from localStorage:', e);
     }
@@ -269,6 +277,15 @@ class BinanceWsEngine {
   }
   public getLastBalanceError(): string | null {
     return this.lastBalanceError;
+  }
+  public getIsSyncingData(): boolean {
+    return this.isSyncingData;
+  }
+  public getLastDataSyncTime(): number {
+    return this.lastDataSyncTime;
+  }
+  public getLastDataSyncError(): string | null {
+    return this.lastDataSyncError;
   }
 
   public subscribe(listener: Function) {
@@ -481,14 +498,14 @@ class BinanceWsEngine {
             await this.sessionLogon();
           }
 
-          // In production or testnet: actively fetch and synchronize real balance and margin
+          // In production or testnet: actively fetch and synchronize real balance, positions, orders and trades
           if (this.credentials.apiKey && (this.mode === 'production' || this.mode === 'testnet')) {
-            this.fetchAccountBalance().catch(() => {});
+            this.syncAllAccountData().catch(() => {});
 
             if (this.balanceSyncInterval) clearInterval(this.balanceSyncInterval);
             this.balanceSyncInterval = setInterval(() => {
               if (this.mode !== 'simulation' && this.credentials.apiKey) {
-                this.fetchAccountBalance().catch(() => {});
+                this.syncAllAccountData().catch(() => {});
               }
             }, 15000);
           }
@@ -933,10 +950,32 @@ class BinanceWsEngine {
    * Cancel single order
    */
   public async cancelOrder(orderId: string): Promise<boolean> {
-    const idx = this.openOrders.findIndex(o => o.orderId === orderId);
+    const idx = this.openOrders.findIndex(o => o.orderId === orderId || o.clientOrderId === orderId);
     if (idx !== -1) {
       const ord = this.openOrders[idx];
       this.openOrders.splice(idx, 1);
+
+      if (this.mode !== 'simulation' && this.credentials.apiKey) {
+        try {
+          const isNumeric = !isNaN(Number(orderId)) && !orderId.includes('-');
+          const cancelParams: Record<string, any> = {
+            symbol: ord.symbol,
+          };
+          if (isNumeric) {
+            cancelParams.orderId = Number(orderId);
+          } else {
+            cancelParams.origClientOrderId = ord.clientOrderId || orderId;
+          }
+          await this.sendWsRequest('order.cancel', cancelParams, true);
+        } catch (err) {
+          try {
+            await this.cancelRestOrder(ord.symbol, orderId);
+          } catch (e) {
+            console.warn('Error cancelando orden en Binance:', e);
+          }
+        }
+      }
+
       this.logFrame('OUT', 'REQUEST', `Orden cancelada: ${ord.orderId}`, ord);
       notificationService.notify('SYSTEM', 'Orden Cancelada', `${ord.side} ${ord.origQty} ${ord.symbol} @ $${ord.price}`);
       this.notify();
@@ -951,6 +990,20 @@ class BinanceWsEngine {
   public async cancelAllOrders(symbol?: string): Promise<number> {
     const target = symbol || this.currentSymbol;
     const initialCount = this.openOrders.length;
+    const targetOrders = this.openOrders.filter(o => !symbol || o.symbol === target);
+
+    if (this.mode !== 'simulation' && this.credentials.apiKey) {
+      try {
+        await this.sendWsRequest('openOrders.cancelAll', { symbol: target }, true);
+      } catch (err) {
+        for (const ord of targetOrders) {
+          try {
+            await this.cancelOrder(ord.orderId);
+          } catch {}
+        }
+      }
+    }
+
     this.openOrders = this.openOrders.filter(o => o.symbol !== target);
     const canceledCount = initialCount - this.openOrders.length;
 
@@ -1059,6 +1112,26 @@ class BinanceWsEngine {
   public async closePosition(symbol: string): Promise<void> {
     const pos = this.positions.find(p => p.symbol === symbol);
     if (!pos) return;
+
+    if (this.mode !== 'simulation' && this.credentials.apiKey) {
+      try {
+        const closeSide = pos.positionAmt > 0 ? 'SELL' : 'BUY';
+        const qtyStr = formatDecimal(Math.abs(pos.positionAmt), 3);
+        await this.sendWsRequest('order.place', {
+          symbol: pos.symbol,
+          side: closeSide,
+          type: 'MARKET',
+          quantity: qtyStr,
+          reduceOnly: 'true',
+        }, true);
+
+        notificationService.notify('SYSTEM', 'Cierre de Posición Enviado', `Cierre a mercado para ${pos.symbol} enviado a Binance.`);
+        setTimeout(() => this.syncAllAccountData().catch(() => {}), 1200);
+        return;
+      } catch (err: any) {
+        console.warn('Fallo enviando orden de cierre WS, aplicando cierre local:', err);
+      }
+    }
 
     const exitPrice = this.ticker.lastPrice;
     const notional = Math.abs(pos.positionAmt) * exitPrice;
@@ -1428,6 +1501,77 @@ class BinanceWsEngine {
       };
     }
 
+    if (method === 'v2/account.position' || method === 'account.position') {
+      return {
+        id,
+        status: 200,
+        result: this.positions.map(p => ({
+          symbol: p.symbol,
+          positionAmt: p.positionAmt.toString(),
+          entryPrice: p.entryPrice.toString(),
+          markPrice: p.markPrice.toString(),
+          unRealizedProfit: p.unRealizedProfit.toString(),
+          liquidationPrice: p.liquidationPrice.toString(),
+          leverage: p.leverage.toString(),
+          marginType: p.marginType.toLowerCase(),
+          isolatedMargin: p.isolatedMargin.toString(),
+          notional: p.notional.toString(),
+          updateTime: p.updatedAt,
+        })),
+      };
+    }
+
+    if (method === 'openOrders.status') {
+      return {
+        id,
+        status: 200,
+        result: this.openOrders.map(o => ({
+          orderId: o.orderId,
+          clientOrderId: o.clientOrderId,
+          symbol: o.symbol,
+          status: o.status,
+          price: o.price.toString(),
+          origQty: o.origQty.toString(),
+          executedQty: o.executedQty.toString(),
+          type: o.type,
+          side: o.side,
+          time: o.createdAt,
+          updateTime: o.createdAt,
+          timeInForce: o.timeInForce,
+        })),
+      };
+    }
+
+    if (method === 'account.trades') {
+      return {
+        id,
+        status: 200,
+        result: this.tradeHistory.map(t => ({
+          id: t.id,
+          orderId: t.orderId,
+          symbol: t.symbol,
+          side: t.side,
+          price: t.price.toString(),
+          qty: t.quantity.toString(),
+          realizedPnl: t.realizedPnl.toString(),
+          commission: t.commission.toString(),
+          time: t.time,
+        })),
+      };
+    }
+
+    if (method === 'order.cancel') {
+      const orderId = params?.orderId ? String(params.orderId) : params?.origClientOrderId;
+      if (orderId) {
+        this.openOrders = this.openOrders.filter(o => o.orderId !== orderId && o.clientOrderId !== orderId);
+      }
+      return {
+        id,
+        status: 200,
+        result: { status: 'CANCELED', orderId },
+      };
+    }
+
     if (method === 'session.status') {
       return {
         id,
@@ -1620,6 +1764,357 @@ class BinanceWsEngine {
   }
 
   /**
+   * Fetches real active positions from Binance (WS-FAPI with REST fallback)
+   */
+  public async fetchLivePositions(): Promise<PositionRisk[]> {
+    if (this.mode === 'simulation' || !this.credentials.apiKey) {
+      return this.positions;
+    }
+
+    let rawPositions: any[] = [];
+
+    // 1. Try WS-FAPI v2/account.position
+    try {
+      const posRes = await this.sendWsRequest('v2/account.position', {}, true);
+      if (posRes && !posRes.error && Array.isArray(posRes.result)) {
+        rawPositions = posRes.result;
+      }
+    } catch (e: any) {}
+
+    // 2. If empty or failed, try account.status
+    if (rawPositions.length === 0) {
+      try {
+        const accRes = await this.sendWsRequest('account.status', {}, true);
+        if (accRes && !accRes.error && accRes.result && Array.isArray(accRes.result.positions)) {
+          rawPositions = accRes.result.positions;
+        }
+      } catch {}
+    }
+
+    // 3. Fallback to REST /fapi/v2/positionRisk
+    if (rawPositions.length === 0) {
+      try {
+        const restPos = await this.fetchRestPositions();
+        if (Array.isArray(restPos)) {
+          rawPositions = restPos;
+        }
+      } catch {}
+    }
+
+    if (rawPositions.length > 0) {
+      const activePositions: PositionRisk[] = rawPositions
+        .filter((p: any) => parseFloat(p.positionAmt || p.size || '0') !== 0)
+        .map((p: any) => {
+          const amt = parseFloat(p.positionAmt || p.size || '0');
+          const entry = parseFloat(p.entryPrice || '0');
+          const mark = parseFloat(p.markPrice || p.entryPrice || '0');
+          const unPnl = parseFloat(p.unrealizedProfit || p.unRealizedProfit || '0');
+          const liq = parseFloat(p.liquidationPrice || '0');
+          const lev = Math.min(5, Math.max(1, parseInt(p.leverage || '2', 10)));
+          const isoMargin = parseFloat(p.isolatedMargin || p.positionInitialMargin || '0');
+          const notional = parseFloat(p.notional || (Math.abs(amt) * (mark || entry)).toString());
+          const roe = isoMargin > 0 ? (unPnl / isoMargin) * 100 : 0;
+
+          return {
+            symbol: p.symbol,
+            positionAmt: amt,
+            entryPrice: entry,
+            markPrice: mark,
+            unRealizedProfit: Number(unPnl.toFixed(2)),
+            liquidationPrice: Number(liq.toFixed(2)),
+            leverage: lev,
+            marginType: (p.isolated ? 'ISOLATED' : (p.marginType?.toUpperCase() || 'ISOLATED')) as any,
+            isolatedMargin: Number(isoMargin.toFixed(2)),
+            notional: Number(notional.toFixed(2)),
+            roePercent: Number(roe.toFixed(2)),
+            updatedAt: Date.now(),
+          };
+        });
+
+      this.positions = activePositions;
+      this.recalculateAccountStats();
+      this.notify();
+      return activePositions;
+    }
+
+    return this.positions;
+  }
+
+  /**
+   * Fetches real open orders from Binance (WS-FAPI with REST fallback)
+   */
+  public async fetchLiveOpenOrders(): Promise<OpenOrder[]> {
+    if (this.mode === 'simulation' || !this.credentials.apiKey) {
+      return this.openOrders;
+    }
+
+    let rawOrders: any[] = [];
+
+    // 1. Try WS-FAPI openOrders.status without symbol
+    try {
+      const ordersRes = await this.sendWsRequest('openOrders.status', {}, true);
+      if (ordersRes && !ordersRes.error && Array.isArray(ordersRes.result)) {
+        rawOrders = ordersRes.result;
+      }
+    } catch (e: any) {
+      // If symbol is required by Binance, query for current symbol
+      try {
+        const singleRes = await this.sendWsRequest('openOrders.status', { symbol: this.currentSymbol }, true);
+        if (singleRes && !singleRes.error && Array.isArray(singleRes.result)) {
+          rawOrders = singleRes.result;
+        }
+      } catch {}
+    }
+
+    // 2. Fallback to REST /fapi/v1/openOrders
+    if (rawOrders.length === 0) {
+      try {
+        const restOrders = await this.fetchRestOpenOrders();
+        if (Array.isArray(restOrders)) {
+          rawOrders = restOrders;
+        }
+      } catch {}
+    }
+
+    if (Array.isArray(rawOrders)) {
+      const mappedOrders: OpenOrder[] = rawOrders.map((ord: any) => ({
+        orderId: String(ord.orderId || ord.clientOrderId || Math.random()),
+        clientOrderId: ord.clientOrderId || String(ord.orderId),
+        symbol: ord.symbol,
+        side: ord.side as OrderSide,
+        type: ord.type as OrderType,
+        price: parseFloat(ord.price || '0'),
+        stopPrice: parseFloat(ord.stopPrice || '0'),
+        origQty: parseFloat(ord.origQty || '0'),
+        executedQty: parseFloat(ord.executedQty || '0'),
+        status: ord.status || 'NEW',
+        timeInForce: ord.timeInForce || 'GTC',
+        leverage: 2,
+        marginType: 'ISOLATED',
+        createdAt: ord.time || ord.updateTime || Date.now(),
+      }));
+
+      this.openOrders = mappedOrders;
+      this.notify();
+      return mappedOrders;
+    }
+
+    return this.openOrders;
+  }
+
+  /**
+   * Fetches real trade history / executions from Binance
+   */
+  public async fetchLiveTradeHistory(): Promise<TradeHistoryItem[]> {
+    if (this.mode === 'simulation' || !this.credentials.apiKey) {
+      return this.tradeHistory;
+    }
+
+    let rawTrades: any[] = [];
+
+    // Try REST /fapi/v1/userTrades for current symbol
+    try {
+      const restTrades = await this.fetchRestUserTrades(this.currentSymbol);
+      if (Array.isArray(restTrades) && restTrades.length > 0) {
+        rawTrades = restTrades;
+      }
+    } catch {}
+
+    if (rawTrades.length > 0) {
+      const mappedTrades: TradeHistoryItem[] = rawTrades
+        .slice(0, 50)
+        .map((t: any) => {
+          const price = parseFloat(t.price || '0');
+          const qty = parseFloat(t.qty || t.origQty || '0');
+          const notional = parseFloat(t.quoteQty || (price * qty).toFixed(2));
+          const realizedPnl = parseFloat(t.realizedPnl || '0');
+          const commission = Math.abs(parseFloat(t.commission || '0'));
+
+          return {
+            id: String(t.id || t.orderId || Math.random()),
+            orderId: String(t.orderId || t.id),
+            symbol: t.symbol || this.currentSymbol,
+            side: t.side || (t.buyer ? 'BUY' : 'SELL'),
+            price,
+            quantity: qty,
+            notional,
+            realizedPnl: Number(realizedPnl.toFixed(2)),
+            commission: Number(commission.toFixed(3)),
+            time: t.time || Date.now(),
+            leverage: 2,
+            marginType: 'ISOLATED' as const,
+          };
+        })
+        .sort((a, b) => b.time - a.time);
+
+      this.tradeHistory = mappedTrades;
+      this.notify();
+      return mappedTrades;
+    }
+
+    return this.tradeHistory;
+  }
+
+  /**
+   * Complete synchronization of balance, positions, open orders, and trade history
+   */
+  public async syncAllAccountData(): Promise<{ success: boolean; error?: string }> {
+    if (this.mode === 'simulation') {
+      this.lastDataSyncTime = Date.now();
+      this.lastDataSyncError = null;
+      this.recalculateAccountStats();
+      this.notify();
+      return { success: true };
+    }
+
+    if (!this.credentials.apiKey || !this.credentials.apiSecret) {
+      this.lastDataSyncError = 'Faltan API Key o Secret Key de Binance.';
+      this.notify();
+      return { success: false, error: this.lastDataSyncError };
+    }
+
+    this.isSyncingData = true;
+    this.notify();
+
+    try {
+      // 1. Time sync
+      try {
+        const timeRes = await this.sendWsRequest('time', {});
+        if (timeRes?.result?.serverTime) {
+          setServerTimeOffset(timeRes.result.serverTime - Date.now());
+        }
+      } catch {}
+
+      // 2. Parallel fetch of balance, positions, open orders, trade history
+      await Promise.allSettled([
+        this.fetchAccountBalance(),
+        this.fetchLivePositions(),
+        this.fetchLiveOpenOrders(),
+        this.fetchLiveTradeHistory(),
+      ]);
+
+      this.lastDataSyncTime = Date.now();
+      this.lastDataSyncError = null;
+      this.isSyncingData = false;
+      this.notify();
+
+      this.logFrame('IN', 'RESPONSE', `Datos de cuenta Binance sincronizados`, {
+        positionsCount: this.positions.length,
+        openOrdersCount: this.openOrders.length,
+        tradesCount: this.tradeHistory.length,
+        availableBalance: this.balance.availableBalance,
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      this.isSyncingData = false;
+      this.lastDataSyncError = err.message || 'Error al sincronizar datos con Binance';
+      this.notify();
+      return { success: false, error: this.lastDataSyncError };
+    }
+  }
+
+  /**
+   * Loads realistic demonstration data in simulation mode
+   */
+  public loadSimulationDemoData() {
+    const symbol = this.currentSymbol || 'BTCUSDT';
+    const price = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : 87450;
+    const entryPrice = Number((price * 0.985).toFixed(2));
+    const qty = symbol.includes('BTC') ? 0.05 : 2.5;
+    const notional = Number((entryPrice * qty).toFixed(2));
+    const margin = Number((notional / 3).toFixed(2));
+    const pnl = Number(((price - entryPrice) * qty).toFixed(2));
+
+    this.positions = [
+      {
+        symbol,
+        positionAmt: qty,
+        entryPrice,
+        markPrice: price,
+        unRealizedProfit: pnl,
+        liquidationPrice: Number((entryPrice * (1 - 1 / 3 + 0.005)).toFixed(2)),
+        leverage: 3,
+        marginType: 'ISOLATED',
+        isolatedMargin: margin,
+        notional,
+        roePercent: Number(((pnl / margin) * 100).toFixed(2)),
+        takeProfit: Number((entryPrice * 1.05).toFixed(2)),
+        stopLoss: Number((entryPrice * 0.96).toFixed(2)),
+        updatedAt: Date.now(),
+      },
+    ];
+
+    this.openOrders = [
+      {
+        orderId: `ORD-${Date.now()}-1`,
+        clientOrderId: `TP-${symbol}-LIMIT`,
+        symbol,
+        side: 'SELL',
+        type: 'LIMIT',
+        price: Number((entryPrice * 1.05).toFixed(2)),
+        origQty: qty,
+        executedQty: 0,
+        status: 'NEW',
+        timeInForce: 'GTC',
+        leverage: 3,
+        marginType: 'ISOLATED',
+        createdAt: Date.now() - 3600000,
+      },
+      {
+        orderId: `ORD-${Date.now()}-2`,
+        clientOrderId: `SL-${symbol}-STOP`,
+        symbol,
+        side: 'SELL',
+        type: 'STOP_MARKET',
+        price: Number((entryPrice * 0.96).toFixed(2)),
+        stopPrice: Number((entryPrice * 0.96).toFixed(2)),
+        origQty: qty,
+        executedQty: 0,
+        status: 'NEW',
+        timeInForce: 'GTC',
+        leverage: 3,
+        marginType: 'ISOLATED',
+        createdAt: Date.now() - 3600000,
+      },
+    ];
+
+    this.tradeHistory = [
+      {
+        id: `TRD-${Date.now() - 7200000}`,
+        orderId: `FILLED-${Date.now() - 7200000}`,
+        symbol,
+        side: 'BUY',
+        price: entryPrice,
+        quantity: qty,
+        notional,
+        realizedPnl: 0,
+        commission: Number((notional * 0.0004).toFixed(3)),
+        time: Date.now() - 7200000,
+        leverage: 3,
+        marginType: 'ISOLATED',
+      },
+      {
+        id: `TRD-${Date.now() - 86400000}`,
+        orderId: `FILLED-${Date.now() - 86400000}`,
+        symbol,
+        side: 'SELL',
+        price: Number((entryPrice * 1.03).toFixed(2)),
+        quantity: qty,
+        notional: Number((entryPrice * 1.03 * qty).toFixed(2)),
+        realizedPnl: 84.50,
+        commission: Number((entryPrice * 1.03 * qty * 0.0004).toFixed(3)),
+        time: Date.now() - 86400000,
+        leverage: 2,
+        marginType: 'ISOLATED',
+      },
+    ];
+
+    this.recalculateAccountStats();
+    this.notify();
+  }
+
+  /**
    * REST fallback for fetching USDⓈ-M Futures balance
    */
   private async fetchRestAccountBalance(): Promise<any> {
@@ -1649,6 +2144,104 @@ class BinanceWsEngine {
       throw new Error(errJson.msg || `HTTP ${res.status}`);
     }
 
+    return await res.json();
+  }
+
+  /**
+   * REST fallback for fetching USDⓈ-M Futures positions
+   */
+  private async fetchRestPositions(): Promise<any> {
+    const restUrl =
+      this.mode === 'testnet' ? BINANCE_ENDPOINTS.testnet.rest : BINANCE_ENDPOINTS.production.rest;
+    const timestamp = getUtcTimestamp();
+    const params: Record<string, any> = { recvWindow: 60000, timestamp };
+    const queryString = buildCanonicalQueryString(params);
+    const signature = await signHmacSha256(queryString, this.credentials.apiSecret);
+    const fullUrl = `${restUrl}/fapi/v2/positionRisk?${queryString}&signature=${signature}`;
+
+    const res = await fetch(fullUrl, {
+      method: 'GET',
+      headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.msg || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  }
+
+  /**
+   * REST fallback for fetching USDⓈ-M Futures open orders
+   */
+  private async fetchRestOpenOrders(): Promise<any> {
+    const restUrl =
+      this.mode === 'testnet' ? BINANCE_ENDPOINTS.testnet.rest : BINANCE_ENDPOINTS.production.rest;
+    const timestamp = getUtcTimestamp();
+    const params: Record<string, any> = { recvWindow: 60000, timestamp };
+    const queryString = buildCanonicalQueryString(params);
+    const signature = await signHmacSha256(queryString, this.credentials.apiSecret);
+    const fullUrl = `${restUrl}/fapi/v1/openOrders?${queryString}&signature=${signature}`;
+
+    const res = await fetch(fullUrl, {
+      method: 'GET',
+      headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.msg || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  }
+
+  /**
+   * REST fallback for fetching USDⓈ-M Futures user trades
+   */
+  private async fetchRestUserTrades(symbol: string): Promise<any> {
+    const restUrl =
+      this.mode === 'testnet' ? BINANCE_ENDPOINTS.testnet.rest : BINANCE_ENDPOINTS.production.rest;
+    const timestamp = getUtcTimestamp();
+    const params: Record<string, any> = { symbol, limit: 50, recvWindow: 60000, timestamp };
+    const queryString = buildCanonicalQueryString(params);
+    const signature = await signHmacSha256(queryString, this.credentials.apiSecret);
+    const fullUrl = `${restUrl}/fapi/v1/userTrades?${queryString}&signature=${signature}`;
+
+    const res = await fetch(fullUrl, {
+      method: 'GET',
+      headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.msg || `HTTP ${res.status}`);
+    }
+    return await res.json();
+  }
+
+  /**
+   * REST fallback for canceling order
+   */
+  private async cancelRestOrder(symbol: string, orderId: string | number): Promise<any> {
+    const restUrl =
+      this.mode === 'testnet' ? BINANCE_ENDPOINTS.testnet.rest : BINANCE_ENDPOINTS.production.rest;
+    const timestamp = getUtcTimestamp();
+    const params: Record<string, any> = { symbol, recvWindow: 60000, timestamp };
+    const isNumeric = !isNaN(Number(orderId)) && !String(orderId).includes('-');
+    if (isNumeric) {
+      params.orderId = Number(orderId);
+    } else {
+      params.origClientOrderId = orderId;
+    }
+    const queryString = buildCanonicalQueryString(params);
+    const signature = await signHmacSha256(queryString, this.credentials.apiSecret);
+    const fullUrl = `${restUrl}/fapi/v1/order?${queryString}&signature=${signature}`;
+
+    const res = await fetch(fullUrl, {
+      method: 'DELETE',
+      headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
+    });
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.msg || `HTTP ${res.status}`);
+    }
     return await res.json();
   }
 
