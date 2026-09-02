@@ -13,6 +13,8 @@ import {
   ArrowUpRight,
   ShieldCheck,
   AlertCircle,
+  FileText,
+  Tag,
 } from 'lucide-react';
 import {
   diarioBitcoinService,
@@ -25,19 +27,22 @@ import { binanceWs } from '../services/binanceWs';
 
 export const DiarioEstrategias: React.FC = () => {
   const [selectedToken, setSelectedToken] = useState<DiarioBitcoinSymbol | 'ALL'>('ALL');
+  const [selectedAnalysisToken, setSelectedAnalysisToken] = useState<DiarioBitcoinSymbol | 'ALL'>('ALL');
   const [metrics, setMetrics] = useState<TokenMetricsData[]>(diarioBitcoinService.getAllMetrics());
-  const [articles, setArticles] = useState<MarketAnalysisArticle[]>(diarioBitcoinService.getArticles());
+  const [articlesBySymbol, setArticlesBySymbol] = useState<Record<DiarioBitcoinSymbol, MarketAnalysisArticle[]>>(
+    diarioBitcoinService.getAllArticlesBySymbol()
+  );
   const [isLoading, setIsLoading] = useState<boolean>(diarioBitcoinService.getIsLoading());
   const [lastFetchedAt, setLastFetchedAt] = useState<number>(diarioBitcoinService.getLastFetchedAt());
   const [error, setError] = useState<string | null>(diarioBitcoinService.getError());
 
-  // Live timer tick every second to keep the "tiempo en vivo restado" (article age) accurate
+  // Live timer tick every second to keep the "tiempo en vivo restado" (article age) updated continuously
   const [, setTick] = useState(0);
 
   useEffect(() => {
     const unsub = diarioBitcoinService.subscribe(() => {
       setMetrics(diarioBitcoinService.getAllMetrics());
-      setArticles(diarioBitcoinService.getArticles());
+      setArticlesBySymbol(diarioBitcoinService.getAllArticlesBySymbol());
       setIsLoading(diarioBitcoinService.getIsLoading());
       setLastFetchedAt(diarioBitcoinService.getLastFetchedAt());
       setError(diarioBitcoinService.getError());
@@ -45,7 +50,7 @@ export const DiarioEstrategias: React.FC = () => {
 
     const timer = setInterval(() => {
       setTick((t) => t + 1);
-      setArticles(diarioBitcoinService.getArticles());
+      setArticlesBySymbol(diarioBitcoinService.getAllArticlesBySymbol());
     }, 1000);
 
     return () => {
@@ -85,6 +90,11 @@ export const DiarioEstrategias: React.FC = () => {
       ? metrics
       : metrics.filter((m) => m.token === selectedToken);
 
+  const displayedAnalysisSymbols: DiarioBitcoinSymbol[] =
+    selectedAnalysisToken === 'ALL'
+      ? SUPPORTED_SYMBOLS.map((s) => s.symbol)
+      : [selectedAnalysisToken];
+
   return (
     <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-4 sm:p-5 flex flex-col gap-6 text-neutral-100">
       {/* Header section */}
@@ -96,14 +106,14 @@ export const DiarioEstrategias: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Diario de Estrategias
+                Diario de Estrategias y Análisis de Mercado
               </h2>
-              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
                 DiarioBitcoin
               </span>
             </div>
             <p className="text-xs text-neutral-400">
-              Extracción en tiempo real de indicadores clave y análisis de mercado para criptoactivos seleccionados
+              14 métricas clave e informe de los últimos 3 análisis de mercado dedicados para cada símbolo
             </p>
           </div>
         </div>
@@ -133,7 +143,7 @@ export const DiarioEstrategias: React.FC = () => {
       <div className="flex flex-wrap items-center gap-2 bg-neutral-950/70 p-2.5 rounded-lg border border-neutral-800 text-xs">
         <span className="text-neutral-400 font-medium shrink-0 flex items-center gap-1">
           <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
-          Páginas Fuentes:
+          Páginas Fuentes por Símbolo:
         </span>
         <div className="flex flex-wrap items-center gap-1.5">
           {SUPPORTED_SYMBOLS.map(({ symbol, name }) => (
@@ -144,7 +154,7 @@ export const DiarioEstrategias: React.FC = () => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-300 border border-neutral-700/80 transition-colors font-mono text-[11px]"
             >
-              <span>{symbol}</span>
+              <span className="font-bold text-amber-300">{symbol}</span>
               <span className="text-[10px] text-neutral-400">({name})</span>
               <ArrowUpRight className="w-3 h-3 opacity-60" />
             </a>
@@ -152,7 +162,7 @@ export const DiarioEstrategias: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Tabs */}
+      {/* Filter Tabs for Metrics */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-neutral-800">
         <button
           onClick={() => setSelectedToken('ALL')}
@@ -196,7 +206,7 @@ export const DiarioEstrategias: React.FC = () => {
         </div>
       )}
 
-      {/* Cards list for tokens */}
+      {/* Cards list for tokens with 14 Metrics + Embedded 3 Market Analysis Links per Symbol */}
       <div className="flex flex-col gap-5">
         {filteredMetrics.map((item) => {
           const isOpenPositive = item.aperturaHoy.pct >= 0;
@@ -205,6 +215,7 @@ export const DiarioEstrategias: React.FC = () => {
           const isVolYesterdayPos = item.volumenAyer.pct >= 0;
           const isVolTodayPos = item.volumenHoy.pct >= 0;
           const isSmaPos = item.precioPromedio200Dias.pct >= 0;
+          const tokenArticles = articlesBySymbol[item.token] || [];
 
           return (
             <div
@@ -239,200 +250,212 @@ export const DiarioEstrategias: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleLoadInTerminal(item.token)}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors flex items-center gap-1.5"
-                >
-                  <span>Cargar {item.token}USDT en Terminal</span>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleLoadInTerminal(item.token)}
+                    className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-colors flex items-center gap-1.5"
+                  >
+                    <span>Cargar {item.token}USDT en Terminal</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
-              {/* Grid of the 14 required extractions */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+              {/* 14 Indicators Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2.5 text-xs">
                 {/* 1. Apertura de Hoy: $ y % */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Apertura de Hoy</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">1. Apertura Hoy</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
                       ${item.aperturaHoy.price.toFixed(2)}
                     </span>
                     <span
-                      className={`text-xs font-mono font-bold flex items-center ${
+                      className={`text-xs font-mono font-bold flex items-center gap-0.5 ${
                         isOpenPositive ? 'text-emerald-400' : 'text-rose-400'
                       }`}
                     >
-                      {isOpenPositive ? <TrendingUp className="w-3 h-3 mr-0.5 inline" /> : <TrendingDown className="w-3 h-3 mr-0.5 inline" />}
+                      {isOpenPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {formatPct(item.aperturaHoy.pct)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Retorno vs precio actual</span>
+                  <span className="text-[10px] text-neutral-400">(hoy vs apertura)</span>
                 </div>
 
                 {/* 2. Cierre Previo: $ y % */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Cierre Previo</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">2. Cierre Previo</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
                       ${item.cierrePrevio.price.toFixed(2)}
                     </span>
                     <span
-                      className={`text-xs font-mono font-bold flex items-center ${
+                      className={`text-xs font-mono font-bold flex items-center gap-0.5 ${
                         isClosePositive ? 'text-emerald-400' : 'text-rose-400'
                       }`}
                     >
-                      {isClosePositive ? <TrendingUp className="w-3 h-3 mr-0.5 inline" /> : <TrendingDown className="w-3 h-3 mr-0.5 inline" />}
+                      {isClosePositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {formatPct(item.cierrePrevio.pct)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Cambio 24h</span>
+                  <span className="text-[10px] text-neutral-400">(hoy vs cierre ayer)</span>
                 </div>
 
                 {/* 3. Rango hoy: $ - $ */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Rango hoy</span>
-                  <div className="text-sm font-bold font-mono text-amber-300">
-                    ${item.rangoHoy.low.toFixed(2)} - ${item.rangoHoy.high.toFixed(2)}
+                  <span className="text-[11px] text-neutral-400 font-medium">3. Rango Hoy</span>
+                  <div className="flex items-baseline justify-between gap-1 font-mono text-xs font-bold text-white">
+                    <span>${item.rangoHoy.low.toFixed(2)}</span>
+                    <span className="text-neutral-400 font-normal">-</span>
+                    <span>${item.rangoHoy.high.toFixed(2)}</span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Mínimo / Máximo intradía</span>
+                  <span className="text-[10px] text-neutral-400">(mínimo - máximo)</span>
                 </div>
 
                 {/* 4. Rango Ayer: $ - $ */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Rango Ayer</span>
-                  <div className="text-sm font-bold font-mono text-neutral-200">
-                    ${item.rangoAyer.low.toFixed(2)} - ${item.rangoAyer.high.toFixed(2)}
+                  <span className="text-[11px] text-neutral-400 font-medium">4. Rango Ayer</span>
+                  <div className="flex items-baseline justify-between gap-1 font-mono text-xs font-bold text-neutral-300">
+                    <span>${item.rangoAyer.low.toFixed(2)}</span>
+                    <span className="text-neutral-400 font-normal">-</span>
+                    <span>${item.rangoAyer.high.toFixed(2)}</span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Sesión previa</span>
+                  <span className="text-[10px] text-neutral-400">(mínimo - máximo)</span>
                 </div>
 
                 {/* 5. Precio hace un Año: $ y % */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Precio hace un Año</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">5. Hace un Año (1A)</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
                       ${item.precioHaceUnAno.price.toFixed(2)}
                     </span>
                     <span
-                      className={`text-xs font-mono font-bold ${
+                      className={`text-xs font-mono font-bold flex items-center gap-0.5 ${
                         isOneYearPositive ? 'text-emerald-400' : 'text-rose-400'
                       }`}
                     >
+                      {isOneYearPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {formatPct(item.precioHaceUnAno.pct)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Retorno 365 días</span>
+                  <span className="text-[10px] text-neutral-400">(retorno 365d)</span>
                 </div>
 
                 {/* 6. Volumen Ayer: $ y % */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Volumen Ayer</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">6. Volumen Ayer</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
-                      {formatCurrency(item.volumenAyer.vol)}
+                      {formatCurrency(item.volumenAyer.vol, 0)}
                     </span>
                     <span
-                      className={`text-xs font-mono font-bold ${
+                      className={`text-xs font-mono font-bold flex items-center gap-0.5 ${
                         isVolYesterdayPos ? 'text-emerald-400' : 'text-rose-400'
                       }`}
                     >
+                      {isVolYesterdayPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {formatPct(item.volumenAyer.pct)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">vs promedio 30 días</span>
+                  <span className="text-[10px] text-neutral-400">(vs prom. 30 días)</span>
                 </div>
 
                 {/* 7. Volumen Hoy: $ y % */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Volumen Hoy</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">7. Volumen Hoy</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
-                      {formatCurrency(item.volumenHoy.vol)}
+                      {formatCurrency(item.volumenHoy.vol, 0)}
                     </span>
                     <span
-                      className={`text-xs font-mono font-bold ${
+                      className={`text-xs font-mono font-bold flex items-center gap-0.5 ${
                         isVolTodayPos ? 'text-emerald-400' : 'text-rose-400'
                       }`}
                     >
+                      {isVolTodayPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {formatPct(item.volumenHoy.pct)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">vs promedio 30 días</span>
+                  <span className="text-[10px] text-neutral-400">(vs prom. 30 días)</span>
                 </div>
 
                 {/* 8. Volumen Promedio 30 dias: $ */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Volumen Promedio 30 dias</span>
-                  <div className="text-sm font-bold font-mono text-cyan-300">
-                    {formatCurrency(item.volumenPromedio30Dias)}
+                  <span className="text-[11px] text-neutral-400 font-medium">8. Vol. Prom. 30D</span>
+                  <div className="text-sm font-bold font-mono text-white">
+                    {formatCurrency(item.volumenPromedio30Dias, 0)}
                   </div>
-                  <span className="text-[10px] text-neutral-400">Media 30 días</span>
+                  <span className="text-[10px] text-neutral-400">(promedio diario)</span>
                 </div>
 
                 {/* 9. Rango 7 dias: $ - $ */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Rango 7 dias</span>
-                  <div className="text-sm font-bold font-mono text-neutral-200">
-                    ${item.rango7Dias.low.toFixed(2)} - ${item.rango7Dias.high.toFixed(2)}
+                  <span className="text-[11px] text-neutral-400 font-medium">9. Rango 7 Días</span>
+                  <div className="flex items-baseline justify-between gap-1 font-mono text-xs font-bold text-white">
+                    <span>${item.rango7Dias.low.toFixed(2)}</span>
+                    <span className="text-neutral-400 font-normal">-</span>
+                    <span>${item.rango7Dias.high.toFixed(2)}</span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Mínimo / Máximo semanal</span>
+                  <span className="text-[10px] text-neutral-400">(mínimo - máximo)</span>
                 </div>
 
-                {/* 10. Tango 52 Semanas: X - X */}
+                {/* 10. Rango 52 Semanas (Tango 52 Semanas): X - X */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Rango 52 Semanas</span>
-                  <div className="text-sm font-bold font-mono text-purple-300">
-                    ${item.rango52Semanas.low.toFixed(2)} - ${item.rango52Semanas.high.toFixed(2)}
+                  <span className="text-[11px] text-neutral-400 font-medium">10. Rango 52 Sem</span>
+                  <div className="flex items-baseline justify-between gap-1 font-mono text-xs font-bold text-white">
+                    <span>${item.rango52Semanas.low.toFixed(2)}</span>
+                    <span className="text-neutral-400 font-normal">-</span>
+                    <span>${item.rango52Semanas.high.toFixed(2)}</span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Mínimo / Máximo anual</span>
+                  <span className="text-[10px] text-neutral-400">(mínimo - máximo anual)</span>
                 </div>
 
                 {/* 11. Precio Promedio 200 dias (SMA 200): $ y % */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Precio Promedio 200 dias (SMA 200)</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">11. SMA 200 Días</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
                       ${item.precioPromedio200Dias.sma200.toFixed(2)}
                     </span>
                     <span
-                      className={`text-xs font-mono font-bold ${
+                      className={`text-xs font-mono font-bold flex items-center gap-0.5 ${
                         isSmaPos ? 'text-emerald-400' : 'text-rose-400'
                       }`}
                     >
+                      {isSmaPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                       {formatPct(item.precioPromedio200Dias.pct)}
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400">Distancia porcentual al SMA</span>
+                  <span className="text-[10px] text-neutral-400">(hoy vs SMA 200)</span>
                 </div>
 
                 {/* 12. Capitalizacion: $ */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Capitalizacion</span>
-                  <div className="text-sm font-bold font-mono text-emerald-300">
-                    {formatCurrency(item.capitalizacion)}
+                  <span className="text-[11px] text-neutral-400 font-medium">12. Capitalización</span>
+                  <div className="text-sm font-bold font-mono text-white">
+                    {formatCurrency(item.capitalizacion, 2)}
                   </div>
-                  <span className="text-[10px] text-neutral-400">Market Cap Reciente</span>
+                  <span className="text-[10px] text-neutral-400">(market cap actual)</span>
                 </div>
 
                 {/* 13. Capitalizacion ATH: $ y % donde %=$/Capitalizacion */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">Capitalizacion ATH</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">13. Market Cap ATH</span>
                   <div className="flex items-baseline justify-between gap-1">
-                    <span className="text-sm font-bold font-mono text-amber-300">
-                      {formatCurrency(item.capitalizacionATH.marketcapAth)}
+                    <span className="text-sm font-bold font-mono text-white">
+                      {formatCurrency(item.capitalizacionATH.marketcapAth, 2)}
                     </span>
-                    <span className="text-xs font-mono font-bold text-amber-400">
-                      {item.capitalizacionATH.pct.toFixed(2)}%
+                    <span className="text-xs font-mono font-bold text-amber-400" title="Cap ATH / Cap Actual">
+                      {item.capitalizacionATH.pct.toFixed(1)}%
                     </span>
                   </div>
-                  <span className="text-[10px] text-neutral-400 font-mono">
-                    % = Cap ATH / Capitalización
-                  </span>
+                  <span className="text-[10px] text-neutral-400">(ATH / Cap actual)</span>
                 </div>
 
                 {/* 14. ATH: Cuando y %= Precio hoy/Precio ATH */}
                 <div className="bg-neutral-900/80 border border-neutral-800/90 rounded-lg p-3 flex flex-col gap-1">
-                  <span className="text-[11px] text-neutral-400 font-medium">ATH Histórico</span>
+                  <span className="text-[11px] text-neutral-400 font-medium">14. ATH Histórico</span>
                   <div className="flex items-baseline justify-between gap-1">
                     <span className="text-sm font-bold font-mono text-white">
                       ${item.ath.price.toFixed(2)}
@@ -447,21 +470,100 @@ export const DiarioEstrategias: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Embedded 3 Market Analysis Links specifically for this token */}
+              <div className="mt-1 pt-3 border-t border-neutral-800/70 flex flex-col gap-2 bg-neutral-900/40 p-3 rounded-lg">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-amber-400" />
+                    Últimos 3 Enlaces de Análisis de Mercado para {item.token} ({item.name}):
+                  </span>
+                  <a
+                    href={`https://www.diariobitcoin.com/categoria/analisis/?s=${encodeURIComponent(item.token)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-neutral-400 hover:text-amber-300 flex items-center gap-1"
+                  >
+                    <span>Más análisis de {item.token}</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {tokenArticles.slice(0, 3).map((art, aIdx) => (
+                    <div
+                      key={`card-art-${item.token}-${aIdx}`}
+                      className="p-2.5 rounded-lg bg-neutral-950/90 border border-neutral-800/90 flex flex-col justify-between gap-2 hover:border-neutral-700 transition-colors"
+                    >
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                          <span className="px-1.5 py-0.2 rounded font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            #{aIdx + 1} {item.token}
+                          </span>
+                          <span className="text-emerald-400 flex items-center gap-1 font-semibold">
+                            <Clock className="w-2.5 h-2.5" />
+                            {art.ageText}
+                          </span>
+                        </div>
+
+                        <a
+                          href={art.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-neutral-200 hover:text-amber-300 transition-colors line-clamp-2 leading-snug group flex items-start justify-between gap-1"
+                          title={art.title}
+                        >
+                          <span>{art.title}</span>
+                          <ArrowUpRight className="w-3 h-3 opacity-50 group-hover:opacity-100 shrink-0 mt-0.5" />
+                        </a>
+
+                        {art.description && (
+                          <p className="text-[10px] text-neutral-400 line-clamp-2 leading-relaxed">
+                            {art.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-1.5 border-t border-neutral-800/80 flex items-center justify-between text-[10px] font-mono text-neutral-400">
+                        <span>
+                          {art.publishedTimestamp > 0
+                            ? new Date(art.publishedTimestamp).toLocaleDateString('es-ES', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : 'Reciente'}
+                        </span>
+                        <a
+                          href={art.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-400 hover:text-amber-300 font-semibold inline-flex items-center gap-0.5"
+                        >
+                          <span>Leer</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Market Analysis Section: Last 3 links */}
+      {/* Dedicated Section: Últimos 3 Enlaces de Análisis de Mercado por Símbolo */}
       <div className="mt-2 border-t border-neutral-800 pt-5 flex flex-col gap-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-amber-400" />
             <h3 className="text-sm sm:text-base font-bold text-white">
-              Últimos 3 Enlaces de Análisis de Mercado
+              Últimos 3 Enlaces de Análisis de Mercado de Cada Símbolo
             </h3>
             <span className="text-xs text-neutral-400 font-mono">
-              (Restado del tiempo en vivo)
+              (Tiempo en vivo restado continuamente)
             </span>
           </div>
 
@@ -471,75 +573,134 @@ export const DiarioEstrategias: React.FC = () => {
             rel="noopener noreferrer"
             className="text-xs text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 hover:underline"
           >
-            <span>Ver todos en DiarioBitcoin</span>
+            <span>Categoría Análisis en DiarioBitcoin</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
 
-        {articles.length === 0 ? (
-          <div className="p-4 rounded-lg bg-neutral-950/60 border border-neutral-800 text-neutral-400 text-xs text-center">
-            Cargando artículos de análisis de mercado...
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {articles.slice(0, 3).map((art, idx) => (
+        {/* Filter selector for the analysis section */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <button
+            onClick={() => setSelectedAnalysisToken('ALL')}
+            className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all ${
+              selectedAnalysisToken === 'ALL'
+                ? 'bg-amber-500 text-neutral-950 font-bold'
+                : 'bg-neutral-950 text-neutral-300 hover:bg-neutral-800 border border-neutral-800'
+            }`}
+          >
+            Todos los Símbolos (3 por cada par)
+          </button>
+          {SUPPORTED_SYMBOLS.map(({ symbol, name }) => (
+            <button
+              key={`an-tab-${symbol}`}
+              onClick={() => setSelectedAnalysisToken(symbol)}
+              className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                selectedAnalysisToken === symbol
+                  ? 'bg-amber-500 text-neutral-950 font-bold'
+                  : 'bg-neutral-950 text-neutral-300 hover:bg-neutral-800 border border-neutral-800'
+              }`}
+            >
+              <span>{symbol}</span>
+              <span className="text-[10px] font-mono text-amber-400 font-bold">(3 enlaces)</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Displaying 3 articles for each symbol */}
+        <div className="flex flex-col gap-4">
+          {displayedAnalysisSymbols.map((sym) => {
+            const symInfo = SUPPORTED_SYMBOLS.find((s) => s.symbol === sym);
+            const symArticles = (articlesBySymbol[sym] || []).slice(0, 3);
+
+            return (
               <div
-                key={idx}
-                className="bg-neutral-950/90 border border-neutral-800 rounded-xl p-4 flex flex-col justify-between gap-3 hover:border-neutral-700 transition-colors"
+                key={`section-sym-articles-${sym}`}
+                className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-4 flex flex-col gap-3"
               >
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <span className="px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Análisis #{idx + 1}
+                <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-neutral-800/80">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md font-mono font-extrabold text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                      {sym}
                     </span>
-                    <div className="flex items-center gap-1 text-emerald-400 font-mono font-semibold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900/60">
-                      <Clock className="w-3 h-3 text-emerald-400" />
-                      <span>{art.ageText}</span>
-                    </div>
+                    <span className="text-xs font-bold text-white">
+                      {symInfo?.name || sym} — Últimos 3 Análisis de Mercado
+                    </span>
                   </div>
 
                   <a
-                    href={art.link}
+                    href={`https://www.diariobitcoin.com/categoria/analisis/?s=${encodeURIComponent(sym)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm font-semibold text-white hover:text-amber-300 transition-colors line-clamp-3 group flex items-start gap-1.5"
+                    className="text-[11px] text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 hover:underline font-mono"
                   >
-                    <span>{art.title}</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 shrink-0 mt-0.5" />
-                  </a>
-
-                  {art.description && (
-                    <p className="text-xs text-neutral-400 line-clamp-2">
-                      {art.description}
-                    </p>
-                  )}
-                </div>
-
-                <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-[11px] font-mono text-neutral-400">
-                  <span title={art.pubDate}>
-                    {art.publishedTimestamp > 0
-                      ? new Date(art.publishedTimestamp).toLocaleDateString('es-ES', {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })
-                      : 'Fecha no disp.'}
-                  </span>
-                  <a
-                    href={art.link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-amber-400 hover:text-amber-300 inline-flex items-center gap-0.5 hover:underline font-semibold"
-                  >
-                    <span>Leer artículo</span>
+                    <span>Ver todos los análisis de {sym}</span>
                     <ExternalLink className="w-2.5 h-2.5" />
                   </a>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {symArticles.map((art, idx) => (
+                    <div
+                      key={`article-${sym}-${idx}`}
+                      className="bg-neutral-900/80 border border-neutral-800 rounded-xl p-4 flex flex-col justify-between gap-3 hover:border-neutral-700 transition-colors shadow-sm"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="px-2 py-0.5 rounded font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {sym} • #{idx + 1}
+                          </span>
+                          <div className="flex items-center gap-1 text-emerald-400 font-mono font-semibold bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900/60">
+                            <Clock className="w-3 h-3 text-emerald-400" />
+                            <span>{art.ageText}</span>
+                          </div>
+                        </div>
+
+                        <a
+                          href={art.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-semibold text-white hover:text-amber-300 transition-colors line-clamp-3 group flex items-start gap-1.5"
+                          title={art.title}
+                        >
+                          <span>{art.title}</span>
+                          <ArrowUpRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 shrink-0 mt-0.5" />
+                        </a>
+
+                        {art.description && (
+                          <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed">
+                            {art.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-[11px] font-mono text-neutral-400">
+                        <span title={art.pubDate}>
+                          {art.publishedTimestamp > 0
+                            ? new Date(art.publishedTimestamp).toLocaleDateString('es-ES', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : 'Fecha no disp.'}
+                        </span>
+                        <a
+                          href={art.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-400 hover:text-amber-300 inline-flex items-center gap-0.5 hover:underline font-semibold"
+                        >
+                          <span>Leer artículo</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

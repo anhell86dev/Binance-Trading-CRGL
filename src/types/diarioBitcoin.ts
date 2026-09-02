@@ -83,4 +83,5 @@ export interface MarketAnalysisArticle {
   ageText: string;
   category?: string;
   description?: string;
+  symbol?: DiarioBitcoinSymbol;
 }
