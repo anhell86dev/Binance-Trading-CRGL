@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, memo } from 'react';
+import React, { useMemo, memo } from 'react';
 
 interface TradingViewWidgetProps {
   symbol: string;
@@ -13,30 +13,14 @@ export const TradingViewWidget: React.FC<TradingViewWidgetProps> = memo(({
   theme = 'dark',
   height = '520px',
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    // Clear previous widget
-    container.innerHTML = '';
-
-    const widgetDiv = document.createElement('div');
-    widgetDiv.className = 'tradingview-widget-container__widget';
-    widgetDiv.style.height = '100%';
-    widgetDiv.style.width = '100%';
-    container.appendChild(widgetDiv);
-
-    // Format clean symbol: BINANCE:ZECUSDT, BINANCE:TAOUSDT, etc.
+  // Format clean symbol: BINANCE:ZECUSDT, BINANCE:TAOUSDT, etc.
+  const formattedSymbol = useMemo(() => {
     const cleanSym = symbol.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const formattedSymbol = cleanSym.startsWith('BINANCE:') ? cleanSym : `BINANCE:${cleanSym}`;
+    return cleanSym.startsWith('BINANCE:') ? cleanSym : `BINANCE:${cleanSym}`;
+  }, [symbol]);
 
-    const script = document.createElement('script');
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
-    script.type = 'text/javascript';
-    script.async = true;
-    script.innerHTML = JSON.stringify({
+  const iframeSrc = useMemo(() => {
+    const config = {
       autosize: true,
       symbol: formattedSymbol,
       interval: interval, // '240' for 4H
@@ -55,27 +39,27 @@ export const TradingViewWidget: React.FC<TradingViewWidgetProps> = memo(({
       support_host: 'https://www.tradingview.com',
       backgroundColor: '#0a0a0a',
       gridColor: '#171717',
-    });
-
-    container.appendChild(script);
-
-    return () => {
-      if (container) {
-        container.innerHTML = '';
-      }
     };
-  }, [symbol, interval, theme]);
+
+    return `https://www.tradingview-widget.com/embed-widget/advanced-chart/?locale=es#${encodeURIComponent(
+      JSON.stringify(config)
+    )}`;
+  }, [formattedSymbol, interval, theme]);
 
   return (
     <div
-      ref={containerRef}
       id="tradingview_advanced_chart_wrapper"
-      className="tradingview-widget-container w-full relative bg-neutral-950 overflow-hidden"
+      className="w-full relative bg-neutral-950 overflow-hidden border border-neutral-800/80 rounded-lg"
       style={{ height: typeof height === 'number' ? `${height}px` : height, width: '100%' }}
     >
-      <div
-        className="tradingview-widget-container__widget"
-        style={{ height: '100%', width: '100%' }}
+      <iframe
+        key={`${formattedSymbol}-${interval}`}
+        id={`tradingview-iframe-${formattedSymbol}`}
+        title={`TradingView Chart ${formattedSymbol}`}
+        src={iframeSrc}
+        className="w-full h-full border-0 block"
+        style={{ width: '100%', height: '100%', border: 0 }}
+        allow="clipboard-write"
       />
     </div>
   );
