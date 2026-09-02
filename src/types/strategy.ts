@@ -46,3 +46,25 @@ export interface StrategyExecutionPlan {
   maxProfitUsdt?: number;
   riskRewardRatio?: number;
 }
+
+export interface SheetAlertRow {
+  id: string; // e.g. "ALT-ZEC-001"
+  timestamp: string; // e.g. "2026-09-02 15:15:00"
+  symbol: string; // e.g. "ZECUSDT"
+  noEstrategia: string; // e.g. "STRAT-ZEC-001"
+  nombreEstrategia: string;
+  livePrice: number;
+  entry1Price: number;
+  entry2Price: number;
+  distPctEntry1: number; // ((livePrice - entry1) / entry1) * 100
+  distPctEntry2: number; // ((livePrice - entry2) / entry2) * 100
+  condition: 'SWING' | 'ABOVE' | 'BELOW';
+  thresholdOrTarget: string; // e.g. "Oscilación > 1.0%" or "$840.00"
+  thresholdVal: number;
+  createdPrice: number;
+  status: 'MONITOREANDO' | 'DISPARADA';
+  triggeredAt?: string;
+  triggerPrice?: number;
+  message?: string;
+}
+

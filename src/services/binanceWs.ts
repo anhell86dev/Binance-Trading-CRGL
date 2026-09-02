@@ -40,6 +40,7 @@ import {
   signHmacSha256,
 } from './crypto';
 import { notificationService } from './notifications';
+import { alertsSheetService } from './alertsSheetService';
 
 export const BINANCE_ENDPOINTS = {
   production: {
@@ -1250,6 +1251,14 @@ class BinanceWsEngine {
       triggered: false,
     };
     this.alerts = [alert, ...this.alerts];
+    try {
+      alertsSheetService.addAlert({
+        symbol: config.symbol,
+        condition: config.condition,
+        thresholdVal: config.condition === 'SWING' ? config.changePercentThreshold : (config.targetPrice || this.ticker.lastPrice),
+        targetPrice: config.targetPrice,
+      });
+    } catch {}
     notificationService.notify(
       'VOLATILITY',
       'Alerta Configurada',
@@ -1261,6 +1270,9 @@ class BinanceWsEngine {
 
   public removeAlert(id: string) {
     this.alerts = this.alerts.filter(a => a.id !== id);
+    try {
+      alertsSheetService.removeAlert(id);
+    } catch {}
     this.notify();
   }
 
@@ -1268,6 +1280,11 @@ class BinanceWsEngine {
    * Simulated Execution and Order matching against real tick prices
    */
   private checkVolatilityAndOrders(oldPrice: number, newPrice: number) {
+    // 0. Sync live price & distances to the 'alertas' sheet in the workbook
+    try {
+      alertsSheetService.updateLivePrice(this.ticker.symbol, newPrice);
+    } catch {}
+
     // 1. Check Volatility Alerts
     this.alerts.forEach(alert => {
       if (alert.triggered) return;

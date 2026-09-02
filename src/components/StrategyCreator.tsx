@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import {
   AlertCircle,
   ArrowRight,
+  Bell,
   CheckCircle2,
   ChevronRight,
   Database,
+  Download,
   ExternalLink,
   Eye,
   FileSpreadsheet,
@@ -14,7 +16,9 @@ import {
   Lock,
   Percent,
   Play,
+  Plus,
   RefreshCw,
+  RotateCcw,
   Send,
   Shield,
   ShieldAlert,
@@ -29,7 +33,7 @@ import {
   DollarSign,
   Wallet,
 } from 'lucide-react';
-import { GoogleSheetStrategyRow, StrategyExecutionPlan } from '../types/strategy';
+import { GoogleSheetStrategyRow, StrategyExecutionPlan, SheetAlertRow } from '../types/strategy';
 import {
   SAMPLE_GOOGLE_SHEET_CSV,
   generateExecutionPlan,
@@ -43,6 +47,11 @@ import {
   OFFICIAL_GOOGLE_SHEET_NAME,
   OFFICIAL_GOOGLE_SHEET_URL,
 } from '../services/strategyService';
+import {
+  alertsSheetService,
+  OFFICIAL_ALERTS_SHEET_NAME,
+  OFFICIAL_WORKBOOK_NAME,
+} from '../services/alertsSheetService';
 
 interface StrategyCreatorProps {
   onSwitchToOrders?: () => void;
@@ -82,11 +91,24 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
   const [confirmedSafetyCheck, setConfirmedSafetyCheck] = useState(false);
   const [isDispatching, setIsDispatching] = useState(false);
   const [createdOrderReceipts, setCreatedOrderReceipts] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'all_strategies' | 'plan' | 'sheet_data' | 'guide'>(
-    'all_strategies'
-  );
+  const [activeTab, setActiveTab] = useState<
+    'all_strategies' | 'plan' | 'sheet_data' | 'sheet_alertas' | 'guide'
+  >('all_strategies');
 
-  // Keep live margin sync with Binance
+  // Sheet "alertas" state and form
+  const [sheetAlerts, setSheetAlerts] = useState<SheetAlertRow[]>(() =>
+    alertsSheetService.getAlerts()
+  );
+  const [isStructureCreated, setIsStructureCreated] = useState<boolean>(() =>
+    alertsSheetService.getIsStructureCreated()
+  );
+  const [newAlertSymbol, setNewAlertSymbol] = useState<string>('ZECUSDT');
+  const [newAlertCond, setNewAlertCond] = useState<'SWING' | 'ABOVE' | 'BELOW'>('SWING');
+  const [newAlertSwing, setNewAlertSwing] = useState<number>(1.0);
+  const [newAlertTargetPrice, setNewAlertTargetPrice] = useState<string>('');
+  const [newAlertCustomMsg, setNewAlertCustomMsg] = useState<string>('');
+
+  // Keep live margin and alerts sync with Binance & Google Sheet service
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
       setMarginBreakdown(binanceWs.getMarginBreakdown());
@@ -98,9 +120,15 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       setLastSyncTime(strategyService.getLastSyncTime());
     });
 
+    const unsubAlerts = alertsSheetService.subscribe(() => {
+      setSheetAlerts([...alertsSheetService.getAlerts()]);
+      setIsStructureCreated(alertsSheetService.getIsStructureCreated());
+    });
+
     return () => {
       unsubWs();
       unsubStrat();
+      unsubAlerts();
     };
   }, []);
 
@@ -200,6 +228,62 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
     );
   };
 
+  // Live Price Resolver for any symbol
+  const getLivePriceForSymbol = (symbol: string): number => {
+    if (symbol === binanceWs.getTicker().symbol) {
+      return binanceWs.getTicker().lastPrice;
+    }
+    return alertsSheetService.getLivePrice(symbol);
+  };
+
+  // Download official CSV for the "alertas" sheet
+  const handleDownloadAlertsCsv = () => {
+    const csv = alertsSheetService.exportAlertsCsv();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `libro_hoja_alertas_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Reset or initialize official sheet structure
+  const handleResetSheetStructure = () => {
+    alertsSheetService.resetToDefaultStructure();
+  };
+
+  // Recalculate distance % in real-time
+  const handleRecalculateDistances = () => {
+    alertsSheetService.recalculateAllDistances();
+  };
+
+  // Add a new alert to the "alertas" sheet
+  const handleCreateSheetAlert = (e: React.FormEvent) => {
+    e.preventDefault();
+    alertsSheetService.addAlert({
+      symbol: newAlertSymbol,
+      condition: newAlertCond,
+      thresholdVal: newAlertCond === 'SWING' ? newAlertSwing : parseFloat(newAlertTargetPrice || '0'),
+      customMessage: newAlertCustomMsg || undefined,
+    });
+    setNewAlertTargetPrice('');
+    setNewAlertCustomMsg('');
+  };
+
+  // Quick-add volatility alert directly from strategy catalog card
+  const handleQuickAddAlertForStrategy = (strat: GoogleSheetStrategyRow) => {
+    alertsSheetService.addAlert({
+      symbol: strat.par,
+      condition: 'SWING',
+      thresholdVal: 1.0,
+      customMessage: `Monitoreo directo desde catálogo para ${strat.noEstrategia}`,
+    });
+    setActiveTab('sheet_alertas');
+  };
+
   const currentStrategy = strategies[selectedStrategyIndex] || strategies[0];
 
   return (
@@ -226,7 +310,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                 </span>
               </div>
               <p className="text-xs text-neutral-400 mt-0.5">
-                Conectado permanentemente a la Google Sheet oficial de estrategias tácticas. Al revisar cualquier estrategia, el gráfico se actualiza en tiempo real.
+                Conectado al libro oficial de Google Sheets con 2 hojas operativas: <strong>Estrategias</strong> (catálogo táctico) y <strong>alertas</strong> (monitoreo de volatilidad y % distancias en vivo).
               </p>
             </div>
           </div>
@@ -250,13 +334,19 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
         <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-neutral-950/80 rounded-lg border border-neutral-800 text-xs font-mono">
           <div className="flex items-center gap-2 text-neutral-300">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-neutral-500">Hoja de Cálculo Oficial:</span>
+            <span className="text-neutral-500">Libro Oficial de Sheets:</span>
             <strong className="text-emerald-300">
-              Diario de Estrategias Cripto (5 Estrategias: ZEC, TAO, AAVE, SOL, XRP)
+              {OFFICIAL_WORKBOOK_NAME}
             </strong>
           </div>
-          <div className="flex items-center gap-3 text-neutral-400 text-[11px]">
-            <span>Total Estrategias: <strong className="text-white">{strategies.length}</strong></span>
+          <div className="flex items-center gap-3 text-neutral-400 text-[11px] flex-wrap">
+            <span className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300">
+              Hoja 1: <b>Estrategias ({strategies.length})</b>
+            </span>
+            <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-800/50 text-emerald-300 font-semibold flex items-center gap-1">
+              <Bell className="w-3 h-3 text-emerald-400" />
+              Hoja 2: <b>{OFFICIAL_ALERTS_SHEET_NAME} ({sheetAlerts.length})</b>
+            </span>
             <span>•</span>
             <span>Última Actualización: <strong className="text-amber-400">{lastSyncTime}</strong></span>
           </div>
@@ -266,7 +356,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       {/* 2. Top Navigation Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-2 bg-neutral-950/60 p-1.5 rounded-lg border border-neutral-800">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-1.5 text-xs font-medium">
+        <div className="flex items-center gap-1.5 text-xs font-medium flex-wrap">
           <button
             id="tab-all-strategies-btn"
             onClick={() => setActiveTab('all_strategies')}
@@ -277,7 +367,23 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Listar Todas las Estrategias ({strategies.length})</span>
+            <span>Hoja 1: Estrategias ({strategies.length})</span>
+          </button>
+
+          <button
+            id="tab-sheet-alertas-btn"
+            onClick={() => setActiveTab('sheet_alertas')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              activeTab === 'sheet_alertas'
+                ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40 shadow-sm'
+                : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Hoja 2: alertas ({sheetAlerts.length})</span>
+            <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold">
+              % Distancia
+            </span>
           </button>
 
           <button
@@ -595,6 +701,136 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       </div>
                     </div>
                   </div>
+
+                  {/* % Distancia entre el precio en vivo vs las entradas */}
+                  {(() => {
+                    const cardLivePrice = getLivePriceForSymbol(strat.par);
+                    const distE1 =
+                      parsedPrices.entry1Price > 0
+                        ? ((cardLivePrice - parsedPrices.entry1Price) / parsedPrices.entry1Price) * 100
+                        : 0;
+                    const distE2 =
+                      parsedPrices.entry2Price > 0
+                        ? ((cardLivePrice - parsedPrices.entry2Price) / parsedPrices.entry2Price) * 100
+                        : 0;
+                    const isNearE1 = Math.abs(distE1) <= 0.75;
+                    const isNearE2 = Math.abs(distE2) <= 0.75;
+
+                    return (
+                      <div className="p-3 rounded-xl bg-neutral-950/90 border border-neutral-800 flex flex-col gap-2.5">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                              <span>Precio en Vivo vs. Entradas de Estrategia</span>
+                              <span className="px-1.5 py-0.2 rounded text-[10px] bg-neutral-900 border border-neutral-750 text-neutral-400 font-mono">
+                                % Distancia en Tiempo Real
+                              </span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono font-extrabold text-amber-300 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-700">
+                              Vivo: ${formatPrice(cardLivePrice)} USDT
+                            </span>
+                            <button
+                              onClick={() => handleQuickAddAlertForStrategy(strat)}
+                              className="px-2.5 py-1 rounded-md bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-[11px] font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                              title="Guardar alerta de volatilidad en la hoja alertas del libro"
+                            >
+                              <Bell className="w-3 h-3 text-emerald-400" />
+                              <span>Guardar en Hoja alertas</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs">
+                          {/* Entrada 1 */}
+                          <div
+                            className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                              isNearE1
+                                ? 'bg-emerald-950/30 border-emerald-500/50'
+                                : 'bg-neutral-900/90 border-neutral-800'
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-neutral-400 font-sans font-semibold">
+                                  Entrada 1 (50% lote)
+                                </span>
+                                {isNearE1 && (
+                                  <span className="text-[9px] px-1 py-0.1 rounded bg-emerald-500/30 text-emerald-300 font-bold">
+                                    ¡ZONA ACTIVA!
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-extrabold text-white text-sm">
+                                ${formatPrice(parsedPrices.entry1Price)}
+                              </span>
+                            </div>
+                            <div className="text-right flex flex-col items-end">
+                              <span className="text-[10px] text-neutral-400 font-sans">
+                                Distancia en Vivo
+                              </span>
+                              <span
+                                className={`text-xs font-black px-2 py-0.5 rounded border ${
+                                  isNearE1
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                                    : distE1 > 0
+                                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                    : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                                }`}
+                              >
+                                {distE1 > 0 ? '+' : ''}
+                                {distE1.toFixed(2)}%
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Entrada 2 */}
+                          <div
+                            className={`p-2.5 rounded-lg border flex items-center justify-between ${
+                              isNearE2
+                                ? 'bg-emerald-950/30 border-emerald-500/50'
+                                : 'bg-neutral-900/90 border-neutral-800'
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-neutral-400 font-sans font-semibold">
+                                  Entrada 2 (50% lote)
+                                </span>
+                                {isNearE2 && (
+                                  <span className="text-[9px] px-1 py-0.1 rounded bg-emerald-500/30 text-emerald-300 font-bold">
+                                    ¡ZONA ACTIVA!
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-extrabold text-white text-sm">
+                                ${formatPrice(parsedPrices.entry2Price)}
+                              </span>
+                            </div>
+                            <div className="text-right flex flex-col items-end">
+                              <span className="text-[10px] text-neutral-400 font-sans">
+                                Distancia en Vivo
+                              </span>
+                              <span
+                                className={`text-xs font-black px-2 py-0.5 rounded border ${
+                                  isNearE2
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                                    : distE2 > 0
+                                    ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                    : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                                }`}
+                              >
+                                {distE2 > 0 ? '+' : ''}
+                                {distE2.toFixed(2)}%
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Indicators & Signals */}
                   <div className="text-xs bg-neutral-900/60 p-2.5 rounded-lg border border-neutral-800/80">
@@ -1035,7 +1271,329 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
         </div>
       )}
 
-      {/* 5. TAB CONTENT: RAW SHEET DATA */}
+      {/* 5. TAB CONTENT: HOJA "alertas" DE GOOGLE SHEETS */}
+      {activeTab === 'sheet_alertas' && (
+        <div className="bg-neutral-950/80 border border-neutral-800 rounded-xl p-4 flex flex-col gap-4">
+          {/* Header de la Hoja de Cálculo */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-white tracking-tight">
+                    Libro: {OFFICIAL_WORKBOOK_NAME}
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-emerald-400" />
+                    Hoja: &ldquo;{OFFICIAL_ALERTS_SHEET_NAME}&rdquo;
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-neutral-900 text-neutral-300 border border-neutral-800">
+                    Estructura creada en libro (13 columnas)
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Registro oficial de alertas de volatilidad con cálculo en tiempo real del <strong>% de distancia entre el precio en vivo vs Entrada 1 y Entrada 2</strong> de cada estrategia.
+                </p>
+              </div>
+            </div>
+
+            {/* Acciones de la Hoja */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={handleRecalculateDistances}
+                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-neutral-300 text-xs font-medium border border-neutral-750 transition-colors flex items-center gap-1.5"
+                title="Recalcular inmediatamente los % de distancias con los últimos precios de Binance"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                <span>Recalcular Distancias</span>
+              </button>
+
+              <button
+                id="export-alerts-csv-btn"
+                onClick={handleDownloadAlertsCsv}
+                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-neutral-200 text-xs font-medium border border-neutral-750 transition-colors flex items-center gap-1.5"
+                title="Descargar la hoja de alertas en formato CSV compatible con Excel y Google Sheets"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Descargar CSV</span>
+              </button>
+
+              <button
+                onClick={handleResetSheetStructure}
+                className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-rose-950/40 text-neutral-400 hover:text-rose-300 text-xs border border-neutral-800 transition-colors flex items-center gap-1"
+                title="Restablecer la estructura oficial y recargar alertas predeterminadas"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restablecer</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Formulario para Crear / Agregar Nueva Alerta en la Hoja */}
+          <div className="p-3.5 rounded-xl bg-neutral-900/70 border border-neutral-800 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-emerald-400" />
+                <span>Registrar Nueva Alerta en la Hoja &ldquo;alertas&rdquo;</span>
+              </span>
+              <span className="text-[11px] text-neutral-400 font-mono">
+                Se guardará con vinculación automática a las entradas de la estrategia
+              </span>
+            </div>
+
+            <form
+              onSubmit={handleCreateSheetAlert}
+              className="flex flex-wrap items-end gap-3 text-xs"
+            >
+              {/* Par / Estrategia */}
+              <div>
+                <label className="text-[10px] text-neutral-400 font-semibold block mb-1">
+                  Par Cripto
+                </label>
+                <select
+                  value={newAlertSymbol}
+                  onChange={e => setNewAlertSymbol(e.target.value)}
+                  className="bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 font-mono font-bold text-white"
+                >
+                  {strategies.map(s => (
+                    <option key={s.par} value={s.par}>
+                      {s.par} ({s.noEstrategia})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Condición */}
+              <div>
+                <label className="text-[10px] text-neutral-400 font-semibold block mb-1">
+                  Condición de Disparo
+                </label>
+                <select
+                  value={newAlertCond}
+                  onChange={e => setNewAlertCond(e.target.value as any)}
+                  className="bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white"
+                >
+                  <option value="SWING">Oscilación % Rápida (Volatilidad)</option>
+                  <option value="ABOVE">Precio Supera Nivel Clave</option>
+                  <option value="BELOW">Precio Cae Bajo Soporte</option>
+                </select>
+              </div>
+
+              {/* Umbral o Precio */}
+              {newAlertCond === 'SWING' ? (
+                <div>
+                  <label className="text-[10px] text-neutral-400 font-semibold block mb-1">
+                    Umbral de Movimiento (%)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.2"
+                    value={newAlertSwing}
+                    onChange={e => setNewAlertSwing(parseFloat(e.target.value))}
+                    className="bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 font-mono text-white w-28"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[10px] text-neutral-400 font-semibold block mb-1">
+                    Precio Objetivo (USDT)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={newAlertTargetPrice}
+                    onChange={e => setNewAlertTargetPrice(e.target.value)}
+                    className="bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 font-mono text-white w-32"
+                    placeholder="0.00"
+                  />
+                </div>
+              )}
+
+              {/* Comentario / Nota */}
+              <div className="flex-1 min-w-[200px]">
+                <label className="text-[10px] text-neutral-400 font-semibold block mb-1">
+                  Nota / Regla Táctica (Opcional)
+                </label>
+                <input
+                  type="text"
+                  value={newAlertCustomMsg}
+                  onChange={e => setNewAlertCustomMsg(e.target.value)}
+                  placeholder="Ej: Vigilancia de entrada 1 tras barrido de liquidez"
+                  className="w-full bg-neutral-950 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Guardar en Hoja</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Tabla Estilo Hoja de Cálculo: Hoja "alertas" */}
+          <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-950">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-neutral-900/90 text-neutral-400 border-b border-neutral-800 text-[10px] uppercase tracking-wider">
+                  <tr>
+                    <th className="py-2.5 px-3">ID Alerta</th>
+                    <th className="py-2.5 px-3">Fecha/Hora</th>
+                    <th className="py-2.5 px-3">Par & Estrategia</th>
+                    <th className="py-2.5 px-3 text-right">Precio en Vivo</th>
+                    <th className="py-2.5 px-3 text-right">Entrada 1</th>
+                    <th className="py-2.5 px-3 text-center bg-amber-950/20 text-amber-300 font-bold">
+                      % Distancia E1
+                    </th>
+                    <th className="py-2.5 px-3 text-right">Entrada 2</th>
+                    <th className="py-2.5 px-3 text-center bg-amber-950/20 text-amber-300 font-bold">
+                      % Distancia E2
+                    </th>
+                    <th className="py-2.5 px-3">Condición / Umbral</th>
+                    <th className="py-2.5 px-3 text-center">Estado</th>
+                    <th className="py-2.5 px-3">Detalles</th>
+                    <th className="py-2.5 px-3 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-850">
+                  {sheetAlerts.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} className="py-8 text-center text-neutral-500">
+                        No hay alertas registradas en la hoja &ldquo;alertas&rdquo;.
+                      </td>
+                    </tr>
+                  ) : (
+                    sheetAlerts.map(alt => {
+                      const isNearE1 = Math.abs(alt.distPctEntry1) <= 0.75;
+                      const isNearE2 = Math.abs(alt.distPctEntry2) <= 0.75;
+
+                      return (
+                        <tr
+                          key={alt.id}
+                          className={`hover:bg-neutral-900/60 transition-colors ${
+                            alt.status === 'DISPARADA' ? 'bg-rose-950/10' : ''
+                          }`}
+                        >
+                          {/* ID */}
+                          <td className="py-2.5 px-3 font-bold text-neutral-300 text-[11px]">
+                            {alt.id}
+                          </td>
+
+                          {/* Fecha / Hora */}
+                          <td className="py-2.5 px-3 text-neutral-400 text-[11px] whitespace-nowrap">
+                            {alt.timestamp}
+                          </td>
+
+                          {/* Par & Estrategia */}
+                          <td className="py-2.5 px-3 whitespace-nowrap">
+                            <span className="font-bold text-white text-xs">{alt.symbol}</span>
+                            <span className="ml-1.5 text-[10px] text-neutral-400 bg-neutral-900 px-1 py-0.2 rounded border border-neutral-800">
+                              {alt.noEstrategia}
+                            </span>
+                          </td>
+
+                          {/* Precio en Vivo */}
+                          <td className="py-2.5 px-3 text-right font-bold text-amber-300">
+                            ${alt.livePrice.toFixed(alt.livePrice < 10 ? 4 : 2)}
+                          </td>
+
+                          {/* Entrada 1 */}
+                          <td className="py-2.5 px-3 text-right text-neutral-300">
+                            ${alt.entry1Price > 0 ? alt.entry1Price.toFixed(alt.entry1Price < 10 ? 4 : 2) : '-'}
+                          </td>
+
+                          {/* % Distancia vs Entrada 1 */}
+                          <td className="py-2.5 px-3 text-center bg-neutral-900/30">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-black border ${
+                                isNearE1
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                                  : alt.distPctEntry1 > 0
+                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                  : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                              }`}
+                              title={`Precio en Vivo vs Entrada 1: ${alt.distPctEntry1.toFixed(2)}%`}
+                            >
+                              {alt.distPctEntry1 > 0 ? '+' : ''}
+                              {alt.distPctEntry1.toFixed(2)}%
+                              {isNearE1 && ' 🎯'}
+                            </span>
+                          </td>
+
+                          {/* Entrada 2 */}
+                          <td className="py-2.5 px-3 text-right text-neutral-300">
+                            ${alt.entry2Price > 0 ? alt.entry2Price.toFixed(alt.entry2Price < 10 ? 4 : 2) : '-'}
+                          </td>
+
+                          {/* % Distancia vs Entrada 2 */}
+                          <td className="py-2.5 px-3 text-center bg-neutral-900/30">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[11px] font-black border ${
+                                isNearE2
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                                  : alt.distPctEntry2 > 0
+                                  ? 'bg-amber-500/10 text-amber-300 border-amber-500/30'
+                                  : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30'
+                              }`}
+                              title={`Precio en Vivo vs Entrada 2: ${alt.distPctEntry2.toFixed(2)}%`}
+                            >
+                              {alt.distPctEntry2 > 0 ? '+' : ''}
+                              {alt.distPctEntry2.toFixed(2)}%
+                              {isNearE2 && ' 🎯'}
+                            </span>
+                          </td>
+
+                          {/* Condición / Umbral */}
+                          <td className="py-2.5 px-3 text-neutral-300 text-[11px]">
+                            {alt.thresholdOrTarget}
+                          </td>
+
+                          {/* Estado */}
+                          <td className="py-2.5 px-3 text-center">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                alt.status === 'DISPARADA'
+                                  ? 'bg-rose-950 text-rose-300 border border-rose-800'
+                                  : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                              }`}
+                            >
+                              {alt.status}
+                            </span>
+                          </td>
+
+                          {/* Mensaje / Regla */}
+                          <td className="py-2.5 px-3 text-neutral-400 text-[11px] max-w-xs truncate">
+                            {alt.message || '-'}
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="py-2.5 px-3 text-center">
+                            <button
+                              onClick={() => alertsSheetService.removeAlert(alt.id)}
+                              className="text-neutral-500 hover:text-rose-400 p-1 transition-colors"
+                              title="Eliminar alerta de la hoja"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. TAB CONTENT: RAW SHEET DATA */}
       {activeTab === 'sheet_data' && currentStrategy && (
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-xl p-4 flex flex-col gap-3">
           <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
