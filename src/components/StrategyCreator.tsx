@@ -32,6 +32,8 @@ import {
 } from '../utils/sheetParser';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
+import { strategyService } from '../services/strategyService';
+import { DollarSign, Wallet } from 'lucide-react';
 
 interface StrategyCreatorProps {
   onSwitchToOrders?: () => void;
@@ -48,8 +50,12 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
   const [pastedCsvText, setPastedCsvText] = useState(SAMPLE_GOOGLE_SHEET_CSV);
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
 
-  // Strategy Execution Plan State
-  const [usdtAllocation, setUsdtAllocation] = useState<number>(300);
+  // Strategy Execution Plan & Account Margin State
+  const [marginBreakdown, setMarginBreakdown] = useState(binanceWs.getMarginBreakdown());
+  const [usdtAllocation, setUsdtAllocation] = useState<number>(() => {
+    const avail = binanceWs.getCalculatedAvailableMargin();
+    return avail > 0 ? Math.min(300, avail) : 100;
+  });
   const [selectedLeverage, setSelectedLeverage] = useState<number>(2);
   const [executionPlan, setExecutionPlan] = useState<StrategyExecutionPlan | null>(null);
 
@@ -60,13 +66,25 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
   const [createdOrderReceipts, setCreatedOrderReceipts] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'plan' | 'sheet_data' | 'guide'>('plan');
 
-  // Load default sample strategy on initial mount
+  // Keep marginBreakdown live with Binance engine
+  useEffect(() => {
+    const unsub = binanceWs.subscribe(() => {
+      setMarginBreakdown(binanceWs.getMarginBreakdown());
+    });
+    return () => unsub();
+  }, []);
+
+  // Load default sample strategy on initial mount and register in strategyService
   useEffect(() => {
     const defaultList = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
     if (defaultList.length > 0) {
       setStrategies(defaultList);
+      strategyService.setStrategies(defaultList);
       setSelectedStrategyIndex(0);
       setLastSyncTime(Date.now());
+      if (defaultList[0]?.par) {
+        binanceWs.setSymbol(defaultList[0].par);
+      }
     }
   }, []);
 
@@ -112,9 +130,13 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       }
 
       setStrategies(parsed);
+      strategyService.setStrategies(parsed);
       setSelectedStrategyIndex(0);
       setLastSyncTime(Date.now());
       setCreatedOrderReceipts([]);
+      if (parsed[0]?.par) {
+        binanceWs.setSymbol(parsed[0].par);
+      }
       notificationService.notify(
         'SYSTEM',
         'Google Sheets Sincronizado',
@@ -140,9 +162,13 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
         return;
       }
       setStrategies(parsed);
+      strategyService.setStrategies(parsed);
       setSelectedStrategyIndex(0);
       setLastSyncTime(Date.now());
       setCreatedOrderReceipts([]);
+      if (parsed[0]?.par) {
+        binanceWs.setSymbol(parsed[0].par);
+      }
       setIsCsvModalOpen(false);
       setSheetError(null);
       notificationService.notify(
@@ -457,44 +483,120 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
 
             {/* Position Size & Risk Customization */}
             <div className="bg-neutral-950/70 border border-neutral-800 p-3.5 rounded-xl flex flex-col gap-3">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                Configurar Capital & Apalancamiento para Binance
+              <span className="text-xs font-bold text-white flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                  Margen de la Cuenta & Asignación
+                </span>
+                <span className="text-[11px] font-mono text-neutral-400">
+                  Total - Órdenes - Posiciones
+                </span>
               </span>
+
+              {/* Live Account Available Margin Indicator & Formula */}
+              <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-800/40 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-xs font-semibold text-emerald-300">Margen Disponible de la Cuenta:</span>
+                  </div>
+                  <span className="text-base font-bold font-mono text-emerald-300">
+                    ${marginBreakdown.availableMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                  </span>
+                </div>
+
+                <div className="text-[10px] font-mono flex flex-wrap items-center gap-1.5 text-neutral-400 bg-neutral-900/60 p-1.5 rounded border border-neutral-800/80">
+                  <span className="text-neutral-300">Cálculo:</span>
+                  <span>Total (${marginBreakdown.totalMarginBalance.toFixed(2)})</span>
+                  <span className="text-rose-400 font-bold">-</span>
+                  <span>Órdenes (${marginBreakdown.openOrdersMargin.toFixed(2)})</span>
+                  <span className="text-rose-400 font-bold">-</span>
+                  <span>Posiciones (${marginBreakdown.activePositionsMargin.toFixed(2)})</span>
+                  <span className="text-emerald-400 font-bold">=</span>
+                  <span className="text-emerald-300 font-bold">${marginBreakdown.availableMargin.toFixed(2)} USDT</span>
+                </div>
+              </div>
 
               {/* USDT Allocation Input */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-400">Margen a Asignar:</span>
+                  <span className="text-neutral-300 font-medium">Margen a Asignar a la Estrategia:</span>
                   <span className="font-mono font-bold text-white">{usdtAllocation} USDT</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    id="usdt-allocation-input"
-                    type="number"
-                    min="10"
-                    max="50000"
-                    step="10"
-                    value={usdtAllocation}
-                    onChange={(e) => setUsdtAllocation(Math.max(10, parseFloat(e.target.value) || 10))}
-                    className="flex-1 px-3 py-1.5 text-xs bg-neutral-900 border border-neutral-700 rounded-lg text-white font-mono focus:outline-none focus:border-amber-500"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      id="usdt-allocation-input"
+                      type="number"
+                      min="5"
+                      max={Math.max(10, marginBreakdown.availableMargin)}
+                      step="5"
+                      value={usdtAllocation}
+                      onChange={(e) => setUsdtAllocation(Math.max(5, parseFloat(e.target.value) || 5))}
+                      className={`w-full px-3 py-1.5 text-xs bg-neutral-900 border rounded-lg text-white font-mono focus:outline-none ${
+                        usdtAllocation > marginBreakdown.availableMargin
+                          ? 'border-rose-500 text-rose-300 focus:border-rose-400'
+                          : 'border-neutral-700 focus:border-amber-500'
+                      }`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-neutral-400 font-mono">
+                      USDT
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => setUsdtAllocation(Number(marginBreakdown.availableMargin.toFixed(2)))}
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-700/60 transition-colors shrink-0 flex items-center gap-1"
+                    title="Asignar todo el margen disponible"
+                  >
+                    <DollarSign className="w-3 h-3 text-emerald-400" />
+                    Tomar Todo ({marginBreakdown.availableMargin.toFixed(0)})
+                  </button>
+                </div>
+
+                {/* Percentage Quick Selectors based on Available Margin */}
+                <div className="flex items-center justify-between gap-1 mt-1">
+                  <span className="text-[10px] text-neutral-400">Porcentaje del Disponible:</span>
                   <div className="flex items-center gap-1">
-                    {[100, 250, 500, 1000].map((amt) => (
-                      <button
-                        key={amt}
-                        onClick={() => setUsdtAllocation(amt)}
-                        className={`px-2 py-1 text-[10px] font-mono rounded border transition-colors ${
-                          usdtAllocation === amt
-                            ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 font-bold'
-                            : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
-                        }`}
-                      >
-                        {amt}
-                      </button>
-                    ))}
+                    {[
+                      { label: '25%', ratio: 0.25 },
+                      { label: '50%', ratio: 0.5 },
+                      { label: '75%', ratio: 0.75 },
+                      { label: '100%', ratio: 1.0 },
+                    ].map(({ label, ratio }) => {
+                      const calculatedAmt = Number((Math.max(5, marginBreakdown.availableMargin * ratio)).toFixed(2));
+                      const isSelected = Math.abs(usdtAllocation - calculatedAmt) < 1;
+                      return (
+                        <button
+                          key={label}
+                          onClick={() => setUsdtAllocation(calculatedAmt)}
+                          className={`px-2 py-0.5 text-[10px] font-mono rounded border transition-colors ${
+                            isSelected
+                              ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-bold'
+                              : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+
+                {/* Over-allocation warning */}
+                {usdtAllocation > marginBreakdown.availableMargin && (
+                  <div className="p-2 rounded-lg bg-rose-950/30 border border-rose-800/60 text-xs text-rose-300 flex items-center justify-between gap-2 mt-1">
+                    <span>
+                      ⚠️ El margen a asignar (${usdtAllocation} USDT) excede el Margen Disponible (${marginBreakdown.availableMargin.toFixed(2)} USDT).
+                    </span>
+                    <button
+                      onClick={() => setUsdtAllocation(Number(marginBreakdown.availableMargin.toFixed(2)))}
+                      className="shrink-0 px-2 py-0.5 rounded bg-rose-900/60 hover:bg-rose-800/80 text-[10px] font-bold text-white border border-rose-700"
+                    >
+                      Ajustar al Disponible
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Leverage Selector (Strictly ISOLATED 1x-5x) */}

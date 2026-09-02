@@ -82,19 +82,19 @@ class BinanceWsEngine {
   ];
 
   // Market & Account State
-  private currentSymbol = 'BTCUSDT';
+  private currentSymbol = 'ZECUSDT';
   private ticker: TickerData = {
-    symbol: 'BTCUSDT',
-    lastPrice: 87450.0,
-    markPrice: 87462.5,
-    indexPrice: 87455.0,
-    high24h: 89120.0,
-    low24h: 86200.0,
-    volume24h: 38450.25,
-    change24h: 1250.0,
-    change24hPercent: 1.45,
-    bestBid: 87449.5,
-    bestAsk: 87450.5,
+    symbol: 'ZECUSDT',
+    lastPrice: 789.5,
+    markPrice: 789.8,
+    indexPrice: 789.6,
+    high24h: 842.0,
+    low24h: 758.0,
+    volume24h: 12540.25,
+    change24h: 18.5,
+    change24hPercent: 2.4,
+    bestBid: 789.2,
+    bestAsk: 789.7,
     timestamp: Date.now(),
   };
 
@@ -138,24 +138,24 @@ class BinanceWsEngine {
   }
 
   private initDemoData() {
-    // Generate initial realistic Kline candles
+    // Generate initial realistic Kline candles for tactical strategy pair
     const now = Date.now();
-    let price = 87450;
+    let price = 789.5;
     const initialCandles: KlineCandle[] = [];
     for (let i = 50; i >= 0; i--) {
       const time = now - i * 60 * 1000;
-      const change = (Math.random() - 0.49) * 120;
+      const change = (Math.random() - 0.49) * 4.5;
       const open = price;
       const close = price + change;
-      const high = Math.max(open, close) + Math.random() * 45;
-      const low = Math.min(open, close) - Math.random() * 45;
+      const high = Math.max(open, close) + Math.random() * 2.5;
+      const low = Math.min(open, close) - Math.random() * 2.5;
       const volume = Math.random() * 15 + 2;
       initialCandles.push({ time, open, high, low, close, volume });
       price = close;
     }
     this.candles = initialCandles;
     this.ticker.lastPrice = price;
-    this.ticker.markPrice = price + 1.5;
+    this.ticker.markPrice = price + 0.3;
     this.generateMockOrderBook(price);
   }
 
@@ -165,12 +165,12 @@ class BinanceWsEngine {
     let bidTot = 0;
     let askTot = 0;
     for (let i = 1; i <= 10; i++) {
-      const bPrice = centerPrice - i * 1.5;
+      const bPrice = centerPrice - i * 0.25;
       const bAmt = Number((Math.random() * 0.8 + 0.1).toFixed(3));
       bidTot += bAmt;
       bids.push({ price: bPrice, amount: bAmt, total: Number(bidTot.toFixed(3)) });
 
-      const aPrice = centerPrice + i * 1.5;
+      const aPrice = centerPrice + i * 0.25;
       const aAmt = Number((Math.random() * 0.8 + 0.1).toFixed(3));
       askTot += aAmt;
       asks.push({ price: aPrice, amount: aAmt, total: Number(askTot.toFixed(3)) });
@@ -180,6 +180,15 @@ class BinanceWsEngine {
 
   private loadPersistedState() {
     try {
+      const savedSymbol = localStorage.getItem('binance_fapi_symbol');
+      if (savedSymbol && !savedSymbol.includes('BTC') && !savedSymbol.includes('ETH')) {
+        this.currentSymbol = savedSymbol;
+        this.ticker.symbol = savedSymbol;
+      } else {
+        this.currentSymbol = 'ZECUSDT';
+        this.ticker.symbol = 'ZECUSDT';
+      }
+
       const savedCreds = localStorage.getItem('binance_fapi_creds');
       if (savedCreds) {
         this.credentials = JSON.parse(savedCreds);
@@ -206,10 +215,28 @@ class BinanceWsEngine {
         this.alerts = JSON.parse(savedAlerts);
       }
 
+      // Ensure active positions or orders with BTC/ETH are sanitized to strategy pair if needed
+      this.positions = this.positions.map(p => {
+        if (p.symbol.includes('BTC') || p.symbol.includes('ETH')) {
+          return { ...p, symbol: 'ZECUSDT' };
+        }
+        return p;
+      });
+
+      this.openOrders = this.openOrders.map(o => {
+        if (o.symbol.includes('BTC') || o.symbol.includes('ETH')) {
+          return { ...o, symbol: 'ZECUSDT' };
+        }
+        return o;
+      });
+
       // If in simulation mode and arrays are empty, load initial demo state
       if (this.mode === 'simulation' && this.positions.length === 0 && this.openOrders.length === 0 && this.tradeHistory.length === 0) {
         this.loadSimulationDemoData();
       }
+
+      // Enforce the calculation: Margen Disponible = Balance Total - Órdenes Abiertas - Posiciones Activas
+      this.recalculateAccountStats();
     } catch (e) {
       console.warn('Error loading state from localStorage:', e);
     }
@@ -816,6 +843,8 @@ class BinanceWsEngine {
         `${config.side} ${config.quantity} ${config.symbol} @ $${config.price} (Apalancamiento: ${clampedLeverage}x ISOLATED)`,
         'normal'
       );
+      this.recalculateAccountStats();
+      this.persistState();
       this.notify();
       return newOrder;
     }
@@ -823,6 +852,8 @@ class BinanceWsEngine {
     try {
       await this.sendWsRequest('order.place', params, true);
       this.openOrders.push(newOrder);
+      this.recalculateAccountStats();
+      this.persistState();
       notificationService.notify(
         'EXECUTION',
         'Orden Limit Enviada a Binance',
@@ -903,6 +934,8 @@ class BinanceWsEngine {
       orders: placed.map(o => ({ price: o.price, qty: o.origQty })),
     });
 
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
     return placed;
   }
@@ -942,6 +975,8 @@ class BinanceWsEngine {
     );
 
     this.logFrame('OUT', 'REQUEST', `Trailing Stop: ${config.side} ${config.quantity} ${config.symbol}`, newOrder);
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
     return newOrder;
   }
@@ -978,6 +1013,8 @@ class BinanceWsEngine {
 
       this.logFrame('OUT', 'REQUEST', `Orden cancelada: ${ord.orderId}`, ord);
       notificationService.notify('SYSTEM', 'Orden Cancelada', `${ord.side} ${ord.origQty} ${ord.symbol} @ $${ord.price}`);
+      this.recalculateAccountStats();
+      this.persistState();
       this.notify();
       return true;
     }
@@ -1009,6 +1046,8 @@ class BinanceWsEngine {
 
     notificationService.notify('SYSTEM', 'Órdenes Canceladas', `Se cancelaron ${canceledCount} órdenes de ${target}`);
     this.logFrame('OUT', 'REQUEST', `Cancel all orders para ${target}`, { count: canceledCount });
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
     return canceledCount;
   }
@@ -1102,6 +1141,8 @@ class BinanceWsEngine {
     );
 
     notificationService.playChime('fill');
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
     return createdIds;
   }
@@ -1168,6 +1209,8 @@ class BinanceWsEngine {
     );
 
     this.logFrame('IN', 'STREAM', `Posición cerrada: ${symbol}`, tradeItem);
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
   }
 
@@ -1416,14 +1459,66 @@ class BinanceWsEngine {
   }
 
   /**
-   * Recalculate account balance, margin ratio, unrealized profits
+   * Margen comprometido/retenido en órdenes abiertas
+   * (precio * cantidad restante) / apalancamiento
    */
-  private recalculateAccountStats() {
+  public getOpenOrdersMargin(): number {
+    const sum = this.openOrders.reduce((acc, ord) => {
+      const remainingQty = Math.max(0, (ord.origQty || 0) - (ord.executedQty || 0));
+      const p = ord.price > 0 ? ord.price : (ord.stopPrice > 0 ? ord.stopPrice : this.ticker.lastPrice);
+      const lev = Math.max(1, ord.leverage || 2);
+      return acc + (p * remainingQty) / lev;
+    }, 0);
+    return Number(sum.toFixed(2));
+  }
+
+  /**
+   * Margen comprometido en posiciones activas (margen aislado)
+   */
+  public getActivePositionsMargin(): number {
+    const sum = this.positions.reduce((acc, pos) => {
+      const iso = pos.isolatedMargin > 0
+        ? pos.isolatedMargin
+        : (Math.abs(pos.positionAmt) * (pos.entryPrice || this.ticker.lastPrice)) / Math.max(1, pos.leverage || 2);
+      return acc + iso;
+    }, 0);
+    return Number(sum.toFixed(2));
+  }
+
+  /**
+   * Desglose explícito según la regla solicitada:
+   * Margen Disponible = Balance Total del Margen - las órdenes abiertas - Posiciones Activas
+   */
+  public getMarginBreakdown() {
+    const totalMarginBalance = Number(this.balance.totalMarginBalance.toFixed(2));
+    const openOrdersMargin = this.getOpenOrdersMargin();
+    const activePositionsMargin = this.getActivePositionsMargin();
+    const availableMargin = Math.max(
+      0,
+      Number((totalMarginBalance - openOrdersMargin - activePositionsMargin).toFixed(2))
+    );
+    return {
+      totalMarginBalance,
+      openOrdersMargin,
+      activePositionsMargin,
+      availableMargin,
+    };
+  }
+
+  public getCalculatedAvailableMargin(): number {
+    return this.getMarginBreakdown().availableMargin;
+  }
+
+  /**
+   * Recalculate account balance, margin ratio, unrealized profits
+   * Enforces: Margen Disponible = Balance Total del Margen - órdenes abiertas - Posiciones Activas
+   */
+  public recalculateAccountStats() {
     let totalUnrealized = 0;
     let totalIsolatedMarginUsed = 0;
 
     this.positions.forEach(pos => {
-      const mark = this.ticker.lastPrice;
+      const mark = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : pos.markPrice;
       pos.markPrice = mark;
       const pnl =
         pos.positionAmt > 0
@@ -1431,8 +1526,12 @@ class BinanceWsEngine {
           : (pos.entryPrice - mark) * Math.abs(pos.positionAmt);
 
       pos.unRealizedProfit = Number(pnl.toFixed(2));
-      pos.roePercent = Number(((pnl / pos.isolatedMargin) * 100).toFixed(2));
-      pos.notional = Math.abs(pos.positionAmt) * mark;
+      const iso = pos.isolatedMargin > 0
+        ? pos.isolatedMargin
+        : (Math.abs(pos.positionAmt) * pos.entryPrice) / Math.max(1, pos.leverage || 2);
+      pos.isolatedMargin = Number(iso.toFixed(2));
+      pos.roePercent = Number(((pnl / Math.max(1, pos.isolatedMargin)) * 100).toFixed(2));
+      pos.notional = Number((Math.abs(pos.positionAmt) * mark).toFixed(2));
 
       totalUnrealized += pnl;
       totalIsolatedMarginUsed += pos.isolatedMargin;
@@ -1440,11 +1539,20 @@ class BinanceWsEngine {
 
     this.balance.totalUnrealizedProfit = Number(totalUnrealized.toFixed(2));
     this.balance.totalMarginBalance = Number((this.balance.totalWalletBalance + totalUnrealized).toFixed(2));
-    this.balance.availableBalance = Math.max(0, Number((this.balance.totalWalletBalance - totalIsolatedMarginUsed).toFixed(2)));
+
+    const openOrdersMargin = this.getOpenOrdersMargin();
+    const activePositionsMargin = totalIsolatedMarginUsed;
+
+    // MANDATO: el Margen Disponible debe ser el Balance Total del Margen - las ordenes abierta - Posiciones Activas
+    this.balance.availableBalance = Math.max(
+      0,
+      Number((this.balance.totalMarginBalance - openOrdersMargin - activePositionsMargin).toFixed(2))
+    );
     this.balance.maintMargin = Number((totalIsolatedMarginUsed * 0.1).toFixed(2));
 
+    const totalCommitted = totalIsolatedMarginUsed + openOrdersMargin;
     const ratio = this.balance.totalMarginBalance > 0
-      ? (totalIsolatedMarginUsed / this.balance.totalMarginBalance) * 100
+      ? (totalCommitted / this.balance.totalMarginBalance) * 100
       : 0;
     this.balance.marginRatio = Number(ratio.toFixed(2));
   }
@@ -1743,11 +1851,15 @@ class BinanceWsEngine {
       }
 
       if (updated) {
+        this.recalculateAccountStats();
         this.lastBalanceSyncTime = Date.now();
         this.lastBalanceError = null;
         this.logFrame('IN', 'RESPONSE', `Balance real sincronizado: $${this.balance.availableBalance.toFixed(2)} USDT`, {
           availableBalance: this.balance.availableBalance,
           totalWalletBalance: this.balance.totalWalletBalance,
+          totalMarginBalance: this.balance.totalMarginBalance,
+          openOrdersMargin: this.getOpenOrdersMargin(),
+          activePositionsMargin: this.getActivePositionsMargin(),
           mode: this.mode,
         });
       }
@@ -2018,10 +2130,10 @@ class BinanceWsEngine {
    * Loads realistic demonstration data in simulation mode
    */
   public loadSimulationDemoData() {
-    const symbol = this.currentSymbol || 'BTCUSDT';
-    const price = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : 87450;
+    const symbol = this.currentSymbol || 'ZECUSDT';
+    const price = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : 789.5;
     const entryPrice = Number((price * 0.985).toFixed(2));
-    const qty = symbol.includes('BTC') ? 0.05 : 2.5;
+    const qty = 1.0;
     const notional = Number((entryPrice * qty).toFixed(2));
     const margin = Number((notional / 3).toFixed(2));
     const pnl = Number(((price - entryPrice) * qty).toFixed(2));
@@ -2248,24 +2360,23 @@ class BinanceWsEngine {
   public setManualBalance(amount: number) {
     const validAmount = Math.max(0, amount);
     this.balance.totalWalletBalance = validAmount;
-    this.balance.availableBalance = validAmount;
-    this.balance.totalMarginBalance = validAmount;
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
     notificationService.notify(
       'SYSTEM',
       'Balance Ajustado',
-      `Margen disponible configurado en $${validAmount.toLocaleString()} USDT`
+      `Margen disponible configurado en $${this.balance.availableBalance.toLocaleString()} USDT (Margen Total: $${validAmount.toLocaleString()})`
     );
   }
 
   public resetSimulationBalance(amount: number = 10000) {
     this.balance.totalWalletBalance = amount;
-    this.balance.availableBalance = amount;
-    this.balance.totalMarginBalance = amount;
-    this.balance.totalUnrealizedProfit = 0;
     this.positions = [];
     this.openOrders = [];
     this.tradeHistory = [];
+    this.recalculateAccountStats();
+    this.persistState();
     this.notify();
     notificationService.notify('SYSTEM', 'Balance Reiniciado', `Balance de simulación restaurado a $${amount.toLocaleString()} USDT`);
   }

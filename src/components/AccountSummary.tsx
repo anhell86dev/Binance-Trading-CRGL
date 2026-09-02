@@ -19,6 +19,8 @@ import { AccountBalance, PositionRisk } from '../types/binance';
 export const AccountSummary: React.FC = () => {
   const [balance, setBalance] = useState<AccountBalance>(binanceWs.getBalance());
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
+  const [marginBreakdown, setMarginBreakdown] = useState(binanceWs.getMarginBreakdown());
+  const [openOrdersCount, setOpenOrdersCount] = useState(binanceWs.getOpenOrders().length);
   const [mode, setMode] = useState(binanceWs.getMode());
   const [isFetching, setIsFetching] = useState(binanceWs.getIsFetchingBalance());
   const [lastSyncTime, setLastSyncTime] = useState(binanceWs.getLastBalanceSyncTime());
@@ -30,6 +32,8 @@ export const AccountSummary: React.FC = () => {
     const unsub = binanceWs.subscribe(() => {
       setBalance(binanceWs.getBalance());
       setPositions(binanceWs.getPositions());
+      setMarginBreakdown(binanceWs.getMarginBreakdown());
+      setOpenOrdersCount(binanceWs.getOpenOrders().length);
       setMode(binanceWs.getMode());
       setIsFetching(binanceWs.getIsFetchingBalance());
       setLastSyncTime(binanceWs.getLastBalanceSyncTime());
@@ -197,16 +201,16 @@ export const AccountSummary: React.FC = () => {
         </div>
 
         {/* Available Margin */}
-        <div className="bg-neutral-950/60 p-3 rounded-lg border border-neutral-800/80">
+        <div className="bg-neutral-950/60 p-3 rounded-lg border border-emerald-800/40 bg-gradient-to-b from-emerald-950/20 to-transparent">
           <div className="flex items-center justify-between text-neutral-400 text-xs mb-1">
-            <span>Margen Disponible</span>
+            <span className="font-semibold text-emerald-400">Margen Disponible</span>
             <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
           </div>
           <div className="text-xl font-bold font-mono tracking-tight text-emerald-300">
             ${balance.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div className="text-[11px] text-neutral-400 font-mono mt-0.5">
-            Para órdenes de estrategia
+          <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
+            Total - Órdenes - Posiciones
           </div>
         </div>
 
@@ -246,6 +250,33 @@ export const AccountSummary: React.FC = () => {
             <span>Riesgo Bajo</span>
             <span>Liquidación (100%)</span>
           </div>
+        </div>
+      </div>
+
+      {/* Real-Time Formula Verification Bar */}
+      <div className="mt-3 pt-2.5 border-t border-neutral-800/70 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex items-center gap-1.5 flex-wrap text-neutral-300">
+          <span className="text-neutral-400 font-medium">Fórmula Margen Disponible:</span>
+          <span className="font-mono bg-neutral-800/80 px-2 py-0.5 rounded text-neutral-200" title="Balance Total del Margen">
+            Total ${marginBreakdown.totalMarginBalance.toFixed(2)}
+          </span>
+          <span className="text-rose-400 font-bold">-</span>
+          <span className="font-mono bg-rose-950/40 border border-rose-900/50 px-2 py-0.5 rounded text-rose-300" title="Margen comprometido en órdenes abiertas">
+            Órdenes ${marginBreakdown.openOrdersMargin.toFixed(2)}
+          </span>
+          <span className="text-rose-400 font-bold">-</span>
+          <span className="font-mono bg-rose-950/40 border border-rose-900/50 px-2 py-0.5 rounded text-rose-300" title="Margen aislado en posiciones activas">
+            Posiciones ${marginBreakdown.activePositionsMargin.toFixed(2)}
+          </span>
+          <span className="text-emerald-400 font-bold">=</span>
+          <span className="font-mono bg-emerald-950/50 border border-emerald-700/60 px-2.5 py-0.5 rounded text-emerald-300 font-bold" title="Margen disponible para nuevas estrategias">
+            Disponible: ${marginBreakdown.availableMargin.toFixed(2)} USDT
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-neutral-400 font-mono">
+          <span>{positions.length} pos. activa{positions.length === 1 ? '' : 's'}</span>
+          <span>•</span>
+          <span>{openOrdersCount} orden{openOrdersCount === 1 ? '' : 'es'} abierta{openOrdersCount === 1 ? '' : 's'}</span>
         </div>
       </div>
 

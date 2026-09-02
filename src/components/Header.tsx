@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
+import { strategyService } from '../services/strategyService';
 import { NetworkMode } from '../types/binance';
 
 interface HeaderProps {
@@ -23,10 +24,9 @@ interface HeaderProps {
   isConsoleOpen: boolean;
 }
 
-const POPULAR_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'];
-
 export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, isConsoleOpen }) => {
   const [currentSymbol, setCurrentSymbol] = useState(binanceWs.getCurrentSymbol());
+  const [strategyPairs, setStrategyPairs] = useState<string[]>(strategyService.getStrategyPairs());
   const [mode, setMode] = useState<NetworkMode>(binanceWs.getMode());
   const [status, setStatus] = useState(binanceWs.getConnectionStatus());
   const [rateLimits, setRateLimits] = useState(binanceWs.getRateLimits());
@@ -35,11 +35,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
   const [latency, setLatency] = useState(24);
 
   useEffect(() => {
-    const unsub = binanceWs.subscribe(() => {
+    // Initial sync of symbol with strategy pairs
+    const pairs = strategyService.getStrategyPairs();
+    if (pairs.length > 0 && !pairs.includes(binanceWs.getCurrentSymbol())) {
+      binanceWs.setSymbol(pairs[0]);
+    }
+
+    const unsubWs = binanceWs.subscribe(() => {
       setCurrentSymbol(binanceWs.getCurrentSymbol());
       setMode(binanceWs.getMode());
       setStatus(binanceWs.getConnectionStatus());
       setRateLimits(binanceWs.getRateLimits());
+    });
+
+    const unsubStrat = strategyService.subscribe(() => {
+      const updatedPairs = strategyService.getStrategyPairs();
+      setStrategyPairs(updatedPairs);
+      if (updatedPairs.length > 0 && !updatedPairs.includes(binanceWs.getCurrentSymbol())) {
+        binanceWs.setSymbol(updatedPairs[0]);
+      }
     });
 
     // Simulate minor realistic WS ping fluctuation
@@ -48,7 +62,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
     }, 4000);
 
     return () => {
-      unsub();
+      unsubWs();
+      unsubStrat();
       clearInterval(interval);
     };
   }, []);
@@ -96,22 +111,32 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
             </div>
           </div>
 
-          {/* Symbol Selector Pills */}
-          <div className="flex items-center bg-neutral-950/80 p-1 rounded-lg border border-neutral-800">
-            {POPULAR_SYMBOLS.map(sym => (
-              <button
-                key={sym}
-                id={`symbol-btn-${sym}`}
-                onClick={() => binanceWs.setSymbol(sym)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
-                  currentSymbol === sym
-                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
-                }`}
-              >
-                {sym.replace('USDT', '')}
-              </button>
-            ))}
+          {/* Symbol Selector Pills - Derived strictly from loaded strategies */}
+          <div className="flex items-center gap-1 bg-neutral-950/80 p-1 rounded-lg border border-neutral-800">
+            <span className="text-[10px] uppercase font-bold text-neutral-400 px-2 py-0.5 border-r border-neutral-800">
+              Pares Estrategia:
+            </span>
+            {strategyPairs.length === 0 ? (
+              <span className="text-xs text-neutral-400 italic px-2">Carga una estrategia en la pestaña Estrategias</span>
+            ) : (
+              strategyPairs.map(sym => (
+                <button
+                  key={sym}
+                  id={`symbol-btn-${sym}`}
+                  onClick={() => binanceWs.setSymbol(sym)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                    currentSymbol === sym
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
+                  }`}
+                >
+                  <span>{sym}</span>
+                  {currentSymbol === sym && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 animate-pulse" />
+                  )}
+                </button>
+              ))
+            )}
           </div>
 
           {/* Strict Risk Compliance Tag */}
