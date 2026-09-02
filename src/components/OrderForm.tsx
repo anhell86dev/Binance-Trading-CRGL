@@ -3,12 +3,10 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
-  Calculator,
-  ChevronRight,
-  Info,
+  ChevronDown,
   Layers,
   Lock,
-  Percent,
+  Search,
   Shield,
   Sliders,
   Target,
@@ -16,6 +14,8 @@ import {
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { OrderSide, OrderType, ScaledOrderConfig, TrailingStopConfig } from '../types/binance';
+import { AssetSelectorModal } from './AssetSelectorModal';
+import { normalizeBinanceSymbol } from '../data/binancePairs';
 
 export const OrderForm: React.FC = () => {
   const [ticker, setTicker] = useState(binanceWs.getTicker());
@@ -23,8 +23,11 @@ export const OrderForm: React.FC = () => {
   const [side, setSide] = useState<OrderSide>('BUY');
   const [orderType, setOrderType] = useState<OrderType>('LIMIT');
 
-  // STRICT MANDATE: Leverage 1x to 5x ONLY!
+  // STRICT RISK RULE: Leverage 1x to 5x ONLY!
   const [leverage, setLeverage] = useState<number>(3);
+
+  // Asset Selector Modal state
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
 
   // Core Order inputs
   const [price, setPrice] = useState<string>('');
@@ -58,12 +61,20 @@ export const OrderForm: React.FC = () => {
     return () => unsub();
   }, []);
 
+  // Format price helper according to coin value
+  const formatCoinPrice = (p: number) => {
+    if (!p || isNaN(p)) return '0.00';
+    if (p >= 100) return p.toFixed(2);
+    if (p >= 1) return p.toFixed(4);
+    return p.toFixed(6);
+  };
+
   // Update default price when symbol changes or initially
   useEffect(() => {
-    if (!price && ticker.lastPrice) {
-      setPrice(ticker.lastPrice.toFixed(2));
-      setScaledMinPrice((ticker.lastPrice * 0.98).toFixed(2));
-      setScaledMaxPrice((ticker.lastPrice * 1.02).toFixed(2));
+    if (ticker.lastPrice) {
+      setPrice(formatCoinPrice(ticker.lastPrice));
+      setScaledMinPrice(formatCoinPrice(ticker.lastPrice * 0.98));
+      setScaledMaxPrice(formatCoinPrice(ticker.lastPrice * 1.02));
     }
   }, [ticker.symbol]);
 
@@ -75,30 +86,43 @@ export const OrderForm: React.FC = () => {
     if (side === 'BUY') {
       const sl = currentP * (1 - slPercent / 100);
       const tp = currentP * (1 + (slPercent * riskReward) / 100);
-      setSlPrice(sl.toFixed(2));
-      setTpPrice(tp.toFixed(2));
+      setSlPrice(formatCoinPrice(sl));
+      setTpPrice(formatCoinPrice(tp));
     } else {
       const sl = currentP * (1 + slPercent / 100);
       const tp = currentP * (1 - (slPercent * riskReward) / 100);
-      setSlPrice(sl.toFixed(2));
-      setTpPrice(tp.toFixed(2));
+      setSlPrice(formatCoinPrice(sl));
+      setTpPrice(formatCoinPrice(tp));
     }
-  }, [price, side, slPercent, riskReward]);
+  }, [price, side, slPercent, riskReward, ticker.symbol]);
 
   // Handle Quick Size buttons
   const handleQuickPercent = (pct: number) => {
     const currentP = parseFloat(price) || ticker.lastPrice;
-    if (!currentP) return;
+    if (!currentP || currentP <= 0) return;
     const maxMargin = balance.availableBalance * (pct / 100);
     const maxNotional = maxMargin * leverage;
     const qty = maxNotional / currentP;
-    setQuantity(qty.toFixed(3));
+    
+    // Adaptive quantity precision
+    if (qty >= 100) {
+      setQuantity(qty.toFixed(1));
+    } else if (qty >= 1) {
+      setQuantity(qty.toFixed(3));
+    } else {
+      setQuantity(qty.toFixed(4));
+    }
   };
 
   // Safe leverage changer: strictly clamped 1x-5x
   const handleLeverageChange = (val: number) => {
     const safeVal = Math.min(5, Math.max(1, val));
     setLeverage(safeVal);
+  };
+
+  const handleSelectSymbol = (newSymbol: string) => {
+    const normalized = normalizeBinanceSymbol(newSymbol);
+    binanceWs.setSymbol(normalized);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -128,7 +152,7 @@ export const OrderForm: React.FC = () => {
 
         setMessage({
           type: 'success',
-          text: `Orden Limit enviada: ${side} ${qtyNum} ${ticker.symbol} @ $${priceNum} (${leverage}x ISOLATED)`,
+          text: `Orden Limit creada en Binance: ${side} ${qtyNum} ${ticker.symbol} @ $${priceNum} (${leverage}x ISOLATED)`,
         });
       } else if (orderType === 'SCALED') {
         const minP = parseFloat(scaledMinPrice);
@@ -151,7 +175,7 @@ export const OrderForm: React.FC = () => {
         await binanceWs.placeScaledOrders(config);
         setMessage({
           type: 'success',
-          text: `Orden escalonada de ${scaledCount} niveles creada exitosamente`,
+          text: `Orden escalonada de ${scaledCount} niveles creada en Binance para ${ticker.symbol}`,
         });
       } else if (orderType === 'TRAILING_STOP_MARKET') {
         const config: TrailingStopConfig = {
@@ -166,11 +190,11 @@ export const OrderForm: React.FC = () => {
         await binanceWs.placeTrailingStopOrder(config);
         setMessage({
           type: 'success',
-          text: `Trailing Stop activado con ${trailingCallback}% de retroceso`,
+          text: `Trailing Stop para ${ticker.symbol} activado con ${trailingCallback}% de retroceso`,
         });
       }
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Error al ejecutar orden' });
+      setMessage({ type: 'error', text: err.message || 'Error al ejecutar orden en Binance' });
     } finally {
       setIsSubmitting(false);
     }
@@ -180,20 +204,54 @@ export const OrderForm: React.FC = () => {
   const calcQty = parseFloat(quantity) || 0;
   const notionalValue = calcPrice * calcQty;
   const initialMargin = notionalValue / leverage;
+  const baseAsset = ticker.symbol.replace('USDT', '');
 
   return (
-    <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-xl p-4 flex flex-col gap-4">
-      {/* Header with Strict Risk Rules Indicators */}
-      <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-        <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-amber-400" />
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">Crear Orden</h3>
+    <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-4 flex flex-col gap-4 shadow-lg">
+      {/* Asset Selector Header - Support Any Binance Asset */}
+      <div className="flex flex-col gap-2 pb-3 border-b border-neutral-800">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Crear Orden</h3>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs font-mono">
+            <span className="text-neutral-400">TIF:</span>
+            <span className="px-1.5 py-0.5 rounded bg-neutral-800 font-bold text-amber-400 border border-neutral-700">
+              GTC
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 text-xs font-mono">
-          <span className="text-neutral-400">TIF:</span>
-          <span className="px-1.5 py-0.5 rounded bg-neutral-800 font-bold text-amber-400 border border-neutral-700">
-            GTC
-          </span>
+
+        {/* Dynamic Asset Chooser Button */}
+        <div className="flex items-center justify-between bg-neutral-950 p-2.5 rounded-lg border border-neutral-800">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              id="orderform-change-asset-btn"
+              onClick={() => setIsAssetModalOpen(true)}
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-amber-500/50 text-white transition-all text-xs font-bold font-mono group"
+              title="Cambiar o buscar cualquier activo listado en Binance"
+            >
+              <span className="text-amber-400">{ticker.symbol}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-neutral-400 group-hover:text-amber-400" />
+            </button>
+            <div className="flex flex-col">
+              <span className="text-[10px] text-neutral-500">Precio Binance</span>
+              <span className="text-xs font-mono font-bold text-emerald-400">
+                ${formatCoinPrice(ticker.lastPrice)}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsAssetModalOpen(true)}
+            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all"
+          >
+            <Search className="w-3 h-3" />
+            <span>Todos los Activos</span>
+          </button>
         </div>
       </div>
 
@@ -331,21 +389,21 @@ export const OrderForm: React.FC = () => {
               <span>Precio Límite (USDT)</span>
               <button
                 type="button"
-                onClick={() => setPrice(ticker.lastPrice.toFixed(2))}
+                onClick={() => setPrice(formatCoinPrice(ticker.lastPrice))}
                 className="text-amber-400 hover:underline text-[11px]"
               >
-                Último: ${ticker.lastPrice.toFixed(2)}
+                Último: ${formatCoinPrice(ticker.lastPrice)}
               </button>
             </div>
             <div className="relative">
               <input
                 type="number"
-                step="0.1"
+                step="any"
                 required
                 value={price}
                 onChange={e => setPrice(e.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-500/80"
-                placeholder="42088.0"
+                placeholder={formatCoinPrice(ticker.lastPrice)}
               />
               <span className="absolute right-3 top-2.5 text-xs text-neutral-500 font-mono">USDT</span>
             </div>
@@ -357,7 +415,7 @@ export const OrderForm: React.FC = () => {
           <div className="flex flex-col gap-2.5 bg-neutral-950/60 p-3 rounded-lg border border-neutral-800">
             <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
               <Layers className="w-3.5 h-3.5" />
-              <span>Rango de Precios para Escalón</span>
+              <span>Rango de Precios para Escalón ({ticker.symbol})</span>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -365,7 +423,7 @@ export const OrderForm: React.FC = () => {
                 <label className="text-[11px] text-neutral-400 block mb-1">Precio Mínimo</label>
                 <input
                   type="number"
-                  step="0.1"
+                  step="any"
                   required
                   value={scaledMinPrice}
                   onChange={e => setScaledMinPrice(e.target.value)}
@@ -377,7 +435,7 @@ export const OrderForm: React.FC = () => {
                 <label className="text-[11px] text-neutral-400 block mb-1">Precio Máximo</label>
                 <input
                   type="number"
-                  step="0.1"
+                  step="any"
                   required
                   value={scaledMaxPrice}
                   onChange={e => setScaledMaxPrice(e.target.value)}
@@ -444,11 +502,11 @@ export const OrderForm: React.FC = () => {
               </label>
               <input
                 type="number"
-                step="0.1"
+                step="any"
                 value={trailingActivation}
                 onChange={e => setTrailingActivation(e.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white"
-                placeholder={`Vacío = Inmediato ($${ticker.lastPrice.toFixed(2)})`}
+                placeholder={`Vacío = Inmediato ($${formatCoinPrice(ticker.lastPrice)})`}
               />
             </div>
           </div>
@@ -457,7 +515,7 @@ export const OrderForm: React.FC = () => {
         {/* Quantity Input */}
         <div>
           <div className="flex justify-between items-center text-xs text-neutral-400 mb-1">
-            <span>{orderType === 'SCALED' ? 'Cantidad Total' : 'Cantidad'} ({ticker.symbol.replace('USDT', '')})</span>
+            <span>{orderType === 'SCALED' ? 'Cantidad Total' : 'Cantidad'} ({baseAsset})</span>
             <span className="text-neutral-400 text-[11px]">
               Disp: ${(balance.availableBalance * leverage).toFixed(1)} USDT
             </span>
@@ -465,7 +523,7 @@ export const OrderForm: React.FC = () => {
           <div className="relative">
             <input
               type="number"
-              step="0.001"
+              step="any"
               required
               value={quantity}
               onChange={e => setQuantity(e.target.value)}
@@ -473,7 +531,7 @@ export const OrderForm: React.FC = () => {
               placeholder="0.05"
             />
             <span className="absolute right-3 top-2.5 text-xs text-neutral-500 font-mono">
-              {ticker.symbol.replace('USDT', '')}
+              {baseAsset}
             </span>
           </div>
 
@@ -535,7 +593,7 @@ export const OrderForm: React.FC = () => {
                   <span className="text-[11px] text-emerald-400 block mb-0.5">Take Profit (USDT)</span>
                   <input
                     type="number"
-                    step="0.1"
+                    step="any"
                     value={tpPrice}
                     onChange={e => setTpPrice(e.target.value)}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-emerald-300"
@@ -546,7 +604,7 @@ export const OrderForm: React.FC = () => {
                   <span className="text-[11px] text-rose-400 block mb-0.5">Stop Loss (USDT)</span>
                   <input
                     type="number"
-                    step="0.1"
+                    step="any"
                     value={slPrice}
                     onChange={e => setSlPrice(e.target.value)}
                     className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-rose-300"
@@ -601,10 +659,18 @@ export const OrderForm: React.FC = () => {
         >
           {side === 'BUY' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
           <span>
-            {side === 'BUY' ? 'Comprar / Long' : 'Vender / Short'} ({leverage}x ISOLATED)
+            {side === 'BUY' ? 'Comprar / Long' : 'Vender / Short'} {ticker.symbol} ({leverage}x)
           </span>
         </button>
       </form>
+
+      {/* Asset Selector Modal */}
+      <AssetSelectorModal
+        isOpen={isAssetModalOpen}
+        onClose={() => setIsAssetModalOpen(false)}
+        onSelectSymbol={handleSelectSymbol}
+        currentSymbol={ticker.symbol}
+      />
     </div>
   );
 };

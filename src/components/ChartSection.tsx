@@ -9,12 +9,18 @@ import {
   CheckCircle2,
   Clock,
   Layers,
+  Sparkles,
+  Sliders,
+  Target,
+  Shield,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { strategyService } from '../services/strategyService';
 import { TickerData } from '../types/binance';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 import { TradingViewWidget } from './TradingViewWidget';
+import { StrategyChartRenderer } from './StrategyChartRenderer';
+import { parsePricesFromStrategy } from '../utils/sheetParser';
 
 interface TimeframeOption {
   label: string;
@@ -40,6 +46,7 @@ export const ChartSection: React.FC = () => {
   );
   const [timeframe, setTimeframe] = useState<string>('240'); // 4H default as instructed
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [chartEngine, setChartEngine] = useState<'strategy_levels' | 'tradingview'>('strategy_levels');
 
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
@@ -59,11 +66,13 @@ export const ChartSection: React.FC = () => {
 
   // Symbol derived from active strategy or binanceWs current symbol
   const currentSymbol = activeStrategy?.par || ticker.symbol || 'ZECUSDT';
-  const isPositive = (ticker.priceChangePercent ?? 0) >= 0;
+  const isPositive = (ticker.change24hPercent ?? 0) >= 0;
 
   const handleSelectStrategy = (strat: GoogleSheetStrategyRow) => {
     strategyService.setActiveStrategyById(strat.noEstrategia);
   };
+
+  const parsedLevels = activeStrategy ? parsePricesFromStrategy(activeStrategy) : null;
 
   return (
     <div
@@ -85,7 +94,7 @@ export const ChartSection: React.FC = () => {
               PERPETUAL
             </span>
             <span className="hidden sm:inline-flex text-[11px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/30">
-              TradingView 4H
+              {timeframe === '240' ? '4H Estrategia' : `${timeframe} TF`}
             </span>
           </div>
 
@@ -105,7 +114,7 @@ export const ChartSection: React.FC = () => {
             >
               {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
               {isPositive ? '+' : ''}
-              {ticker.priceChangePercent ? ticker.priceChangePercent.toFixed(2) : '0.00'}%
+              {ticker.change24hPercent ? ticker.change24hPercent.toFixed(2) : '0.00'}%
             </span>
           </div>
         </div>
@@ -115,25 +124,55 @@ export const ChartSection: React.FC = () => {
           <div>
             <span className="text-neutral-500 text-[10px] block">24h Alto</span>
             <span className="text-neutral-200">
-              ${ticker.highPrice ? ticker.highPrice.toLocaleString() : '---'}
+              ${ticker.high24h ? ticker.high24h.toLocaleString() : '---'}
             </span>
           </div>
           <div>
             <span className="text-neutral-500 text-[10px] block">24h Bajo</span>
             <span className="text-neutral-200">
-              ${ticker.lowPrice ? ticker.lowPrice.toLocaleString() : '---'}
+              ${ticker.low24h ? ticker.low24h.toLocaleString() : '---'}
             </span>
           </div>
           <div>
             <span className="text-neutral-500 text-[10px] block">Volumen 24h</span>
             <span className="text-neutral-200">
-              {ticker.volume ? ticker.volume.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '---'}
+              {ticker.volume24h ? ticker.volume24h.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '---'}
             </span>
           </div>
         </div>
 
-        {/* Controls: Timeframe selector (Default 4H) & Fullscreen Toggle */}
-        <div className="flex items-center gap-2">
+        {/* Controls: Chart Mode Selector, Timeframes & Fullscreen Toggle */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Chart Engine Mode Switcher */}
+          <div className="flex items-center bg-neutral-900 rounded-lg p-0.5 border border-neutral-800 text-xs font-mono">
+            <button
+              id="chart-mode-strategy-btn"
+              onClick={() => setChartEngine('strategy_levels')}
+              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
+                chartEngine === 'strategy_levels'
+                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Dibuja en el gráfico las Entradas (E1, E2), Stop Loss (SL) y Take Profits (TP1, TP2, TP3)"
+            >
+              <Target className="w-3.5 h-3.5" />
+              <span>Niveles E1/SL/TP</span>
+            </button>
+            <button
+              id="chart-mode-tradingview-btn"
+              onClick={() => setChartEngine('tradingview')}
+              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
+                chartEngine === 'tradingview'
+                  ? 'bg-neutral-800 text-white font-bold'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Abrir vista de TradingView clásico con herramientas de dibujo libre"
+            >
+              <LineChart className="w-3.5 h-3.5" />
+              <span>TradingView</span>
+            </button>
+          </div>
+
           {/* Timeframe Buttons */}
           <div className="flex items-center bg-neutral-900 rounded-lg p-0.5 border border-neutral-800 text-xs font-mono">
             {TIMEFRAMES.map(tf => {
@@ -173,15 +212,15 @@ export const ChartSection: React.FC = () => {
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-1 text-amber-400 font-mono font-medium">
             <Compass size={13} />
-            Estrategia en Revisión:
+            Estrategia en Gráfico:
           </span>
           {activeStrategy ? (
-            <div className="flex items-center gap-2 font-mono">
+            <div className="flex items-center gap-2 font-mono flex-wrap">
               <span className="px-2 py-0.5 rounded bg-neutral-800 text-amber-300 font-bold border border-neutral-700">
                 {activeStrategy.noEstrategia}
               </span>
-              <span className="text-neutral-300 font-medium truncate max-w-[280px] sm:max-w-[450px]">
-                {activeStrategy.nombreDeEstrategia}
+              <span className="text-neutral-300 font-medium truncate max-w-[280px] sm:max-w-[420px]">
+                {activeStrategy.nombreEstrategia}
               </span>
               <span className="text-neutral-500 hidden sm:inline">•</span>
               <span className="text-neutral-400 hidden sm:inline">
@@ -196,7 +235,7 @@ export const ChartSection: React.FC = () => {
         {/* Quick Strategy Switcher Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
           <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider mr-1 hidden lg:inline">
-            Estrategias:
+            Pares:
           </span>
           {allStrategies.map(strat => {
             const isCurrent = strat.noEstrategia === activeStrategy?.noEstrategia;
@@ -211,7 +250,7 @@ export const ChartSection: React.FC = () => {
                     ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 font-bold shadow-sm'
                     : 'bg-neutral-800/80 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 border border-neutral-700/60'
                 }`}
-                title={`Revisar ${strat.noEstrategia}: ${strat.nombreDeEstrategia}`}
+                title={`Revisar ${strat.noEstrategia}: ${strat.nombreEstrategia}`}
               >
                 {isCurrent && <CheckCircle2 size={10} className="text-amber-400" />}
                 <span>{parBadge}</span>
@@ -222,14 +261,23 @@ export const ChartSection: React.FC = () => {
         </div>
       </div>
 
-      {/* Main TradingView Chart Container (No Order Book, 100% TradingView) */}
+      {/* Main Chart Container: Strategy Levels (Lightweight Charts) vs TradingView Embed */}
       <div className="relative flex-1 w-full min-h-[500px] bg-neutral-950">
-        <TradingViewWidget
-          symbol={currentSymbol}
-          interval={timeframe}
-          theme="dark"
-          height={isExpanded ? 'calc(100vh - 110px)' : '520px'}
-        />
+        {chartEngine === 'strategy_levels' ? (
+          <StrategyChartRenderer
+            symbol={currentSymbol}
+            interval={timeframe}
+            height={isExpanded ? 'calc(100vh - 120px)' : '520px'}
+            strategy={activeStrategy}
+          />
+        ) : (
+          <TradingViewWidget
+            symbol={currentSymbol}
+            interval={timeframe}
+            theme="dark"
+            height={isExpanded ? 'calc(100vh - 120px)' : '520px'}
+          />
+        )}
       </div>
 
       {/* Footer Status Bar with Protocol Adherence */}
@@ -237,7 +285,9 @@ export const ChartSection: React.FC = () => {
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-neutral-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            TradingView Advanced Real-Time Chart
+            {chartEngine === 'strategy_levels'
+              ? 'Líneas Tácticas Activas: E1, E2, SL, TP1, TP2, TP Final'
+              : 'TradingView Advanced Real-Time Chart'}
           </span>
           <span>•</span>
           <span>Símbolo: <strong className="text-neutral-300">BINANCE:{currentSymbol}</strong></span>
@@ -245,9 +295,10 @@ export const ChartSection: React.FC = () => {
           <span>Temporalidad: <strong className="text-amber-400 font-semibold">{timeframe === '240' ? '4 Horas (4H)' : timeframe}</strong></span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-neutral-400">Modo: Velas Japonesas + Herramientas de Análisis</span>
+          <span className="text-neutral-400">Margen ISOLATED 1x-5x</span>
         </div>
       </div>
     </div>
   );
 };
+

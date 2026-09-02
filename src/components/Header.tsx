@@ -8,6 +8,7 @@ import {
   Key,
   Radio,
   RefreshCw,
+  Search,
   Shield,
   Volume2,
   VolumeX,
@@ -18,6 +19,7 @@ import { notificationService } from '../services/notifications';
 import { strategyService } from '../services/strategyService';
 import { NetworkMode } from '../types/binance';
 import { APP_CONFIG, APP_VERSION } from '../config/version';
+import { AssetSelectorModal } from './AssetSelectorModal';
 
 interface HeaderProps {
   onOpenApiModal: () => void;
@@ -34,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
   const [soundOn, setSoundOn] = useState(notificationService.soundEnabled);
   const [pushGranted, setPushGranted] = useState(notificationService.pushGranted);
   const [latency, setLatency] = useState(24);
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
 
   useEffect(() => {
     // Initial sync of symbol with strategy pairs
@@ -120,20 +123,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
             </div>
           </div>
 
-          {/* Symbol Selector Pills - Derived strictly from loaded strategies */}
-          <div className="flex items-center gap-1 bg-neutral-950/80 p-1 rounded-lg border border-neutral-800">
-            <span className="text-[10px] uppercase font-bold text-neutral-400 px-2 py-0.5 border-r border-neutral-800">
-              Pares Estrategia:
-            </span>
-            {strategyPairs.length === 0 ? (
-              <span className="text-xs text-neutral-400 italic px-2">Carga una estrategia en la pestaña Estrategias</span>
-            ) : (
-              strategyPairs.map(sym => (
+          {/* Symbol Selector Pills & All Assets Search */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1 bg-neutral-950/80 p-1 rounded-lg border border-neutral-800">
+              <span className="text-[10px] uppercase font-bold text-neutral-400 px-2 py-0.5 border-r border-neutral-800">
+                Pares:
+              </span>
+              {strategyPairs.map(sym => (
                 <button
                   key={sym}
                   id={`symbol-btn-${sym}`}
                   onClick={() => binanceWs.setSymbol(sym)}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
                     currentSymbol === sym
                       ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
@@ -144,8 +145,27 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
                     <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 animate-pulse" />
                   )}
                 </button>
-              ))
-            )}
+              ))}
+
+              {/* If current symbol is not in strategy pairs, show it as active pill */}
+              {!strategyPairs.includes(currentSymbol) && (
+                <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-amber-500 text-neutral-950 shadow-sm flex items-center gap-1.5 font-mono">
+                  <span>{currentSymbol}</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 animate-pulse" />
+                </span>
+              )}
+            </div>
+
+            {/* Quick Button to Search Any Asset */}
+            <button
+              id="header-explore-assets-btn"
+              onClick={() => setIsAssetModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-amber-500/50 text-neutral-200 hover:text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm group"
+              title="Buscar y operar cualquier activo listado en Binance (BTC, ETH, SOL, DOGE, SUI, PEPE, etc.)"
+            >
+              <Search className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span>Todos los Activos Binance</span>
+            </button>
           </div>
 
           {/* Strict Risk Compliance Tag */}
@@ -290,6 +310,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
           </button>
         </div>
       </div>
+
+      {/* Binance Asset Selector Modal */}
+      <AssetSelectorModal
+        isOpen={isAssetModalOpen}
+        onClose={() => setIsAssetModalOpen(false)}
+        onSelectSymbol={(sym) => binanceWs.setSymbol(sym)}
+        currentSymbol={currentSymbol}
+      />
     </header>
   );
 };
