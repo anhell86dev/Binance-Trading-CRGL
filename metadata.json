@@ -1,0 +1,6 @@
+{
+  "name": "Binance USDⓈ-M Futures Terminal",
+  "description": "Terminal de trading de futuros USDⓈ-M de Binance con conexión WebSocket de baja latencia, apalancamiento restringido (1-5x Isolated), órdenes Limit, Escalonadas, Trailing Stop, TP/SL dinámicos y métricas en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
