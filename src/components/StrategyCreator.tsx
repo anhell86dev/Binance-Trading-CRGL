@@ -24,12 +24,17 @@ import {
   TrendingUp,
   X,
   Compass,
+  Scale,
+  Target,
+  DollarSign,
+  Wallet,
 } from 'lucide-react';
 import { GoogleSheetStrategyRow, StrategyExecutionPlan } from '../types/strategy';
 import {
   SAMPLE_GOOGLE_SHEET_CSV,
   generateExecutionPlan,
   parseCsvToStrategies,
+  parsePricesFromStrategy,
 } from '../utils/sheetParser';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
@@ -38,11 +43,17 @@ import {
   OFFICIAL_GOOGLE_SHEET_NAME,
   OFFICIAL_GOOGLE_SHEET_URL,
 } from '../services/strategyService';
-import { DollarSign, Wallet } from 'lucide-react';
 
 interface StrategyCreatorProps {
   onSwitchToOrders?: () => void;
 }
+
+const formatPrice = (p: number) => {
+  if (!p || isNaN(p)) return '0.00';
+  if (p >= 100) return p.toFixed(2);
+  if (p >= 1) return p.toFixed(3);
+  return p.toFixed(4);
+};
 
 export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrders }) => {
   // Strategies & Selection State
@@ -323,15 +334,82 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       {/* 3. TAB CONTENT: LISTAR TODAS LAS ESTRATEGIAS */}
       {activeTab === 'all_strategies' && (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-amber-400" />
                 Catálogo de Estrategias Oficiales ({strategies.length} activas)
               </h3>
-              <span className="text-xs text-neutral-400">
-                • Haz clic en &ldquo;Revisar y Ver en Gráfico&rdquo; para sincronizar TradingView en 4H
+              <span className="text-xs text-neutral-400 hidden sm:inline">
+                • Haz clic en &ldquo;Revisar y Cargar en Gráfico&rdquo; para sincronizar TradingView en 4H
               </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
+              <span className="text-neutral-500">Base de Cálculo:</span>
+              <span className="px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-amber-400 font-bold">
+                ${usdtAllocation} USDT • {selectedLeverage}x ISOLATED
+              </span>
+            </div>
+          </div>
+
+          {/* Comparador Rápido de Riesgo / Beneficio de las 5 Estrategias */}
+          <div className="bg-neutral-900/60 p-3 rounded-xl border border-neutral-800 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Scale className="w-3.5 h-3.5 text-amber-400" />
+                Resumen Comparativo: Ratio R/B, Ganancia y Pérdida
+              </span>
+              <span className="text-[11px] font-mono text-neutral-400 hidden md:inline">
+                Haz clic en una ficha para seleccionarla
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              {strategies.map((strat, sIdx) => {
+                const p = generateExecutionPlan(strat, usdtAllocation, selectedLeverage);
+                const isSelected = selectedStrategyIndex === sIdx;
+                return (
+                  <button
+                    key={`quick-metric-${strat.noEstrategia}`}
+                    id={`quick-compare-btn-${strat.noEstrategia}`}
+                    onClick={() => handleSelectStrategyToReview(sIdx)}
+                    className={`p-2.5 rounded-lg text-left transition-all border flex flex-col gap-1.5 ${
+                      isSelected
+                        ? 'bg-amber-500/10 border-amber-500/60 ring-1 ring-amber-500/40 shadow-sm'
+                        : 'bg-neutral-950/80 border-neutral-800/80 hover:border-neutral-700 hover:bg-neutral-900/70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-xs text-white flex items-center gap-1">
+                        <span>{strat.par}</span>
+                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
+                      </span>
+                      <span className={`text-[10px] font-mono font-extrabold px-1.5 py-0.2 rounded border ${
+                        p.riskRewardRatio >= 3
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : p.riskRewardRatio >= 2
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                          : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                      }`}>
+                        R/B 1:{p.riskRewardRatio}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <span className="text-emerald-400 font-bold" title="Ganancia Proyectada">
+                        +${p.maxProfitUsdt.toFixed(1)}
+                      </span>
+                      <span className="text-rose-400 font-bold" title="Pérdida Máxima">
+                        -${p.maxLossUsdt.toFixed(1)}
+                      </span>
+                    </div>
+
+                    <div className="text-[9px] text-neutral-400 truncate">
+                      {strat.nombreEstrategia || (strat as unknown as Record<string, string>).nombreDeEstrategia}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -339,19 +417,27 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
           <div className="grid grid-cols-1 gap-3.5">
             {strategies.map((strat, idx) => {
               const isSelected = selectedStrategyIndex === idx;
+              const cardPlan = generateExecutionPlan(strat, usdtAllocation, selectedLeverage);
+              const parsedPrices = parsePricesFromStrategy(strat);
+              const avgEntry = (parsedPrices.entry1Price + parsedPrices.entry2Price) / 2;
+              const slDistPct = avgEntry > 0 ? Math.abs(((avgEntry - parsedPrices.slPrice) / avgEntry) * 100) : 0;
+              const tpDistPct = avgEntry > 0 ? Math.abs(((parsedPrices.tp1Price - avgEntry) / avgEntry) * 100) : 0;
+              const profitReturnPct = usdtAllocation > 0 ? ((cardPlan.maxProfitUsdt / usdtAllocation) * 100) : 0;
+              const lossRiskPct = usdtAllocation > 0 ? ((cardPlan.maxLossUsdt / usdtAllocation) * 100) : 0;
+
               return (
                 <div
                   key={strat.noEstrategia}
                   id={`strategy-card-${strat.noEstrategia}`}
-                  className={`p-4 rounded-xl border transition-all flex flex-col gap-3 ${
+                  className={`p-4 rounded-xl border transition-all flex flex-col gap-3.5 ${
                     isSelected
                       ? 'bg-neutral-950 border-amber-500/60 shadow-lg shadow-amber-950/20 ring-1 ring-amber-500/30'
                       : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-950/90'
                   }`}
                 >
                   {/* Card Header */}
-                  <div className="flex flex-wrap items-start justify-between gap-2 pb-2.5 border-b border-neutral-850">
-                    <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex flex-wrap items-start justify-between gap-2.5 pb-2.5 border-b border-neutral-850">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs font-bold px-2.5 py-1 rounded bg-amber-500/15 text-amber-300 border border-amber-500/40">
                         {strat.noEstrategia}
                       </span>
@@ -359,7 +445,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                         {strat.par}
                       </span>
                       <span className="text-xs font-semibold text-white">
-                        {strat.nombreDeEstrategia}
+                        {strat.nombreEstrategia || (strat as unknown as Record<string, string>).nombreDeEstrategia}
                       </span>
                       <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-neutral-900 text-neutral-400 border border-neutral-800">
                         {strat.temporalidad || '1D / 4H'}
@@ -367,6 +453,31 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       <span className="text-[11px] font-mono text-neutral-500">
                         {strat.fecha}
                       </span>
+
+                      {/* Quick Badges in Header */}
+                      <div className="flex items-center gap-1.5 flex-wrap ml-1">
+                        <span
+                          title={`Ratio Riesgo/Beneficio: 1:${cardPlan.riskRewardRatio}`}
+                          className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/35 flex items-center gap-1"
+                        >
+                          <Scale className="w-3 h-3 text-amber-400" />
+                          <span>R/B 1:{cardPlan.riskRewardRatio}</span>
+                        </span>
+                        <span
+                          title="Ganancia Proyectada al alcanzar los 3 Take Profits"
+                          className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 flex items-center gap-1"
+                        >
+                          <TrendingUp className="w-3 h-3 text-emerald-400" />
+                          <span>+${cardPlan.maxProfitUsdt.toFixed(2)} USDT</span>
+                        </span>
+                        <span
+                          title="Pérdida Máxima al ejecutar el Stop Loss estricto"
+                          className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/35 flex items-center gap-1"
+                        >
+                          <ShieldAlert className="w-3 h-3 text-rose-400" />
+                          <span>-${cardPlan.maxLossUsdt.toFixed(2)} USDT</span>
+                        </span>
+                      </div>
                     </div>
 
                     {/* Action Button: Revisar & Cargar en Gráfico */}
@@ -398,6 +509,90 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                         <span>Ver Plan</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </button>
+                    </div>
+                  </div>
+
+                  {/* 3 Core Financial Metrics Requested: Ratio R/B, Ganancia Proyectada, Pérdida Máxima */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 rounded-xl bg-neutral-900/90 border border-neutral-800 shadow-inner">
+                    {/* 1. Ratio R/B */}
+                    <div className="p-3 rounded-lg bg-neutral-950/80 border border-amber-500/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center gap-1.5">
+                          <Scale className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          Ratio R/B (Riesgo / Beneficio)
+                        </span>
+                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-bold border ${
+                          cardPlan.riskRewardRatio >= 3
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                            : cardPlan.riskRewardRatio >= 2
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                            : 'bg-neutral-800 text-neutral-300 border-neutral-700'
+                        }`}>
+                          {cardPlan.riskRewardRatio >= 3 ? '★ 1:' + cardPlan.riskRewardRatio + ' Óptimo' : '1:' + cardPlan.riskRewardRatio}
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-mono font-extrabold text-amber-300">
+                          1 : {cardPlan.riskRewardRatio}
+                        </span>
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          (Riesgo $1.00 vs Retorno ${cardPlan.riskRewardRatio})
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-neutral-400 font-mono flex items-center justify-between pt-1.5 border-t border-neutral-850">
+                        <span>SL: ${formatPrice(parsedPrices.slPrice)} (-{slDistPct.toFixed(1)}%)</span>
+                        <span>TP1: ${formatPrice(parsedPrices.tp1Price)} (+{tpDistPct.toFixed(1)}%)</span>
+                      </div>
+                    </div>
+
+                    {/* 2. Ganancia Proyectada */}
+                    <div className="p-3 rounded-lg bg-neutral-950/80 border border-emerald-500/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          Ganancia Proyectada
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                          +{profitReturnPct.toFixed(1)}% Retorno
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-mono font-extrabold text-emerald-300">
+                          +${cardPlan.maxProfitUsdt.toFixed(2)} USDT
+                        </span>
+                        <span className="text-[10px] text-emerald-400/80 font-mono">
+                          (TP1 + TP2 + TP Final)
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-neutral-400 font-mono flex items-center justify-between pt-1.5 border-t border-neutral-850">
+                        <span>TP1 40% (${formatPrice(parsedPrices.tp1Price)})</span>
+                        <span>TP Final 20% (${formatPrice(parsedPrices.tpFinalPrice)})</span>
+                      </div>
+                    </div>
+
+                    {/* 3. Pérdida Máxima */}
+                    <div className="p-3 rounded-lg bg-neutral-950/80 border border-rose-500/30 flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-rose-400 tracking-wider flex items-center gap-1.5">
+                          <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                          Pérdida Máxima
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
+                          -{lossRiskPct.toFixed(1)}% Margen
+                        </span>
+                      </div>
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-2xl font-mono font-extrabold text-rose-300">
+                          -${cardPlan.maxLossUsdt.toFixed(2)} USDT
+                        </span>
+                        <span className="text-[10px] text-rose-400/80 font-mono">
+                          (SL Estricto)
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-neutral-400 font-mono flex items-center justify-between pt-1.5 border-t border-neutral-850">
+                        <span>Nivel SL: ${formatPrice(parsedPrices.slPrice)}</span>
+                        <span className="text-amber-400 font-semibold">{selectedLeverage}x ISOLATED</span>
+                      </div>
                     </div>
                   </div>
 
