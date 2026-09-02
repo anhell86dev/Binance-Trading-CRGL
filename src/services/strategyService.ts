@@ -1,8 +1,12 @@
-import { GoogleSheetStrategyRow } from '../types/strategy';
-import { SAMPLE_GOOGLE_SHEET_CSV, parseCsvToStrategies } from '../utils/sheetParser';
+import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
+import {
+  SAMPLE_GOOGLE_SHEET_CSV,
+  parseCsvToStrategies,
+  resolveLatestStrategiesPerPair,
+} from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
 
-const STORAGE_KEY = 'binance_futures_strategies_v2';
+const STORAGE_KEY = 'binance_futures_strategies_v3';
 const LAST_SYNC_KEY = 'binance_strategies_last_sync';
 
 export const OFFICIAL_GOOGLE_SHEET_NAME = 'Diario de Estrategias Cripto - Táctico Oficial (Google Sheets)';
@@ -20,7 +24,7 @@ class StrategyService {
 
   private loadStrategies() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('binance_futures_strategies_v2');
       const storedSync = localStorage.getItem(LAST_SYNC_KEY);
       if (storedSync) {
         this.lastSyncTime = storedSync;
@@ -28,7 +32,8 @@ class StrategyService {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length >= 5) {
-          this.strategies = parsed;
+          const { allResolvedStrategies } = resolveLatestStrategiesPerPair(parsed);
+          this.strategies = allResolvedStrategies;
           return;
         }
       }
@@ -36,7 +41,7 @@ class StrategyService {
       console.warn('Error reading stored strategies:', e);
     }
 
-    // Default to the 5 official tactical strategies
+    // Default to the official tactical strategies
     const initial = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
     this.strategies = initial;
     this.saveToStorage();
@@ -51,8 +56,76 @@ class StrategyService {
     }
   }
 
-  public getStrategies(): GoogleSheetStrategyRow[] {
+  /**
+   * Returns all strategies or filtered strictly to the latest strategy of each pair
+   */
+  public getStrategies(onlyLatestPerPair: boolean = false): GoogleSheetStrategyRow[] {
+    if (onlyLatestPerPair) {
+      return this.getLatestStrategiesPerPair();
+    }
     return this.strategies;
+  }
+
+  /**
+   * Strictly takes ONLY the latest strategy of each pair.
+   * "solo debe tomar la ultima estrategia de cada par"
+   */
+  public getLatestStrategiesPerPair(): GoogleSheetStrategyRow[] {
+    const { latestStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+    return latestStrategies;
+  }
+
+  /**
+   * Returns only the latest strategies that have status 'Activa' (Estrategia para tomar)
+   */
+  public getActiveStrategiesToTake(): GoogleSheetStrategyRow[] {
+    const { activeToTakeStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+    return activeToTakeStrategies;
+  }
+
+  /**
+   * Returns all strategies with obsolete states correctly resolved for historical duplicates
+   */
+  public getAllResolvedStrategies(): GoogleSheetStrategyRow[] {
+    const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+    return allResolvedStrategies;
+  }
+
+  /**
+   * Updates the lifecycle status of a specific strategy
+   * ('Activa' | 'Obsoleto' | 'Live' | 'Live+')
+   */
+  public updateStrategyStatus(strategyId: string, newStatus: StrategyTradeStatus) {
+    let changed = false;
+    this.strategies = this.strategies.map(s => {
+      if (s.noEstrategia.toLowerCase() === strategyId.toLowerCase()) {
+        changed = true;
+        return {
+          ...s,
+          estado: newStatus,
+        };
+      }
+      return s;
+    });
+
+    if (changed) {
+      this.saveToStorage();
+      this.notify();
+    }
+  }
+
+  /**
+   * Updates the status of the latest strategy matching a trading pair (symbol)
+   */
+  public updatePairLatestStatus(symbol: string, newStatus: StrategyTradeStatus) {
+    const cleanSym = symbol.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const latest = this.getLatestStrategiesPerPair().find(
+      s => (s.par || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym
+    );
+
+    if (latest) {
+      this.updateStrategyStatus(latest.noEstrategia, newStatus);
+    }
   }
 
   public getActiveStrategy(): GoogleSheetStrategyRow | undefined {

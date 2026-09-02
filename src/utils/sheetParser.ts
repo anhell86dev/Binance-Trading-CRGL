@@ -1,11 +1,165 @@
-import { GoogleSheetStrategyRow, PlannedStrategyOrder, StrategyExecutionPlan } from '../types/strategy';
+import {
+  GoogleSheetStrategyRow,
+  PlannedStrategyOrder,
+  StrategyExecutionPlan,
+  StrategyTradeStatus,
+  TradeProcessStageInfo,
+} from '../types/strategy';
 
-export const SAMPLE_GOOGLE_SHEET_CSV = `No. Estrategia,Fecha,Nombre de Estrategia,Par,Temporalidad,Tipo de Orden,Indicadores Clave,Reglas de Entrada,Reglas de Salida / TP,Gestión de Riesgo & Stop Loss,Comentarios / Backtesting
-STRAT-ZEC-001,2026-09-02,ZEC Rango Táctico y Acumulación en Soporte,ZECUSDT,1D / 4H,Límite / Stop Market / TP Límite,"6 SMAs (SMA-15: $760.45, SMA-30: $629.68), Soporte $789.12, Volumen (-5.54%)",Compra escalonada en soporte: Entrada 1 a $789-$790; Entrada 2 en prueba SMA-15 ($760.45). Opcional: confirmación con cierre 1D > $839.76.,"TP1: $840 (40% parcial); TP2: $865 (40% parcial); TP Final: $883 - $1,000 (20% swing).",Stop Loss estricto bajo SMA-15 a $759.00. Apalancamiento: 5x aislado. Riesgo de cartera: 1-3%.,"Ponderación: Rango/Rebote soporte 50% (más probable), Acumulación SMA-15/30 35%, Corrección profunda 15%. Estructura alcista intacta."
-STRAT-TAO-001,2026-09-02,TAO Soporte SMA-30/90 y Rango Táctico,TAOUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMA-30 y SMA-90 ($211 - $213), SMA-15, SMA-200 ($235.80), Retorno 30D (+15.03%), Volumen (-6.70%)",Entrada escalonada en soporte: Entrada 1 a $216.00; Entrada 2 en confluencia SMA-30/90 ($211.00 - $213.00). Confirmación opcional: cierre > $227.82.,TP1: $227.00 (40% parcial); TP2: $232.00 (40% parcial); TP Final: $235.80 (20% swing hacia SMA-200).,Stop Loss estricto bajo $205.00 en $204.50. Apalancamiento: 3x aislado. Riesgo de cartera: 1-2%.,Recomendación HOLD (2/5 señales alcistas). Respetar soporte $211-$213 para mantener sesgo. Acumulación DCA largo plazo (-70.93% ATH). Prudencia por desbloqueos.
-STRAT-AAVE-001,2026-09-02,AAVE Retroceso Táctico y Acumulación en Soporte,AAVEUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMAs 7/15/30/50/200, SMA-7: $122.10, SMA-30: $103.58, Soporte $117.72, Volumen (+25.51%)","Compra escalonada en retroceso: Entrada 1 a $124.60 (Apertura semanal, 50%); Entrada 2 a $122.10 (SMA-7 días, 50%). Opcional: confirmación con rebote en soporte.",TP1: $132.00 (40% parcial); TP2: $140.00 (40% parcial); TP Final: $160.00 (20% swing institucional).,Stop Loss estricto bajo $117.72 a $117.00. Apalancamiento: 5x aislado. Riesgo de cartera: 1-2%.,"Recomendación HOLD activa (3/5 señales alcistas). Retroceso táctico y rebote en SMA-7 55% (más probable), Rango actual 30%, Corrección a soporte $117.72 15%. Catalizador V4 institucional."
-STRAT-SOL-001,2026-09-02,SOL Rango Táctico y Acumulación en Soporte,SOLUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMA-200 (+14.3%), SMA-7 ($103.07), SMA-30 ($86.13), Retorno 90D (+47.33%), Soporte $97.10 - $97.51, Volumen contenido (-4.40%)",Compra escalonada en soporte: Entrada 1 a $97.50 (50%); Entrada 2 a $97.10 (50%). Confirmación conservadora: cierre 1D > $103.07 o superar $103.62.,TP1: $103.62 (40% parcial); TP2: $104.29 (40% parcial); TP Final: $110.00 (20% swing mediano plazo).,Stop Loss estricto bajo $96.00 en $95.90. Apalancamiento: 3x aislado. Riesgo de cartera: 1-2%.,"Recomendación HOLD (2/5 señales alcistas). Tendencia de fondo alcista. Rango/Rebote soporte $97.10-$97.51 (más probable), Acumulación $95-$100, SMA-30 ($86.13) en corrección profunda."
-STRAT-XRP-001,2026-09-02,XRP Rango Táctico y Acumulación en Soporte SMA-200,XRPUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMA-200 ($1.27), SMA-90 ($1.13), SMA-50, SMA-15, SMA-7, Soporte $1.31, Volumen decreciente (-3.44%)",Compra escalonada en soporte: Entrada 1 a $1.32 (50%); Entrada 2 en defensa SMA-200 a $1.27 (50%). Confirmación: cierre 1D > $1.38.,TP1: $1.38 (40% parcial); TP2: $1.39 (40% parcial); TP Final: $1.56 (20% swing mediano plazo).,Stop Loss estricto bajo $1.26 en $1.2580. Apalancamiento: 5x aislado. Riesgo de cartera: 1-2%.,Recomendación HOLD (2/5 señales alcistas). Tendencia de fondo alcista sobre SMA-200 ($1.27). Operar rango $1.31-$1.39. Acumulación DCA mediano plazo (-65.27% ATH).`;
+export const SAMPLE_GOOGLE_SHEET_CSV = `No. Estrategia,Fecha,Nombre de Estrategia,Par,Temporalidad,Tipo de Orden,Indicadores Clave,Reglas de Entrada,Reglas de Salida / TP,Gestión de Riesgo & Stop Loss,Comentarios / Backtesting,Estado
+STRAT-ZEC-000,2026-08-20,ZEC Rango Táctico Anterior (Revisión Previa),ZECUSDT,1D / 4H,Límite / Stop Market,"SMA-15: $720.00, Soporte $740.00",Compra a $740.00 (50%); Entrada 2 a $720.00.,TP1: $800; TP Final: $840.,Stop Loss bajo $705.00. Apalancamiento: 3x aislado.,Estrategia superada por la revisión actual de septiembre 2026. Invalidada por rotura alcista.,Obsoleto
+STRAT-ZEC-001,2026-09-02,ZEC Rango Táctico y Acumulación en Soporte,ZECUSDT,1D / 4H,Límite / Stop Market / TP Límite,"6 SMAs (SMA-15: $760.45, SMA-30: $629.68), Soporte $789.12, Volumen (-5.54%)",Compra escalonada en soporte: Entrada 1 a $789-$790; Entrada 2 en prueba SMA-15 ($760.45). Opcional: confirmación con cierre 1D > $839.76.,"TP1: $840 (40% parcial); TP2: $865 (40% parcial); TP Final: $883 - $1,000 (20% swing).",Stop Loss estricto bajo SMA-15 a $759.00. Apalancamiento: 5x aislado. Riesgo de cartera: 1-3%.,"Ponderación: Rango/Rebote soporte 50% (más probable), Acumulación SMA-15/30 35%, Corrección profunda 15%. Estructura alcista intacta.",Activa
+STRAT-TAO-001,2026-09-02,TAO Soporte SMA-30/90 y Rango Táctico,TAOUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMA-30 y SMA-90 ($211 - $213), SMA-15, SMA-200 ($235.80), Retorno 30D (+15.03%), Volumen (-6.70%)",Entrada escalonada en soporte: Entrada 1 a $216.00; Entrada 2 en confluencia SMA-30/90 ($211.00 - $213.00). Confirmación opcional: cierre > $227.82.,TP1: $227.00 (40% parcial); TP2: $232.00 (40% parcial); TP Final: $235.80 (20% swing hacia SMA-200).,Stop Loss estricto bajo $205.00 en $204.50. Apalancamiento: 3x aislado. Riesgo de cartera: 1-2%.,Recomendación HOLD (2/5 señales alcistas). Respetar soporte $211-$213 para mantener sesgo. Acumulación DCA largo plazo (-70.93% ATH). Prudencia por desbloqueos.,Activa
+STRAT-AAVE-001,2026-09-02,AAVE Retroceso Táctico y Acumulación en Soporte,AAVEUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMAs 7/15/30/50/200, SMA-7: $122.10, SMA-30: $103.58, Soporte $117.72, Volumen (+25.51%)","Compra escalonada en retroceso: Entrada 1 a $124.60 (Apertura semanal, 50%); Entrada 2 a $122.10 (SMA-7 días, 50%). Opcional: confirmación con rebote en soporte.",TP1: $132.00 (40% parcial); TP2: $140.00 (40% parcial); TP Final: $160.00 (20% swing institucional).,Stop Loss estricto bajo $117.72 a $117.00. Apalancamiento: 5x aislado. Riesgo de cartera: 1-2%.,"Recomendación HOLD activa (3/5 señales alcistas). Retroceso táctico y rebote en SMA-7 55% (más probable), Rango actual 30%, Corrección a soporte $117.72 15%. Catalizador V4 institucional.",Activa
+STRAT-SOL-001,2026-09-02,SOL Rango Táctico y Acumulación en Soporte,SOLUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMA-200 (+14.3%), SMA-7 ($103.07), SMA-30 ($86.13), Retorno 90D (+47.33%), Soporte $97.10 - $97.51, Volumen contenido (-4.40%)",Compra escalonada en soporte: Entrada 1 a $97.50 (50%); Entrada 2 a $97.10 (50%). Confirmación conservadora: cierre 1D > $103.07 o superar $103.62.,TP1: $103.62 (40% parcial); TP2: $104.29 (40% parcial); TP Final: $110.00 (20% swing mediano plazo).,Stop Loss estricto bajo $96.00 en $95.90. Apalancamiento: 3x aislado. Riesgo de cartera: 1-2%.,"Recomendación HOLD (2/5 señales alcistas). Tendencia de fondo alcista. Rango/Rebote soporte $97.10-$97.51 (más probable), Acumulación $95-$100, SMA-30 ($86.13) en corrección profunda.",Activa
+STRAT-XRP-001,2026-09-02,XRP Rango Táctico y Acumulación en Soporte SMA-200,XRPUSDT,1D / 4H,Límite / Stop Market / TP Límite,"SMA-200 ($1.27), SMA-90 ($1.13), SMA-50, SMA-15, SMA-7, Soporte $1.31, Volumen decreciente (-3.44%)",Compra escalonada en soporte: Entrada 1 a $1.32 (50%); Entrada 2 en defensa SMA-200 a $1.27 (50%). Confirmación: cierre 1D > $1.38.,TP1: $1.38 (40% parcial); TP2: $1.39 (40% parcial); TP Final: $1.56 (20% swing mediano plazo).,Stop Loss estricto bajo $1.26 en $1.2580. Apalancamiento: 5x aislado. Riesgo de cartera: 1-2%.,Recomendación HOLD (2/5 señales alcistas). Tendencia de fondo alcista sobre SMA-200 ($1.27). Operar rango $1.31-$1.39. Acumulación DCA mediano plazo (-65.27% ATH).,Activa`;
+
+/**
+ * Normalizes status strings from Google Sheets to StrategyTradeStatus
+ * Activa: Estrategia para tomar
+ * Obsoleto: Estrategia No activa
+ * Live: Estrategia con Ordenes Generadas
+ * Live+: Estrategia con Ordenes Generadas y completadas
+ */
+export function normalizeStrategyStatus(val?: string): StrategyTradeStatus {
+  if (!val) return 'Activa';
+  const clean = val.trim().toLowerCase();
+  if (clean === 'live+' || clean.includes('live+') || clean.includes('live plus') || clean.includes('completad')) {
+    return 'Live+';
+  }
+  if (clean === 'live' || clean.includes('generad')) {
+    return 'Live';
+  }
+  if (clean === 'obsoleto' || clean.includes('obsolet') || clean.includes('no activa') || clean.includes('inactiv') || clean.includes('cancelad')) {
+    return 'Obsoleto';
+  }
+  return 'Activa';
+}
+
+/**
+ * Returns rich status metadata and trade lifecycle process description
+ */
+export function getTradeProcessStageInfo(
+  status: StrategyTradeStatus = 'Activa',
+  hasOpenOrders: boolean = false,
+  hasPosition: boolean = false
+): TradeProcessStageInfo {
+  // If Binance has an active position, it is in Live+ phase (completada / en curso)
+  if (hasPosition || status === 'Live+') {
+    return {
+      stage: 3,
+      status: 'Live+',
+      label: 'Live+',
+      meaning: 'Estrategia con Órdenes Generadas y completadas',
+      description:
+        'Entradas ejecutadas y completadas en el mercado. Posición activa en Binance Futures con margen aislado. Monitoreo en tiempo real de PnL no realizado y gestión dinámica hacia TP1 (40%), TP2 (40%), TP Final (20%) y Stop Loss.',
+      progressPct: 90,
+      nextStep: 'Gestión activa hasta toma de beneficios en TPs escalonados o salida estricta por Stop Loss.',
+      badgeClass: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    };
+  }
+
+  // If Binance has open orders placed, it is in Live phase (órdenes generadas en libro)
+  if (hasOpenOrders || status === 'Live') {
+    return {
+      stage: 2,
+      status: 'Live',
+      label: 'Live',
+      meaning: 'Estrategia con Órdenes Generadas',
+      description:
+        'Órdenes límite de entrada (E1 y E2) junto a órdenes condicionales Stop Loss y Take Profits colocadas en el libro de Binance Futures. Esperando que el mercado toque la zona de soporte para su ejecución.',
+      progressPct: 60,
+      nextStep: 'Esperar llenado (Fill) de las órdenes límite para pasar automáticamente a estado Live+.',
+      badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    };
+  }
+
+  // Obsolete / Inactive strategy
+  if (status === 'Obsoleto') {
+    return {
+      stage: 0,
+      status: 'Obsoleto',
+      label: 'Obsoleto',
+      meaning: 'Estrategia No activa',
+      description:
+        'Estrategia no vigente o superada por una revisión más reciente del mismo par. Desestimada para ejecución operativa.',
+      progressPct: 0,
+      nextStep: 'Consultar la última estrategia con estado "Activa" para este par.',
+      badgeClass: 'bg-neutral-850 text-neutral-400 border-neutral-700',
+    };
+  }
+
+  // Default: 'Activa' (Estrategia para tomar)
+  return {
+    stage: 1,
+    status: 'Activa',
+    label: 'Activa',
+    meaning: 'Estrategia para tomar',
+    description:
+      'Estrategia vigente y lista para tomar. Análisis técnico validado con niveles de soporte y medias móviles. Monitoreo en tiempo real del % de distancia a Entrada 1 y Entrada 2.',
+    progressPct: 30,
+    nextStep: 'Autorizar y enviar órdenes planificadas a Binance Futures para pasar a estado Live.',
+    badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+  };
+}
+
+/**
+ * Takes a list of strategies and resolves the rule:
+ * "Solo debe tomar la última estrategia de cada par. La que dice ACTIVA en el estado: Activa.
+ * Estrategia para tomar, Obsoleto: Estrategia No activa. Live: Estrategia con Ordenes Generadas.
+ * Live+: Estrategia con Ordenes Generadas y completadas."
+ */
+export function resolveLatestStrategiesPerPair(strategies: GoogleSheetStrategyRow[]): {
+  latestStrategies: GoogleSheetStrategyRow[];
+  allResolvedStrategies: GoogleSheetStrategyRow[];
+  activeToTakeStrategies: GoogleSheetStrategyRow[];
+} {
+  // Map to find the last index / latest entry for each pair
+  const lastIndexByPair = new Map<string, number>();
+
+  for (let i = 0; i < strategies.length; i++) {
+    const s = strategies[i];
+    const pair = (s.par || '').trim().toUpperCase();
+    if (pair) {
+      lastIndexByPair.set(pair, i);
+    }
+  }
+
+  const allResolvedStrategies: GoogleSheetStrategyRow[] = strategies.map((s, i) => {
+    const pair = (s.par || '').trim().toUpperCase();
+    const isLatest = lastIndexByPair.get(pair) === i;
+
+    // If it's NOT the latest strategy for this pair, it is superseded and becomes Obsoleto
+    if (!isLatest) {
+      return {
+        ...s,
+        estado: 'Obsoleto' as StrategyTradeStatus,
+      };
+    }
+
+    return {
+      ...s,
+      estado: s.estado ? normalizeStrategyStatus(s.estado) : 'Activa',
+    };
+  });
+
+  // Extract only the latest strategy of each pair
+  const latestStrategies: GoogleSheetStrategyRow[] = [];
+  lastIndexByPair.forEach(idx => {
+    if (allResolvedStrategies[idx]) {
+      latestStrategies.push(allResolvedStrategies[idx]);
+    }
+  });
+
+  // Filter only those among the latest that are marked "Activa" (Estrategia para tomar)
+  const activeToTakeStrategies = latestStrategies.filter(s => s.estado === 'Activa');
+
+  return {
+    latestStrategies,
+    allResolvedStrategies,
+    activeToTakeStrategies,
+  };
+}
 
 /**
  * Robust CSV parser that handles quotes and line breaks inside quoted fields
@@ -79,6 +233,7 @@ export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] 
   const salidaIdx = findColIndex(['salida', 'tp', 'take profit', 'exit']);
   const riesgoIdx = findColIndex(['riesgo', 'stop', 'sl', 'risk']);
   const comIdx = findColIndex(['comentario', 'backtest', 'nota', 'comment']);
+  const estadoIdx = findColIndex(['estado', 'status', 'fase', 'lifecycle', 'proceso']);
 
   const strategies: GoogleSheetStrategyRow[] = [];
 
@@ -98,10 +253,13 @@ export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] 
       reglasDeSalidaTP: (salidaIdx >= 0 && row[salidaIdx]) ? row[salidaIdx] : '',
       gestionDeRiesgoStopLoss: (riesgoIdx >= 0 && row[riesgoIdx]) ? row[riesgoIdx] : '',
       comentariosBacktesting: (comIdx >= 0 && row[comIdx]) ? row[comIdx] : '',
+      estado: normalizeStrategyStatus(estadoIdx >= 0 ? row[estadoIdx] : undefined),
     });
   }
 
-  return strategies;
+  // Auto-resolve latest strategies per pair (earlier ones for the same pair become Obsoleto)
+  const { allResolvedStrategies } = resolveLatestStrategiesPerPair(strategies);
+  return allResolvedStrategies;
 }
 
 /**

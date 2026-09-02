@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Eye,
   FileSpreadsheet,
+  Filter,
   HelpCircle,
   Layers,
   LineChart,
@@ -17,6 +18,7 @@ import {
   Percent,
   Play,
   Plus,
+  Radio,
   RefreshCw,
   RotateCcw,
   Send,
@@ -32,13 +34,26 @@ import {
   Target,
   DollarSign,
   Wallet,
+  Zap,
+  Ban,
+  Trophy,
+  AlertTriangle,
+  TrendingDown,
+  Award,
 } from 'lucide-react';
-import { GoogleSheetStrategyRow, StrategyExecutionPlan, SheetAlertRow } from '../types/strategy';
+import {
+  GoogleSheetStrategyRow,
+  StrategyExecutionPlan,
+  SheetAlertRow,
+  StrategyTradeStatus,
+} from '../types/strategy';
 import {
   SAMPLE_GOOGLE_SHEET_CSV,
   generateExecutionPlan,
   parseCsvToStrategies,
   parsePricesFromStrategy,
+  resolveLatestStrategiesPerPair,
+  getTradeProcessStageInfo,
 } from '../utils/sheetParser';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
@@ -52,6 +67,7 @@ import {
   OFFICIAL_ALERTS_SHEET_NAME,
   OFFICIAL_WORKBOOK_NAME,
 } from '../services/alertsSheetService';
+import { TradeProcessIndicator } from './TradeProcessIndicator';
 
 interface StrategyCreatorProps {
   onSwitchToOrders?: () => void;
@@ -95,6 +111,15 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
     'all_strategies' | 'plan' | 'sheet_data' | 'sheet_alertas' | 'guide'
   >('all_strategies');
 
+  // User Requirement: "solo debe tomar la ultima estrategia de cada par"
+  // Default to true (strictly take latest strategy per pair)
+  const [onlyLatestPerPair, setOnlyLatestPerPair] = useState<boolean>(true);
+  const [statusFilter, setStatusFilter] = useState<'ALL' | StrategyTradeStatus>('ALL');
+
+  // Live open orders and positions from Binance to auto-detect execution states
+  const [openOrders, setOpenOrders] = useState(() => binanceWs.getOpenOrders());
+  const [positions, setPositions] = useState(() => binanceWs.getPositions());
+
   // Sheet "alertas" state and form
   const [sheetAlerts, setSheetAlerts] = useState<SheetAlertRow[]>(() =>
     alertsSheetService.getAlerts()
@@ -108,10 +133,12 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
   const [newAlertTargetPrice, setNewAlertTargetPrice] = useState<string>('');
   const [newAlertCustomMsg, setNewAlertCustomMsg] = useState<string>('');
 
-  // Keep live margin and alerts sync with Binance & Google Sheet service
+  // Keep live margin, orders, positions and alerts sync with Binance & Google Sheet service
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
       setMarginBreakdown(binanceWs.getMarginBreakdown());
+      setOpenOrders(binanceWs.getOpenOrders());
+      setPositions(binanceWs.getPositions());
     });
 
     const unsubStrat = strategyService.subscribe(() => {
@@ -131,6 +158,89 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       unsubAlerts();
     };
   }, []);
+
+  // Compute resolved strategies per pair ("solo debe tomar la ultima estrategia de cada par")
+  const { latestStrategies, allResolvedStrategies, activeToTakeStrategies } = useMemo(() => {
+    return resolveLatestStrategiesPerPair(strategies);
+  }, [strategies]);
+
+  // Displayed strategies according to latest-per-pair filter and status filter
+  const displayedStrategies = useMemo(() => {
+    const base = onlyLatestPerPair ? latestStrategies : allResolvedStrategies;
+    if (statusFilter === 'ALL') {
+      return base;
+    }
+    return base.filter(s => (s.estado || 'Activa') === statusFilter);
+  }, [onlyLatestPerPair, latestStrategies, allResolvedStrategies, statusFilter]);
+
+  // Ranking of strategies: Identifies Best and Worst based on Risk/Reward Ratio & Projected Return
+  const rankedStrategies = useMemo(() => {
+    if (!displayedStrategies || displayedStrategies.length === 0) {
+      return { best: null, worst: null, allRanked: [], rankMap: new Map<string, number>() };
+    }
+
+    const scored = displayedStrategies.map(strat => {
+      const origIndex = strategies.findIndex(s => s.noEstrategia === strat.noEstrategia);
+      const plan = generateExecutionPlan(strat, usdtAllocation, selectedLeverage);
+      const parsedPrices = parsePricesFromStrategy(strat);
+      const roiPct = usdtAllocation > 0 ? (plan.maxProfitUsdt / usdtAllocation) * 100 : 0;
+      const riskPct = usdtAllocation > 0 ? (plan.maxLossUsdt / usdtAllocation) * 100 : 0;
+      // Primary score: riskRewardRatio, secondary tiebreaker: maxProfitUsdt
+      const compositeScore = plan.riskRewardRatio * 1000 + plan.maxProfitUsdt;
+
+      return {
+        strategy: strat,
+        originalIndex: origIndex >= 0 ? origIndex : 0,
+        plan,
+        parsedPrices,
+        roiPct,
+        riskPct,
+        compositeScore,
+        rbRatio: plan.riskRewardRatio,
+        maxProfit: plan.maxProfitUsdt,
+        maxLoss: plan.maxLossUsdt,
+      };
+    });
+
+    // Sort descending by compositeScore (highest R/B and profit first)
+    scored.sort((a, b) => b.compositeScore - a.compositeScore);
+
+    const rankMap = new Map<string, number>();
+    scored.forEach((item, index) => {
+      rankMap.set(item.strategy.noEstrategia, index + 1);
+    });
+
+    const best = scored[0] || null;
+    // Only designate a distinct worst if there are 2 or more strategies
+    const worst = scored.length > 1 ? scored[scored.length - 1] : null;
+
+    return {
+      best,
+      worst,
+      allRanked: scored,
+      rankMap,
+    };
+  }, [displayedStrategies, strategies, usdtAllocation, selectedLeverage]);
+
+  const hasOpenOrdersForPair = (pair: string) => {
+    const clean = (pair || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    return openOrders.some(o => o.symbol.toUpperCase() === clean);
+  };
+
+  const hasPositionForPair = (pair: string) => {
+    const clean = (pair || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    return positions.some(p => p.symbol.toUpperCase() === clean && Math.abs(p.positionAmt) > 0);
+  };
+
+  const handleStatusChange = (strategyId: string, newStatus: StrategyTradeStatus) => {
+    strategyService.updateStrategyStatus(strategyId, newStatus);
+    notificationService.notify(
+      'SYSTEM',
+      'Estado del Trade Actualizado',
+      `Estrategia ${strategyId} actualizada a "${newStatus}".`,
+      'normal'
+    );
+  };
 
   // Recalculate execution plan whenever selected strategy, allocation, or leverage changes
   useEffect(() => {
@@ -204,6 +314,16 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       setCreatedOrderReceipts(orderIds);
       setExecutionPlan(authorizedPlan);
       setIsAuthModalOpen(false);
+
+      // Advance trade process to 'Live' (Estrategia con Órdenes Generadas)
+      strategyService.updateStrategyStatus(currentStrategy.noEstrategia, 'Live');
+
+      notificationService.notify(
+        'EXECUTION',
+        'Órdenes Generadas en Binance (Estado: Live)',
+        `Estrategia ${currentStrategy.noEstrategia} (${currentStrategy.par}) pasó a estado "Live" con ${orderIds.length} órdenes en libro.`,
+        'urgent'
+      );
     } catch (err: any) {
       notificationService.notify('SYSTEM', 'Error al autorizar estrategia', err.message, 'urgent');
     } finally {
@@ -221,10 +341,14 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       status: 'DRAFT_PENDING_AUTH',
       createdOrderIds: [],
     });
+
+    // Revert trade process to 'Activa' (Estrategia para tomar)
+    strategyService.updateStrategyStatus(currentStrategy.noEstrategia, 'Activa');
+
     notificationService.notify(
       'SYSTEM',
-      'Órdenes de Estrategia Canceladas',
-      'Las órdenes en Binance fueron canceladas.'
+      'Órdenes Canceladas (Estado: Activa)',
+      `Las órdenes fueron canceladas. Estrategia ${currentStrategy.noEstrategia} vuelve a estado "Activa" (Para tomar).`
     );
   };
 
@@ -433,6 +557,9 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
           <span className="px-1.5 py-0.2 rounded bg-neutral-800 text-emerald-400 border border-neutral-700">
             {currentStrategy?.par}
           </span>
+          {currentStrategy && (
+            <TradeProcessIndicator strategy={currentStrategy} compact={true} />
+          )}
           <span className="text-blue-400 text-[10px] hidden sm:inline">Gráfico 4H</span>
         </div>
       </div>
@@ -444,7 +571,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-amber-400" />
-                Catálogo de Estrategias Oficiales ({strategies.length} activas)
+                Catálogo de Estrategias Oficiales ({displayedStrategies.length} mostradas)
               </h3>
               <span className="text-xs text-neutral-400 hidden sm:inline">
                 • Haz clic en &ldquo;Revisar y Cargar en Gráfico&rdquo; para sincronizar TradingView en 4H
@@ -458,70 +585,365 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
             </div>
           </div>
 
-          {/* Comparador Rápido de Riesgo / Beneficio de las 5 Estrategias */}
-          <div className="bg-neutral-900/60 p-3 rounded-xl border border-neutral-800 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                <Scale className="w-3.5 h-3.5 text-amber-400" />
-                Resumen Comparativo: Ratio R/B, Ganancia y Pérdida
-              </span>
-              <span className="text-[11px] font-mono text-neutral-400 hidden md:inline">
-                Haz clic en una ficha para seleccionarla
+          {/* User Requirement Filter Bar: "solo debe tomar la ultima estrategia de cada par" */}
+          <div className="p-3 bg-neutral-900/90 rounded-xl border border-neutral-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs">
+            {/* Left: Deduplication Toggle */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                id="toggle-only-latest-pair-btn"
+                onClick={() => setOnlyLatestPerPair(!onlyLatestPerPair)}
+                className={`px-3 py-1.5 rounded-lg border font-mono font-bold text-xs transition-all flex items-center gap-1.5 ${
+                  onlyLatestPerPair
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                    : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:text-neutral-200'
+                }`}
+                title="Filtro estricto: Solo toma la última estrategia vigente de cada par"
+              >
+                <Filter className="w-3.5 h-3.5 text-amber-400" />
+                <span>{onlyLatestPerPair ? '✓ Solo Última por Par (Activo)' : 'Ver Historial Completo'}</span>
+              </button>
+
+              <span className="text-[11px] text-neutral-400 font-mono hidden lg:inline">
+                {onlyLatestPerPair
+                  ? 'Filtro activo: Únicamente la última estrategia de cada par.'
+                  : 'Historial completo visible (versiones anteriores marcadas Obsoletas).'}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-              {strategies.map((strat, sIdx) => {
-                const p = generateExecutionPlan(strat, usdtAllocation, selectedLeverage);
-                const isSelected = selectedStrategyIndex === sIdx;
-                return (
+            {/* Right: Status Filters */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-neutral-500 font-mono uppercase tracking-wider">
+                Estado:
+              </span>
+              <button
+                id="status-filter-all"
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all ${
+                  statusFilter === 'ALL'
+                    ? 'bg-neutral-800 text-white font-bold border border-neutral-700'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-950'
+                }`}
+              >
+                Todas ({onlyLatestPerPair ? latestStrategies.length : allResolvedStrategies.length})
+              </button>
+              <button
+                id="status-filter-activa"
+                onClick={() => setStatusFilter('Activa')}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all flex items-center gap-1 ${
+                  statusFilter === 'Activa'
+                    ? 'bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40'
+                    : 'text-emerald-400/80 hover:text-emerald-300 hover:bg-emerald-950/20'
+                }`}
+                title="Activa: Estrategia para tomar"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Activa ({latestStrategies.filter(s => (s.estado || 'Activa') === 'Activa').length})</span>
+              </button>
+              <button
+                id="status-filter-live"
+                onClick={() => setStatusFilter('Live')}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all flex items-center gap-1 ${
+                  statusFilter === 'Live'
+                    ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40'
+                    : 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/20'
+                }`}
+                title="Live: Estrategia con Órdenes Generadas"
+              >
+                <Radio className="w-3 h-3 text-amber-400" />
+                <span>Live ({latestStrategies.filter(s => s.estado === 'Live').length})</span>
+              </button>
+              <button
+                id="status-filter-live-plus"
+                onClick={() => setStatusFilter('Live+')}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all flex items-center gap-1 ${
+                  statusFilter === 'Live+'
+                    ? 'bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/40'
+                    : 'text-indigo-400/80 hover:text-indigo-300 hover:bg-indigo-950/20'
+                }`}
+                title="Live+: Estrategia con Órdenes Generadas y completadas"
+              >
+                <Zap className="w-3 h-3 text-indigo-400" />
+                <span>Live+ ({latestStrategies.filter(s => s.estado === 'Live+').length})</span>
+              </button>
+              <button
+                id="status-filter-obsoleto"
+                onClick={() => setStatusFilter('Obsoleto')}
+                className={`px-2 py-0.5 rounded text-[11px] font-mono transition-all flex items-center gap-1 ${
+                  statusFilter === 'Obsoleto'
+                    ? 'bg-neutral-800 text-neutral-300 font-bold border border-neutral-700'
+                    : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-950'
+                }`}
+                title="Obsoleto: Estrategia No activa"
+              >
+                <Ban className="w-3 h-3 text-neutral-500" />
+                <span>Obsoletas ({allResolvedStrategies.filter(s => s.estado === 'Obsoleto').length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Comparador Rápido y Resumen Comparativo de Estrategias: Lista la Mejor y la Peor */}
+          <div className="bg-neutral-900/70 p-3.5 rounded-xl border border-neutral-800 flex flex-col gap-3">
+            {/* Header with Title and Ranking Criteria */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-neutral-800/80">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Scale className="w-4 h-4 text-amber-400" />
+                  Resumen Comparativo: Mejor y Peor Estrategia
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                  {displayedStrategies.length} evaluadas
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-neutral-400 hidden sm:inline">
+                Criterio: Ratio Riesgo / Beneficio (R/B) y Retorno Proyectado
+              </span>
+            </div>
+
+            {/* Duo Cards: LA MEJOR ESTRATEGIA vs LA PEOR ESTRATEGIA */}
+            {rankedStrategies.best && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* 1. LA MEJOR ESTRATEGIA */}
+                <div
+                  id="best-strategy-summary-card"
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 bg-gradient-to-br from-emerald-950/40 via-neutral-900/95 to-neutral-950 ${
+                    selectedStrategyIndex === rankedStrategies.best.originalIndex
+                      ? 'border-emerald-400 ring-1 ring-emerald-400/50 shadow-md shadow-emerald-950/40'
+                      : 'border-emerald-500/40 hover:border-emerald-400/80'
+                  }`}
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-xs">
+                        <Trophy className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                        <span>MEJOR ESTRATEGIA (Top 1)</span>
+                      </span>
+                      <TradeProcessIndicator strategy={rankedStrategies.best.strategy} compact={true} />
+                    </div>
+
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-base font-extrabold text-white">
+                          {rankedStrategies.best.strategy.par}
+                        </span>
+                        <span className="text-xs text-neutral-300 truncate max-w-[180px]">
+                          {rankedStrategies.best.strategy.nombreEstrategia || (rankedStrategies.best.strategy as unknown as Record<string, string>).nombreDeEstrategia}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-400/90 font-bold px-1.5 py-0.5 rounded bg-emerald-950/50 border border-emerald-800/60">
+                        {rankedStrategies.best.strategy.noEstrategia}
+                      </span>
+                    </div>
+
+                    {/* Metrics row */}
+                    <div className="grid grid-cols-3 gap-2 p-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 text-center font-mono">
+                      <div>
+                        <span className="text-[9px] text-neutral-500 uppercase block">Ratio R/B</span>
+                        <span className="text-xs font-extrabold text-emerald-400">
+                          1:{rankedStrategies.best.rbRatio}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-neutral-500 uppercase block">Ganancia Est.</span>
+                        <span className="text-xs font-bold text-emerald-400">
+                          +${rankedStrategies.best.maxProfit.toFixed(1)}
+                        </span>
+                        <span className="text-[9px] text-emerald-500 block">
+                          (+{rankedStrategies.best.roiPct.toFixed(1)}%)
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-neutral-500 uppercase block">Pérdida Máx.</span>
+                        <span className="text-xs font-bold text-rose-400">
+                          -${rankedStrategies.best.maxLoss.toFixed(1)}
+                        </span>
+                        <span className="text-[9px] text-rose-500 block">
+                          (-{rankedStrategies.best.riskPct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-neutral-300 leading-snug">
+                      <strong className="text-emerald-400">Diagnóstico Táctico: </strong>
+                      Máxima rentabilidad proyectada por unidad de riesgo. Ofrece ${rankedStrategies.best.rbRatio} de beneficio potencial por cada $1 arriesgado con soporte técnico validado.
+                    </p>
+                  </div>
+
                   <button
-                    key={`quick-metric-${strat.noEstrategia}`}
-                    id={`quick-compare-btn-${strat.noEstrategia}`}
-                    onClick={() => handleSelectStrategyToReview(sIdx)}
-                    className={`p-2.5 rounded-lg text-left transition-all border flex flex-col gap-1.5 ${
-                      isSelected
-                        ? 'bg-amber-500/10 border-amber-500/60 ring-1 ring-amber-500/40 shadow-sm'
-                        : 'bg-neutral-950/80 border-neutral-800/80 hover:border-neutral-700 hover:bg-neutral-900/70'
+                    id="btn-select-best-strategy"
+                    onClick={() => handleSelectStrategyToReview(rankedStrategies.best!.originalIndex)}
+                    className="w-full mt-1 py-1.5 px-3 rounded-lg bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-neutral-950 text-xs font-bold border border-emerald-500/40 hover:border-emerald-400 transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <LineChart className="w-3.5 h-3.5" />
+                    <span>Cargar Mejor Estrategia en Gráfico</span>
+                  </button>
+                </div>
+
+                {/* 2. LA PEOR ESTRATEGIA (o de menor ratio) */}
+                {rankedStrategies.worst && (
+                  <div
+                    id="worst-strategy-summary-card"
+                    className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 bg-gradient-to-br from-rose-950/25 via-neutral-900/95 to-neutral-950 ${
+                      selectedStrategyIndex === rankedStrategies.worst.originalIndex
+                        ? 'border-rose-400 ring-1 ring-rose-400/50 shadow-md shadow-rose-950/30'
+                        : 'border-rose-500/35 hover:border-rose-400/70'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-xs text-white flex items-center gap-1">
-                        <span>{strat.par}</span>
-                        {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
-                      </span>
-                      <span className={`text-[10px] font-mono font-extrabold px-1.5 py-0.2 rounded border ${
-                        p.riskRewardRatio >= 3
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                          : p.riskRewardRatio >= 2
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                          : 'bg-neutral-800 text-neutral-300 border-neutral-700'
-                      }`}>
-                        R/B 1:{p.riskRewardRatio}
-                      </span>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                          <span>PEOR ESTRATEGIA (Menor R/B)</span>
+                        </span>
+                        <TradeProcessIndicator strategy={rankedStrategies.worst.strategy} compact={true} />
+                      </div>
+
+                      <div className="flex items-baseline justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-base font-extrabold text-white">
+                            {rankedStrategies.worst.strategy.par}
+                          </span>
+                          <span className="text-xs text-neutral-300 truncate max-w-[180px]">
+                            {rankedStrategies.worst.strategy.nombreEstrategia || (rankedStrategies.worst.strategy as unknown as Record<string, string>).nombreDeEstrategia}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-rose-400/90 font-bold px-1.5 py-0.5 rounded bg-rose-950/50 border border-rose-800/60">
+                          {rankedStrategies.worst.strategy.noEstrategia}
+                        </span>
+                      </div>
+
+                      {/* Metrics row */}
+                      <div className="grid grid-cols-3 gap-2 p-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 text-center font-mono">
+                        <div>
+                          <span className="text-[9px] text-neutral-500 uppercase block">Ratio R/B</span>
+                          <span className="text-xs font-extrabold text-amber-300">
+                            1:{rankedStrategies.worst.rbRatio}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-500 uppercase block">Ganancia Est.</span>
+                          <span className="text-xs font-bold text-neutral-200">
+                            +${rankedStrategies.worst.maxProfit.toFixed(1)}
+                          </span>
+                          <span className="text-[9px] text-neutral-400 block">
+                            (+{rankedStrategies.worst.roiPct.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-neutral-500 uppercase block">Pérdida Máx.</span>
+                          <span className="text-xs font-bold text-rose-400">
+                            -${rankedStrategies.worst.maxLoss.toFixed(1)}
+                          </span>
+                          <span className="text-[9px] text-rose-500 block">
+                            (-{rankedStrategies.worst.riskPct.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-neutral-300 leading-snug">
+                        <strong className="text-rose-400">Diagnóstico Táctico: </strong>
+                        Menor ratio beneficio/riesgo de las opciones actuales. Exige mayor confirmación de volumen o buscar un descuento adicional de entrada antes de posicionarse.
+                      </p>
                     </div>
 
-                    <div className="flex items-center justify-between text-[11px] font-mono">
-                      <span className="text-emerald-400 font-bold" title="Ganancia Proyectada">
-                        +${p.maxProfitUsdt.toFixed(1)}
-                      </span>
-                      <span className="text-rose-400 font-bold" title="Pérdida Máxima">
-                        -${p.maxLossUsdt.toFixed(1)}
-                      </span>
-                    </div>
+                    <button
+                      id="btn-select-worst-strategy"
+                      onClick={() => handleSelectStrategyToReview(rankedStrategies.worst!.originalIndex)}
+                      className="w-full mt-1 py-1.5 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold border border-neutral-700 hover:border-neutral-600 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-neutral-400" />
+                      <span>Inspeccionar Niveles de Riesgo</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
-                    <div className="text-[9px] text-neutral-400 truncate">
-                      {strat.nombreEstrategia || (strat as unknown as Record<string, string>).nombreDeEstrategia}
-                    </div>
-                  </button>
-                );
-              })}
+            {/* Fichas rápidas comparativas de todas las estrategias con indicador de ranking */}
+            <div className="flex flex-col gap-1.5 pt-1">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+                Comparador Completo ({displayedStrategies.length} pares):
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                {displayedStrategies.map((strat) => {
+                  const sIdx = strategies.findIndex(s => s.noEstrategia === strat.noEstrategia);
+                  const p = generateExecutionPlan(strat, usdtAllocation, selectedLeverage);
+                  const isSelected = selectedStrategyIndex === sIdx;
+                  const isBest = rankedStrategies.best?.strategy.noEstrategia === strat.noEstrategia;
+                  const isWorst = rankedStrategies.worst?.strategy.noEstrategia === strat.noEstrategia;
+                  const rank = rankedStrategies.rankMap.get(strat.noEstrategia) || 0;
+
+                  return (
+                    <button
+                      key={`quick-metric-${strat.noEstrategia}`}
+                      id={`quick-compare-btn-${strat.noEstrategia}`}
+                      onClick={() => handleSelectStrategyToReview(sIdx >= 0 ? sIdx : 0)}
+                      className={`p-2.5 rounded-lg text-left transition-all border flex flex-col gap-1.5 relative ${
+                        isBest
+                          ? isSelected
+                            ? 'bg-emerald-950/30 border-emerald-400 ring-1 ring-emerald-400/50 shadow-sm'
+                            : 'bg-emerald-950/15 border-emerald-500/40 hover:border-emerald-400/70'
+                          : isWorst
+                          ? isSelected
+                            ? 'bg-rose-950/30 border-rose-400 ring-1 ring-rose-400/50 shadow-sm'
+                            : 'bg-rose-950/10 border-rose-500/30 hover:border-rose-400/60'
+                          : isSelected
+                          ? 'bg-amber-500/10 border-amber-500/60 ring-1 ring-amber-500/40 shadow-sm'
+                          : 'bg-neutral-950/80 border-neutral-800/80 hover:border-neutral-700 hover:bg-neutral-900/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-bold text-xs text-white flex items-center gap-1">
+                            <span>{strat.par}</span>
+                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
+                          </span>
+                          {isBest && (
+                            <span className="px-1 py-0.2 rounded text-[9px] font-mono font-extrabold bg-emerald-500/30 text-emerald-300 border border-emerald-500/50" title="Mejor Estrategia">
+                              🏆 #1
+                            </span>
+                          )}
+                          {isWorst && (
+                            <span className="px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40" title="Peor Estrategia">
+                              ⚠️ Peor
+                            </span>
+                          )}
+                          {!isBest && !isWorst && rank > 0 && (
+                            <span className="px-1 py-0.2 rounded text-[9px] font-mono text-neutral-400 bg-neutral-800">
+                              #{rank}
+                            </span>
+                          )}
+                        </div>
+                        <TradeProcessIndicator strategy={strat} compact={true} />
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-emerald-400 font-bold" title="Ganancia Proyectada">
+                          +${p.maxProfitUsdt.toFixed(1)}
+                        </span>
+                        <span className="text-rose-400 font-bold" title="Pérdida Máxima">
+                          -${p.maxLossUsdt.toFixed(1)}
+                        </span>
+                      </div>
+
+                      <div className="text-[9px] text-neutral-400 truncate flex items-center justify-between">
+                        <span className="truncate">{strat.nombreEstrategia || (strat as unknown as Record<string, string>).nombreDeEstrategia}</span>
+                        <span className={`font-mono text-[9px] shrink-0 ml-1 font-bold ${
+                          isBest ? 'text-emerald-400' : isWorst ? 'text-amber-400' : 'text-neutral-300'
+                        }`}>
+                          R/B 1:{p.riskRewardRatio}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
           {/* Strategies Cards Grid */}
           <div className="grid grid-cols-1 gap-3.5">
-            {strategies.map((strat, idx) => {
+            {displayedStrategies.map((strat) => {
+              const idx = strategies.findIndex(s => s.noEstrategia === strat.noEstrategia);
               const isSelected = selectedStrategyIndex === idx;
               const cardPlan = generateExecutionPlan(strat, usdtAllocation, selectedLeverage);
               const parsedPrices = parsePricesFromStrategy(strat);
@@ -550,6 +972,19 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       <span className="font-mono text-sm font-extrabold text-emerald-400 bg-emerald-950/30 px-2 py-0.5 rounded border border-emerald-800/40">
                         {strat.par}
                       </span>
+                      <TradeProcessIndicator strategy={strat} compact={true} />
+                      {rankedStrategies.best?.strategy.noEstrategia === strat.noEstrategia && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-extrabold bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 shadow-xs">
+                          <Trophy className="w-3 h-3 text-emerald-400" />
+                          <span>🏆 MEJOR</span>
+                        </span>
+                      )}
+                      {rankedStrategies.worst?.strategy.noEstrategia === strat.noEstrategia && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-mono font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-xs">
+                          <AlertTriangle className="w-3 h-3 text-rose-400" />
+                          <span>⚠️ PEOR</span>
+                        </span>
+                      )}
                       <span className="text-xs font-semibold text-white">
                         {strat.nombreEstrategia || (strat as unknown as Record<string, string>).nombreDeEstrategia}
                       </span>
@@ -596,7 +1031,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       ) : (
                         <button
                           id={`select-strat-btn-${strat.noEstrategia}`}
-                          onClick={() => handleSelectStrategyToReview(idx)}
+                          onClick={() => handleSelectStrategyToReview(idx >= 0 ? idx : 0)}
                           className="px-3.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 text-xs font-semibold border border-neutral-700 hover:border-amber-400 transition-all flex items-center gap-1.5 shadow-sm"
                         >
                           <LineChart className="w-3.5 h-3.5" />
@@ -606,7 +1041,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
 
                       <button
                         onClick={() => {
-                          handleSelectStrategyToReview(idx);
+                          handleSelectStrategyToReview(idx >= 0 ? idx : 0);
                           setActiveTab('plan');
                         }}
                         className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium border border-neutral-700 transition-colors flex items-center gap-1"
@@ -617,6 +1052,16 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       </button>
                     </div>
                   </div>
+
+                  {/* Trade Process Timeline & Lifecycle Stage Indicator */}
+                  <TradeProcessIndicator
+                    strategy={strat}
+                    showProcessStepper={true}
+                    showStatusSelector={true}
+                    onStatusChange={(newSt) => handleStatusChange(strat.noEstrategia, newSt)}
+                    hasOpenOrders={hasOpenOrdersForPair(strat.par)}
+                    hasPosition={hasPositionForPair(strat.par)}
+                  />
 
                   {/* 3 Core Financial Metrics Requested: Ratio R/B, Ganancia Proyectada, Pérdida Máxima */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 rounded-xl bg-neutral-900/90 border border-neutral-800 shadow-inner">
@@ -893,6 +1338,18 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       {/* 4. TAB CONTENT: PLAN DE ÓRDENES (BINANCE) */}
       {activeTab === 'plan' && currentStrategy && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Trade Process Stepper & Status Banner for Active Plan */}
+          <div className="lg:col-span-12">
+            <TradeProcessIndicator
+              strategy={currentStrategy}
+              showProcessStepper={true}
+              showStatusSelector={true}
+              onStatusChange={(newSt) => handleStatusChange(currentStrategy.noEstrategia, newSt)}
+              hasOpenOrders={hasOpenOrdersForPair(currentStrategy.par)}
+              hasPosition={hasPositionForPair(currentStrategy.par)}
+            />
+          </div>
+
           {/* Strategy Meta & Signals (5 Cols) */}
           <div className="lg:col-span-5 flex flex-col gap-3">
             <div className="bg-neutral-950/70 border border-neutral-800 p-3.5 rounded-xl flex flex-col gap-2.5">
@@ -1593,18 +2050,35 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
         </div>
       )}
 
-      {/* 6. TAB CONTENT: RAW SHEET DATA */}
+      {/* 5. TAB CONTENT: RAW SHEET DATA */}
       {activeTab === 'sheet_data' && currentStrategy && (
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-            <h4 className="text-xs font-bold text-white">
-              Fila oficial de Google Sheets: {currentStrategy.noEstrategia} ({currentStrategy.par})
-            </h4>
+          <div className="flex flex-wrap items-center justify-between pb-3 border-b border-neutral-800 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-xs font-bold text-white">
+                Fila oficial de Google Sheets: {currentStrategy.noEstrategia} ({currentStrategy.par})
+              </h4>
+              <TradeProcessIndicator
+                strategy={currentStrategy}
+                compact={true}
+              />
+            </div>
             <span className="text-xs text-neutral-400 font-mono">
               Estrategia {selectedStrategyIndex + 1} de {strategies.length}
             </span>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Trade Process Overview */}
+          <TradeProcessIndicator
+            strategy={currentStrategy}
+            showProcessStepper={true}
+            showStatusSelector={true}
+            onStatusChange={(newSt) => handleStatusChange(currentStrategy.noEstrategia, newSt)}
+            hasOpenOrders={hasOpenOrdersForPair(currentStrategy.par)}
+            hasPosition={hasPositionForPair(currentStrategy.par)}
+          />
+
+          <div className="overflow-x-auto mt-2">
             <table className="w-full text-left text-xs font-mono">
               <tbody>
                 {Object.entries(currentStrategy).map(([key, val]) => (
@@ -1612,7 +2086,24 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                     <td className="py-2.5 pr-4 font-semibold text-neutral-400 w-52 capitalize">
                       {key.replace(/([A-Z])/g, ' $1')}
                     </td>
-                    <td className="py-2.5 text-neutral-200 break-words leading-relaxed">{val || '-'}</td>
+                    <td className="py-2.5 text-neutral-200 break-words leading-relaxed">
+                      {key === 'estado' ? (
+                        <div className="flex items-center gap-2">
+                          <TradeProcessIndicator strategy={currentStrategy} compact={true} />
+                          <span className="text-neutral-400 text-xs font-sans">
+                            {val === 'Live+'
+                              ? 'Estrategia con Órdenes Generadas y completadas'
+                              : val === 'Live'
+                              ? 'Estrategia con Órdenes Generadas'
+                              : val === 'Obsoleto'
+                              ? 'Estrategia No activa'
+                              : 'Estrategia para tomar'}
+                          </span>
+                        </div>
+                      ) : (
+                        val || '-'
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1626,14 +2117,43 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
         <div className="bg-neutral-950/70 border border-neutral-800 rounded-xl p-4 flex flex-col gap-3 text-xs leading-relaxed text-neutral-300">
           <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
             <HelpCircle className="w-4 h-4 text-emerald-400" />
-            Estructura y Protocolo de Ejecución Táctica de Google Sheets
+            Estructura, Ciclo del Trade y Protocolo Táctico de Google Sheets
           </h4>
           <p>
             El Creador de Estrategias está vinculado de manera exclusiva e inmutable a la hoja de cálculo
-            oficial de Google Sheets que contiene las 5 estrategias tácticas (ZEC, TAO, AAVE, SOL, XRP).
+            oficial de Google Sheets que contiene las estrategias tácticas de Binance USDⓈ-M Futures.
           </p>
+
+          {/* Ciclo del Trade Oficial */}
+          <div className="p-3 bg-neutral-900 rounded-xl border border-neutral-800 flex flex-col gap-2">
+            <span className="text-xs font-bold text-amber-400 font-mono uppercase tracking-wider">
+              Estados Oficiales del Trade & Regla de Filtrado por Par:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono">
+              <div className="p-2 rounded bg-emerald-950/20 border border-emerald-800/40 text-emerald-300">
+                <strong className="text-emerald-400 block mb-0.5">● Activa:</strong>
+                Estrategia para tomar. Monitorea distancias en vivo a Entrada 1 y Entrada 2 en soporte.
+              </div>
+              <div className="p-2 rounded bg-amber-950/20 border border-amber-800/40 text-amber-300">
+                <strong className="text-amber-400 block mb-0.5">● Live:</strong>
+                Estrategia con Órdenes Generadas. Órdenes límite escalonadas y contingentes en Binance.
+              </div>
+              <div className="p-2 rounded bg-indigo-950/20 border border-indigo-800/40 text-indigo-300">
+                <strong className="text-indigo-400 block mb-0.5">● Live+:</strong>
+                Estrategia con Órdenes Generadas y completadas. Posición activa en mercado. Gestión de TPs.
+              </div>
+              <div className="p-2 rounded bg-neutral-800/50 border border-neutral-700/50 text-neutral-400">
+                <strong className="text-neutral-300 block mb-0.5">● Obsoleto:</strong>
+                Estrategia No activa. Superada por una nueva versión del par o descartada operativamente.
+              </div>
+            </div>
+            <div className="text-[11px] text-amber-300/90 bg-amber-950/30 p-2 rounded border border-amber-800/40 mt-1">
+              <strong>Regla de Selección:</strong> Solo debe tomar la última estrategia de cada par. Si existen múltiples filas para un mismo par, la terminal toma automáticamente la última y clasifica las anteriores como Obsoletas.
+            </div>
+          </div>
+
           <div className="p-3 bg-neutral-900 rounded-lg border border-neutral-800 font-mono text-[11px] text-emerald-300 overflow-x-auto">
-            No. Estrategia, Fecha, Nombre de Estrategia, Par, Temporalidad, Tipo de Orden, Indicadores Clave, Reglas
+            Estado, No. Estrategia, Fecha, Nombre de Estrategia, Par, Temporalidad, Tipo de Orden, Indicadores Clave, Reglas
             de Entrada, Reglas de Salida / TP, Gestión de Riesgo & Stop Loss, Comentarios / Backtesting
           </div>
           <div className="flex flex-col gap-1.5 text-[11px] text-neutral-400 pt-1">

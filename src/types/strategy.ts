@@ -1,3 +1,16 @@
+export type StrategyTradeStatus = 'Activa' | 'Obsoleto' | 'Live' | 'Live+';
+
+export interface TradeProcessStageInfo {
+  stage: number; // 0 = Obsoleto, 1 = Activa, 2 = Live, 3 = Live+
+  status: StrategyTradeStatus;
+  label: string; // e.g. "Activa", "Live", "Live+", "Obsoleto"
+  meaning: string; // e.g. "Estrategia para tomar", "Órdenes Generadas", "Órdenes Generadas y completadas", "Estrategia No activa"
+  description: string;
+  progressPct: number;
+  nextStep: string;
+  badgeClass: string;
+}
+
 export interface GoogleSheetStrategyRow {
   noEstrategia: string;
   fecha: string;
@@ -10,6 +23,7 @@ export interface GoogleSheetStrategyRow {
   reglasDeSalidaTP: string;
   gestionDeRiesgoStopLoss: string;
   comentariosBacktesting: string;
+  estado?: StrategyTradeStatus; // 'Activa' | 'Obsoleto' | 'Live' | 'Live+'
 }
 
 export interface PlannedStrategyOrder {
