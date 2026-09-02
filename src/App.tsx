@@ -8,6 +8,7 @@ import { MetricsDashboard } from './components/MetricsDashboard';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { WebSocketConsole } from './components/WebSocketConsole';
 import { NotificationToasts } from './components/NotificationToasts';
+import { APP_VERSION, APP_CONFIG } from './config/version';
 
 export default function App() {
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
@@ -51,11 +52,24 @@ export default function App() {
       {/* Footer info & protocol adherence note */}
       <footer className="border-t border-neutral-800/80 bg-neutral-950 py-3 px-4 text-center text-xs text-neutral-500 font-mono">
         <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-2">
-          <span>Binance USDⓈ-M Futures WebSocket API v1 Engine</span>
+          <div className="flex items-center gap-2">
+            <span>Binance USDⓈ-M Futures WebSocket API v1 Engine</span>
+            <span>•</span>
+            <span className="text-neutral-400 font-semibold flex items-center gap-1.5">
+              <span>Versión en Producción:</span>
+              <strong className="text-emerald-400 font-bold px-1.5 py-0.5 rounded bg-emerald-950/40 border border-emerald-800/60">
+                {APP_VERSION}
+              </strong>
+            </span>
+          </div>
           <span className="text-amber-400/80">
             Apalancamiento Restringido: 1x-5x • Modo: Margen ISOLATED Obligatorio • TIF: GTC
           </span>
-          <span>WebSockets Seguros (WSS) con Ping/Pong cada 3 min</span>
+          <div className="flex items-center gap-2">
+            <span>WSS Ping/Pong 3m</span>
+            <span>•</span>
+            <span className="text-neutral-400">{APP_CONFIG.buildNumber}</span>
+          </div>
         </div>
       </footer>
 

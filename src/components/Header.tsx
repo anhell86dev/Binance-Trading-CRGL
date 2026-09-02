@@ -17,6 +17,7 @@ import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
 import { strategyService } from '../services/strategyService';
 import { NetworkMode } from '../types/binance';
+import { APP_CONFIG, APP_VERSION } from '../config/version';
 
 interface HeaderProps {
   onOpenApiModal: () => void;
@@ -106,8 +107,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
                 <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
                   USDⓈ-M WS-FAPI
                 </span>
+                <span
+                  id="header-prod-version-badge"
+                  title={`Versión en Producción: ${APP_VERSION} (${APP_CONFIG.stage} • ${APP_CONFIG.releaseDate})`}
+                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{APP_VERSION} Prod</span>
+                </span>
               </div>
-              <p className="text-xs text-neutral-400">Terminal WebSocket de Baja Latencia</p>
+              <p className="text-xs text-neutral-400">Terminal WebSocket de Baja Latencia • {APP_CONFIG.version}</p>
             </div>
           </div>
 
