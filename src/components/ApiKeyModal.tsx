@@ -44,13 +44,30 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onClose }) => {
     try {
       const success = await binanceWs.connectWsApi(creds);
       if (success) {
-        setStatusMsg({
-          type: 'success',
-          text: `Conexión establecida con éxito en modo ${mode.toUpperCase()} (WS-FAPI v1)`,
-        });
+        if (mode !== 'simulation' && creds.apiKey) {
+          const balRes = await binanceWs.fetchAccountBalance();
+          if (balRes.success && balRes.data) {
+            setStatusMsg({
+              type: 'success',
+              text: `¡Conectado a Binance ${mode.toUpperCase()}! Balance disponible verificado: $${balRes.data.availableBalance.toFixed(2)} USDT`,
+            });
+          } else {
+            setStatusMsg({
+              type: 'error',
+              text: `Conectado al WebSocket, pero no se pudo leer el saldo de Futuros: ${balRes.error || 'Error desconocido'}. Asegúrate de que tu API Key tenga habilitado el permiso 'Enable Futures' en Binance.`,
+            });
+            setIsTesting(false);
+            return;
+          }
+        } else {
+          setStatusMsg({
+            type: 'success',
+            text: `Conexión establecida con éxito en modo ${mode.toUpperCase()} (WS-FAPI v1)`,
+          });
+        }
         setTimeout(() => {
           onClose();
-        }, 1200);
+        }, 1500);
       } else {
         setStatusMsg({
           type: 'error',

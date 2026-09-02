@@ -7,8 +7,18 @@
  * 4. HMAC-SHA256 signature using Web Crypto API
  */
 
+let serverTimeOffset = 0;
+
+export function setServerTimeOffset(offset: number) {
+  serverTimeOffset = offset;
+}
+
+export function getServerTimeOffset(): number {
+  return serverTimeOffset;
+}
+
 export function getUtcTimestamp(): number {
-  return Date.now();
+  return Date.now() + serverTimeOffset;
 }
 
 /**

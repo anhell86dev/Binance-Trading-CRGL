@@ -35,6 +35,7 @@ import {
   buildCanonicalQueryString,
   formatDecimal,
   getUtcTimestamp,
+  setServerTimeOffset,
   signEd25519,
   signHmacSha256,
 } from './crypto';
@@ -115,6 +116,12 @@ class BinanceWsEngine {
   private tradeHistory: TradeHistoryItem[] = [];
   private alerts: VolatilityAlert[] = [];
   private wsLogs: WsLogFrame[] = [];
+
+  // Production Real-Balance Sync state
+  private lastBalanceSyncTime: number = 0;
+  private isFetchingBalance: boolean = false;
+  private lastBalanceError: string | null = null;
+  private balanceSyncInterval: any = null;
 
   // Listeners
   private stateListeners: Set<Function> = new Set();
@@ -253,6 +260,15 @@ class BinanceWsEngine {
   }
   public getCurrentSymbol(): string {
     return this.currentSymbol;
+  }
+  public getLastBalanceSyncTime(): number {
+    return this.lastBalanceSyncTime;
+  }
+  public getIsFetchingBalance(): boolean {
+    return this.isFetchingBalance;
+  }
+  public getLastBalanceError(): string | null {
+    return this.lastBalanceError;
   }
 
   public subscribe(listener: Function) {
@@ -452,9 +468,29 @@ class BinanceWsEngine {
             status: 'OPEN',
           });
 
+          // Sync server time with Binance immediately
+          try {
+            const timeRes = await this.sendWsRequest('time', {});
+            if (timeRes?.result?.serverTime) {
+              setServerTimeOffset(timeRes.result.serverTime - Date.now());
+            }
+          } catch (e) {}
+
           // If session auth requested with Ed25519 / HMAC:
           if (this.credentials.apiKey && this.credentials.isSessionAuth) {
             await this.sessionLogon();
+          }
+
+          // In production or testnet: actively fetch and synchronize real balance and margin
+          if (this.credentials.apiKey && (this.mode === 'production' || this.mode === 'testnet')) {
+            this.fetchAccountBalance().catch(() => {});
+
+            if (this.balanceSyncInterval) clearInterval(this.balanceSyncInterval);
+            this.balanceSyncInterval = setInterval(() => {
+              if (this.mode !== 'simulation' && this.credentials.apiKey) {
+                this.fetchAccountBalance().catch(() => {});
+              }
+            }, 15000);
           }
 
           this.connectMarketStream();
@@ -475,6 +511,10 @@ class BinanceWsEngine {
 
         this.ws.onclose = (event) => {
           this.connectionStatus = 'disconnected';
+          if (this.balanceSyncInterval) {
+            clearInterval(this.balanceSyncInterval);
+            this.balanceSyncInterval = null;
+          }
           this.logFrame('IN', 'SYSTEM', `Conexión cerrada: código ${event.code}`, { reason: event.reason });
           this.notify();
         };
@@ -613,6 +653,9 @@ class BinanceWsEngine {
 
     if (requiresAuth) {
       payloadParams.apiKey = this.credentials.apiKey;
+      if (payloadParams.recvWindow === undefined) {
+        payloadParams.recvWindow = 60000;
+      }
       payloadParams.timestamp = getUtcTimestamp(); // Rule: INT ms UTC
 
       // Rule #3: Order alphabetically, exclude signature, then sign
@@ -1403,6 +1446,223 @@ class BinanceWsEngine {
       status: 200,
       result: { success: true, method },
     };
+  }
+
+  /**
+   * Fetches real account balance, available margin, and positions from Binance (WS-FAPI with REST fallback)
+   */
+  public async fetchAccountBalance(): Promise<{ success: boolean; data?: AccountBalance; error?: string }> {
+    if (this.mode === 'simulation') {
+      this.lastBalanceSyncTime = Date.now();
+      this.lastBalanceError = null;
+      this.notify();
+      return { success: true, data: this.balance };
+    }
+
+    if (!this.credentials.apiKey || !this.credentials.apiSecret) {
+      this.lastBalanceError = 'Faltan API Key o Secret Key de Binance.';
+      this.notify();
+      return { success: false, error: this.lastBalanceError };
+    }
+
+    this.isFetchingBalance = true;
+    this.notify();
+
+    try {
+      // 1. Synchronize server time if needed
+      try {
+        const timeRes = await this.sendWsRequest('time', {});
+        if (timeRes?.result?.serverTime) {
+          setServerTimeOffset(timeRes.result.serverTime - Date.now());
+        }
+      } catch (err) {}
+
+      // 2. Query account via WS-FAPI: account.status
+      let accountRes: any = null;
+      let errorMsg: string | null = null;
+
+      try {
+        accountRes = await this.sendWsRequest('account.status', {}, true);
+      } catch (err: any) {
+        errorMsg = err.message || 'Error en account.status';
+      }
+
+      // If account.status failed or returned an error, try account.balance
+      if (!accountRes || accountRes.error || accountRes.status !== 200) {
+        if (accountRes?.error) {
+          errorMsg = accountRes.error.msg || `Código ${accountRes.error.code}`;
+        }
+        try {
+          const balRes = await this.sendWsRequest('account.balance', {}, true);
+          if (balRes && !balRes.error && (balRes.status === 200 || Array.isArray(balRes.result))) {
+            accountRes = balRes;
+            errorMsg = null;
+          }
+        } catch (e: any) {
+          errorMsg = errorMsg || e.message;
+        }
+      }
+
+      // If WS-FAPI failed, attempt REST fallback
+      if (!accountRes || accountRes.error || (!accountRes.result && !Array.isArray(accountRes))) {
+        try {
+          const restData = await this.fetchRestAccountBalance();
+          if (restData) {
+            accountRes = { status: 200, result: restData };
+            errorMsg = null;
+          }
+        } catch (restErr: any) {
+          errorMsg = errorMsg || restErr.message;
+        }
+      }
+
+      if (errorMsg && (!accountRes || accountRes.error)) {
+        this.lastBalanceError = errorMsg;
+        this.isFetchingBalance = false;
+        this.notify();
+        this.logFrame('IN', 'ERROR', 'Fallo al sincronizar balance real con Binance', { error: errorMsg });
+        notificationService.notify(
+          'SYSTEM',
+          'Aviso de Balance Binance',
+          `No se pudo leer el balance: ${errorMsg}. Revisa si tu API Key tiene permisos de Futuros o restricción de IP.`,
+          'urgent'
+        );
+        return { success: false, error: errorMsg };
+      }
+
+      // Process returned account payload
+      const data = accountRes?.result || accountRes;
+      let updated = false;
+
+      if (data && typeof data === 'object') {
+        // Format A: account.status structure with totalWalletBalance / availableBalance
+        if (data.totalWalletBalance !== undefined || data.availableBalance !== undefined) {
+          const wBal = parseFloat(data.totalWalletBalance ?? '0');
+          const mBal = parseFloat(data.totalMarginBalance ?? data.totalWalletBalance ?? '0');
+          const aBal = parseFloat(data.availableBalance ?? data.totalWalletBalance ?? '0');
+          const unPnl = parseFloat(data.totalUnrealizedProfit ?? '0');
+          const mMarg = parseFloat(data.totalMaintMargin ?? '0');
+
+          this.balance = {
+            ...this.balance,
+            totalWalletBalance: isNaN(wBal) ? this.balance.totalWalletBalance : Number(wBal.toFixed(2)),
+            totalMarginBalance: isNaN(mBal) ? this.balance.totalMarginBalance : Number(mBal.toFixed(2)),
+            availableBalance: isNaN(aBal) ? this.balance.availableBalance : Number(aBal.toFixed(2)),
+            totalUnrealizedProfit: isNaN(unPnl) ? 0 : Number(unPnl.toFixed(2)),
+            maintMargin: isNaN(mMarg) ? 0 : Number(mMarg.toFixed(2)),
+          };
+          updated = true;
+        }
+
+        // Format B: array of assets (account.balance or /fapi/v2/balance)
+        const assetsList = Array.isArray(data) ? data : data.assets;
+        if (Array.isArray(assetsList) && assetsList.length > 0) {
+          const usdt = assetsList.find((a: any) => a.asset === 'USDT') || assetsList[0];
+          if (usdt) {
+            const wBal = parseFloat(usdt.balance ?? usdt.walletBalance ?? '0');
+            const aBal = parseFloat(usdt.availableBalance ?? usdt.withdrawAvailable ?? usdt.maxWithdrawAmount ?? '0');
+            const mBal = parseFloat(usdt.crossWalletBalance ?? usdt.marginBalance ?? wBal.toString());
+            const unPnl = parseFloat(usdt.crossUnPnl ?? usdt.unrealizedProfit ?? '0');
+
+            this.balance = {
+              ...this.balance,
+              totalWalletBalance: isNaN(wBal) ? this.balance.totalWalletBalance : Number(wBal.toFixed(2)),
+              totalMarginBalance: isNaN(mBal) ? this.balance.totalMarginBalance : Number(mBal.toFixed(2)),
+              availableBalance: isNaN(aBal) ? this.balance.availableBalance : Number(aBal.toFixed(2)),
+              totalUnrealizedProfit: isNaN(unPnl) ? 0 : Number(unPnl.toFixed(2)),
+            };
+            updated = true;
+          }
+        }
+
+        // Format C: real live positions from Binance
+        if (Array.isArray(data.positions)) {
+          const livePositions: PositionRisk[] = data.positions
+            .filter((p: any) => parseFloat(p.positionAmt || p.size || '0') !== 0)
+            .map((p: any) => ({
+              symbol: p.symbol,
+              positionAmt: parseFloat(p.positionAmt || p.size || '0'),
+              entryPrice: parseFloat(p.entryPrice || '0'),
+              markPrice: parseFloat(p.markPrice || p.entryPrice || '0'),
+              unRealizedProfit: parseFloat(p.unrealizedProfit || p.unRealizedProfit || '0'),
+              liquidationPrice: parseFloat(p.liquidationPrice || '0'),
+              leverage: Math.min(5, Math.max(1, parseInt(p.leverage || '2', 10))),
+              marginType: (p.isolated ? 'ISOLATED' : (p.marginType || 'ISOLATED')) as any,
+              isolatedMargin: parseFloat(p.isolatedMargin || p.positionInitialMargin || '0'),
+              notional: parseFloat(p.notional || '0'),
+              roePercent: parseFloat(p.percentage || '0'),
+              updatedAt: Date.now(),
+            }));
+
+          this.positions = livePositions;
+        }
+      }
+
+      if (updated) {
+        this.lastBalanceSyncTime = Date.now();
+        this.lastBalanceError = null;
+        this.logFrame('IN', 'RESPONSE', `Balance real sincronizado: $${this.balance.availableBalance.toFixed(2)} USDT`, {
+          availableBalance: this.balance.availableBalance,
+          totalWalletBalance: this.balance.totalWalletBalance,
+          mode: this.mode,
+        });
+      }
+
+      this.isFetchingBalance = false;
+      this.notify();
+      return { success: true, data: this.balance };
+    } catch (err: any) {
+      this.isFetchingBalance = false;
+      this.lastBalanceError = err.message || 'Error al obtener balance';
+      this.notify();
+      return { success: false, error: this.lastBalanceError };
+    }
+  }
+
+  /**
+   * REST fallback for fetching USDⓈ-M Futures balance
+   */
+  private async fetchRestAccountBalance(): Promise<any> {
+    const restUrl =
+      this.mode === 'testnet'
+        ? BINANCE_ENDPOINTS.testnet.rest
+        : BINANCE_ENDPOINTS.production.rest;
+
+    const timestamp = getUtcTimestamp();
+    const params: Record<string, any> = {
+      recvWindow: 60000,
+      timestamp,
+    };
+    const queryString = buildCanonicalQueryString(params);
+    const signature = await signHmacSha256(queryString, this.credentials.apiSecret);
+    const fullUrl = `${restUrl}/fapi/v2/account?${queryString}&signature=${signature}`;
+
+    const res = await fetch(fullUrl, {
+      method: 'GET',
+      headers: {
+        'X-MBX-APIKEY': this.credentials.apiKey,
+      },
+    });
+
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.msg || `HTTP ${res.status}`);
+    }
+
+    return await res.json();
+  }
+
+  public setManualBalance(amount: number) {
+    const validAmount = Math.max(0, amount);
+    this.balance.totalWalletBalance = validAmount;
+    this.balance.availableBalance = validAmount;
+    this.balance.totalMarginBalance = validAmount;
+    this.notify();
+    notificationService.notify(
+      'SYSTEM',
+      'Balance Ajustado',
+      `Margen disponible configurado en $${validAmount.toLocaleString()} USDT`
+    );
   }
 
   public resetSimulationBalance(amount: number = 10000) {
