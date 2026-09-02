@@ -30,6 +30,7 @@ import {
   VolatilityAlert,
   WsLogFrame,
 } from '../types/binance';
+import { StrategyExecutionPlan } from '../types/strategy';
 import {
   buildCanonicalQueryString,
   formatDecimal,
@@ -917,6 +918,99 @@ class BinanceWsEngine {
   }
 
   /**
+   * Place Strategy Orders - STRICTLY REQUIRING EXPLICIT OPERATOR AUTHORIZATION
+   * "La estrategia solo se debe crear en Binance con un boton de autorizacion"
+   */
+  public async placeStrategyOrders(plan: StrategyExecutionPlan): Promise<string[]> {
+    if (plan.status !== 'AUTHORIZED_CREATED') {
+      throw new Error('La estrategia requiere autorización explícita antes de ser creada en Binance.');
+    }
+
+    const clampedLeverage = this.clampLeverage(plan.leverage);
+    const createdIds: string[] = [];
+
+    // Switch symbol if necessary so ticker and chart reflect the strategy
+    if (this.currentSymbol !== plan.symbol) {
+      this.setSymbol(plan.symbol);
+    }
+
+    this.logFrame(
+      'OUT',
+      'REQUEST',
+      `[AUTORIZACIÓN MANUAL DEL OPERADOR] Estrategia ${plan.strategyId} aprobada: despachando ${plan.orders.length} órdenes`,
+      {
+        strategyId: plan.strategyId,
+        symbol: plan.symbol,
+        leverage: `${clampedLeverage}x ISOLATED`,
+        totalAllocation: `${plan.totalUsdtAllocation} USDT`,
+        ordersCount: plan.orders.length,
+      }
+    );
+
+    for (const ord of plan.orders) {
+      const orderId = `${plan.strategyId}-${ord.role}-${Date.now().toString().slice(-4)}-${Math.random().toString(36).substring(2, 5)}`;
+      const price = ord.price;
+      const quantity = ord.quantity;
+      const type: OrderType = ord.type === 'STOP_MARKET' ? 'STOP_MARKET' : 'LIMIT';
+
+      const newOrder: OpenOrder = {
+        orderId,
+        clientOrderId: orderId,
+        symbol: plan.symbol,
+        side: ord.side,
+        type,
+        price,
+        stopPrice: ord.stopPrice || (type === 'STOP_MARKET' ? price : undefined),
+        origQty: quantity,
+        executedQty: 0,
+        status: 'NEW',
+        timeInForce: 'GTC',
+        leverage: clampedLeverage,
+        marginType: 'ISOLATED',
+        createdAt: Date.now(),
+      };
+
+      if (this.mode === 'simulation') {
+        this.openOrders.push(newOrder);
+        createdIds.push(orderId);
+      } else {
+        try {
+          const params: Record<string, any> = {
+            symbol: plan.symbol,
+            side: ord.side,
+            type,
+            timeInForce: 'GTC',
+            quantity: formatDecimal(quantity, 3),
+            marginType: 'ISOLATED',
+            leverage: clampedLeverage,
+          };
+          if (type === 'LIMIT') {
+            params.price = formatDecimal(price, 2);
+          } else if (type === 'STOP_MARKET') {
+            params.stopPrice = formatDecimal(ord.stopPrice || price, 2);
+          }
+          await this.sendWsRequest('order.place', params, true);
+          this.openOrders.push(newOrder);
+          createdIds.push(orderId);
+        } catch (err: any) {
+          console.error(`Error despachando orden ${ord.label}:`, err);
+        }
+      }
+    }
+
+    notificationService.notify(
+      'EXECUTION',
+      `🛡️ Estrategia Autorizada y Creada en Binance`,
+      `${plan.name} (${plan.symbol}): ${createdIds.length} órdenes creadas con apalancamiento ${clampedLeverage}x ISOLATED.`,
+      'normal'
+    );
+
+    notificationService.playChime('fill');
+    this.notify();
+    return createdIds;
+  }
+
+  /**
    * Close open position at market
    */
   public async closePosition(symbol: string): Promise<void> {
@@ -1054,6 +1148,20 @@ class BinanceWsEngine {
         if (order.side === 'BUY' && newPrice <= order.price) {
           isFilled = true;
         } else if (order.side === 'SELL' && newPrice >= order.price) {
+          isFilled = true;
+        }
+      } else if (order.type === 'STOP_MARKET') {
+        const trigger = order.stopPrice || order.price;
+        if (order.side === 'SELL' && newPrice <= trigger) {
+          isFilled = true;
+        } else if (order.side === 'BUY' && newPrice >= trigger) {
+          isFilled = true;
+        }
+      } else if (order.type === 'TAKE_PROFIT_MARKET') {
+        const trigger = order.stopPrice || order.price;
+        if (order.side === 'SELL' && newPrice >= trigger) {
+          isFilled = true;
+        } else if (order.side === 'BUY' && newPrice <= trigger) {
           isFilled = true;
         }
       } else if (order.type === 'TRAILING_STOP_MARKET') {
