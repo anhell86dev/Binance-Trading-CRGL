@@ -4,6 +4,7 @@ import {
   parseCsvToStrategies,
   resolveLatestStrategiesPerPair,
   convertToGoogleSheetCsvUrl,
+  fetchGoogleSheetCsv,
   strategiesToCsv,
 } from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
@@ -13,8 +14,8 @@ const LAST_SYNC_KEY = 'binance_strategies_last_sync_v6';
 const SHEET_URL_KEY = 'binance_strategies_custom_sheet_url_v6';
 const WEBHOOK_URL_KEY = 'binance_strategies_webhook_url_v6';
 
-export const OFFICIAL_GOOGLE_SHEET_NAME = 'Diario de Estrategias Cripto - Táctico Oficial (Google Sheets)';
-export const OFFICIAL_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTakticoFuturesStrategies2026/pub?output=csv';
+export const OFFICIAL_GOOGLE_SHEET_NAME = 'Estrategias Automatizadas Binance';
+export const OFFICIAL_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1xu-DaHU8kH0SiEEIG3mW2MHDfk7HXc43S6CttIzmi6s/edit?usp=sharing';
 
 class StrategyService {
   private strategies: GoogleSheetStrategyRow[] = [];
@@ -30,6 +31,9 @@ class StrategyService {
   constructor() {
     this.loadStrategies();
     this.initAutoSync();
+    setTimeout(() => {
+      this.syncFromGoogleSheets(undefined, true);
+    }, 300);
   }
 
   private loadStrategies() {
@@ -43,11 +47,7 @@ class StrategyService {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (
-          Array.isArray(parsed) &&
-          parsed.length >= 10 &&
-          parsed.some((s) => s.noEstrategia === 'ZEC-20260903-RANGO-V2')
-        ) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           const { allResolvedStrategies } = resolveLatestStrategiesPerPair(parsed);
           this.strategies = allResolvedStrategies;
           return;
@@ -91,7 +91,7 @@ class StrategyService {
   }
 
   /**
-   * Extracts and syncs strategies from Google Sheets
+   * Extracts and syncs strategies strictly from the configured Google Sheets file
    */
   public async syncFromGoogleSheets(urlToFetch?: string, silent: boolean = false): Promise<boolean> {
     if (this.isSyncing) return false;
@@ -100,31 +100,22 @@ class StrategyService {
     if (!silent) this.notify();
 
     const targetUrl = urlToFetch || this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
-    const directCsvUrl = convertToGoogleSheetCsvUrl(targetUrl);
 
     try {
-      let csvContent = '';
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(directCsvUrl, {
-          signal: controller.signal,
-          headers: { Accept: 'text/csv, text/plain, */*' },
-        });
-        clearTimeout(timeoutId);
+      // 1. Try fetching tab 'Estrategias' specifically
+      let csvContent = await fetchGoogleSheetCsv(targetUrl, { sheetTabName: 'Estrategias' });
 
-        if (res.ok) {
-          csvContent = await res.text();
-        }
-      } catch (fetchErr) {
-        // Benign CORS / network fallback - use official updated CSV
+      // 2. Fallback to primary sheet export if tab 'Estrategias' returned empty
+      if (!csvContent || !csvContent.includes('Estrategia') || csvContent.length < 50) {
+        csvContent = await fetchGoogleSheetCsv(targetUrl);
       }
 
-      if (csvContent && csvContent.includes('No. Estrategia') && csvContent.length > 50) {
+      if (csvContent && csvContent.length > 50 && (csvContent.includes('Estrategia') || csvContent.includes('Par'))) {
         const parsed = parseCsvToStrategies(csvContent);
         if (parsed.length > 0) {
           this.strategies = parsed;
           this.lastSyncTime = new Date().toLocaleTimeString();
+          this.syncError = null;
           this.saveToStorage();
           this.isSyncing = false;
           this.notify();
@@ -132,18 +123,22 @@ class StrategyService {
         }
       }
 
-      // If remote returned nothing, refresh from official dataset
-      this.refreshOfficialStrategies();
+      // If remote returned nothing or invalid structure, preserve existing strategies and record warning
+      this.syncError = 'No se encontraron filas válidas en la hoja de Google Sheets. Se mantienen los datos sincronizados previos.';
       this.isSyncing = false;
       this.notify();
-      return true;
+      return false;
     } catch (err: any) {
       console.error('Error syncing Google Sheets:', err);
-      this.syncError = err.message || 'Error de sincronización';
+      this.syncError = err.message || 'Error al conectar con Google Sheets';
       this.isSyncing = false;
       this.notify();
       return false;
     }
+  }
+
+  public getEffectiveSheetUrl(): string {
+    return this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
   }
 
   public setCustomSheetUrl(url: string) {

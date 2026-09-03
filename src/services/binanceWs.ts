@@ -308,6 +308,12 @@ class BinanceWsEngine {
   public getOpenOrders(): OpenOrder[] {
     return this.openOrders;
   }
+  public setOpenOrders(orders: OpenOrder[], _source: string = 'local'): void {
+    this.openOrders = orders;
+    this.persistState();
+    this.recalculateAccountStats();
+    this.notify();
+  }
   public getTradeHistory(): TradeHistoryItem[] {
     return this.tradeHistory;
   }

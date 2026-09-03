@@ -17,10 +17,12 @@ import {
   AlertCircle,
   Link as LinkIcon,
   CheckCircle2,
+  Layers,
 } from 'lucide-react';
 import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
+import { ordersSheetService } from '../services/ordersSheetService';
 import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
-import { SAMPLE_GOOGLE_SHEET_CSV, normalizeStrategyStatus } from '../utils/sheetParser';
+import { SAMPLE_GOOGLE_SHEET_CSV, normalizeStrategyStatus, DEFAULT_ORDERS_SHEET_CSV_TEMPLATE } from '../utils/sheetParser';
 
 interface GoogleDocsManagerModalProps {
   isOpen: boolean;
@@ -28,7 +30,7 @@ interface GoogleDocsManagerModalProps {
 }
 
 export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'CATALOG' | 'WRITE' | 'READ'>('CATALOG');
+  const [activeTab, setActiveTab] = useState<'CATALOG' | 'ORDERS' | 'WRITE' | 'READ'>('CATALOG');
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [customSheetUrl, setCustomSheetUrl] = useState<string>(() => strategyService.getCustomSheetUrl());
   const [webhookUrl, setWebhookUrl] = useState<string>(() => strategyService.getWebhookUrl());
@@ -39,6 +41,14 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showAppsScriptCode, setShowAppsScriptCode] = useState(false);
+
+  // Orders Sheet State
+  const [ordersTabName, setOrdersTabName] = useState(() => ordersSheetService.getSheetTabName());
+  const [ordersGid, setOrdersGid] = useState(() => ordersSheetService.getSheetGid());
+  const [sheetOrders, setSheetOrders] = useState(() => ordersSheetService.getOrders());
+  const [isSyncingOrders, setIsSyncingOrders] = useState(() => ordersSheetService.getIsSyncing());
+  const [ordersSyncError, setOrdersSyncError] = useState(() => ordersSheetService.getLastSyncError());
+  const [ordersLastSync, setOrdersLastSync] = useState(() => ordersSheetService.getLastSyncTime());
 
   // New Strategy Form State
   const [newStrategy, setNewStrategy] = useState<Partial<GoogleSheetStrategyRow>>({
@@ -60,7 +70,18 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
     const unsub = strategyService.subscribe(() => {
       setStrategies([...strategyService.getStrategies()]);
     });
-    return unsub;
+    const unsubOrders = ordersSheetService.subscribe(() => {
+      setSheetOrders([...ordersSheetService.getOrders()]);
+      setOrdersTabName(ordersSheetService.getSheetTabName());
+      setOrdersGid(ordersSheetService.getSheetGid());
+      setIsSyncingOrders(ordersSheetService.getIsSyncing());
+      setOrdersSyncError(ordersSheetService.getLastSyncError());
+      setOrdersLastSync(ordersSheetService.getLastSyncTime());
+    });
+    return () => {
+      unsub();
+      unsubOrders();
+    };
   }, []);
 
   if (!isOpen) return null;
@@ -185,9 +206,48 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
   const handleSyncFromSheetUrl = async () => {
     setIsSyncing(true);
     strategyService.setCustomSheetUrl(customSheetUrl);
-    await strategyService.syncFromGoogleSheets(customSheetUrl);
+    await Promise.all([
+      strategyService.syncFromGoogleSheets(customSheetUrl),
+      ordersSheetService.syncOrdersFromGoogleSheet(customSheetUrl),
+    ]);
     setIsSyncing(false);
-    showNotification('success', 'Sincronización completada desde Google Sheets.');
+    showNotification('success', 'Sincronización completada desde Google Sheets (Estrategias y Órdenes).');
+  };
+
+  const handleSaveOrdersConfig = async () => {
+    ordersSheetService.setSheetTabName(ordersTabName);
+    ordersSheetService.setSheetGid(ordersGid);
+    setIsSyncingOrders(true);
+    const ok = await ordersSheetService.syncOrdersFromGoogleSheet();
+    setIsSyncingOrders(false);
+    if (ok) {
+      showNotification('success', `¡Órdenes sincronizadas con éxito desde la pestaña "${ordersTabName}" de Google Sheets!`);
+    } else {
+      showNotification('error', ordersSheetService.getLastSyncError() || 'No se pudieron recuperar las órdenes.');
+    }
+  };
+
+  const handleCopyOrdersTemplate = async () => {
+    const ok = await ordersSheetService.copyTemplateCsv();
+    if (ok) {
+      showNotification('success', '¡Plantilla CSV de órdenes copiada al portapapeles! Pégala en tu pestaña de Google Sheets.');
+    } else {
+      showNotification('error', 'Error al copiar la plantilla.');
+    }
+  };
+
+  const handleCopyCurrentOrders = async () => {
+    const ok = await ordersSheetService.copyCurrentOrdersCsv();
+    if (ok) {
+      showNotification('success', '¡Órdenes actuales copiadas al portapapeles en formato CSV!');
+    } else {
+      showNotification('error', 'Error al copiar las órdenes.');
+    }
+  };
+
+  const handleDownloadOrdersCsv = () => {
+    ordersSheetService.downloadOrdersCsv();
+    showNotification('success', 'Archivo CSV de órdenes descargado.');
   };
 
   const appsScriptCodeSnippet = `// Código para Google Apps Script (Extensiones > Apps Script en tu Google Sheet)
@@ -269,6 +329,18 @@ function doPost(e) {
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
             <span>Catálogo & Edición ({strategies.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ORDERS')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'ORDERS'
+                ? 'text-cyan-400 border-cyan-500 bg-neutral-900'
+                : 'text-neutral-400 border-transparent hover:text-neutral-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Hoja de Órdenes ({sheetOrders.length})</span>
           </button>
 
           <button
@@ -426,6 +498,223 @@ function doPost(e) {
             </div>
           )}
 
+          {/* TAB: ORDERS FROM GOOGLE SHEETS */}
+          {activeTab === 'ORDERS' && (
+            <div className="space-y-5">
+              {/* Header & Config */}
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Hoja de Órdenes Centralizada</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                          {sheetOrders.length} Órdenes Activas
+                        </span>
+                      </h4>
+                      <p className="text-xs text-neutral-400">
+                        Lee y sincroniza las órdenes en Binance Futures desde la pestaña específica de tu mismo archivo Google Sheet.
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    href={customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-neutral-700"
+                  >
+                    <span>Abrir Google Sheet</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
+                  </a>
+                </div>
+
+                {/* Configuration Inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-2">
+                  <div className="sm:col-span-6 space-y-1">
+                    <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                      Nombre de la Pestaña / Hoja
+                    </label>
+                    <input
+                      type="text"
+                      value={ordersTabName}
+                      onChange={(e) => setOrdersTabName(e.target.value)}
+                      placeholder="Ej: Ordenes o Órdenes"
+                      className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-cyan-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3 space-y-1">
+                    <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                      GID (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={ordersGid}
+                      onChange={(e) => setOrdersGid(e.target.value)}
+                      placeholder="Ej: 0 o 123456789"
+                      className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-cyan-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3 flex items-end">
+                    <button
+                      onClick={handleSaveOrdersConfig}
+                      disabled={isSyncingOrders}
+                      className="w-full px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 shadow-lg shadow-cyan-950/40"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingOrders ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingOrders ? 'Leyendo...' : 'Sincronizar'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Sync status & Actions */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-800/80 text-[11px]">
+                  <div className="text-neutral-400 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span>Última lectura: {ordersLastSync || 'Pendiente'}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCopyOrdersTemplate}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 font-medium transition-colors flex items-center gap-1"
+                      title="Copia el encabezado y formato estándar para pegar en una nueva pestaña de Google Sheets"
+                    >
+                      <Copy className="w-3 h-3 text-cyan-400" />
+                      <span>Copiar Plantilla CSV</span>
+                    </button>
+                    <button
+                      onClick={handleCopyCurrentOrders}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 font-medium transition-colors flex items-center gap-1"
+                      title="Copia las órdenes activas en formato CSV"
+                    >
+                      <Copy className="w-3 h-3 text-neutral-400" />
+                      <span>Copiar Órdenes Activas</span>
+                    </button>
+                    <button
+                      onClick={handleDownloadOrdersCsv}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 font-medium transition-colors flex items-center gap-1"
+                      title="Descarga el archivo .CSV de órdenes"
+                    >
+                      <Download className="w-3 h-3 text-neutral-400" />
+                      <span>Descargar CSV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {ordersSyncError && (
+                  <div className="p-2.5 rounded-lg bg-amber-950/60 border border-amber-800/80 text-amber-300 text-xs flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-semibold">{ordersSyncError}</p>
+                      <p className="text-[11px] text-amber-400/80">
+                        Copia la plantilla preformateada haciendo clic en &quot;Copiar Plantilla CSV&quot; y pégala en la pestaña &quot;{ordersTabName}&quot; de tu Google Sheet.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Orders Table */}
+              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-950/40">
+                <div className="p-3 bg-neutral-900 border-b border-neutral-800 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-neutral-300">
+                    Órdenes Registradas en Google Sheets ({sheetOrders.length})
+                  </span>
+                  <span className="text-[11px] text-neutral-400 font-mono">
+                    Hoja: &quot;{ordersTabName}&quot;
+                  </span>
+                </div>
+
+                {sheetOrders.length === 0 ? (
+                  <div className="p-8 text-center text-xs space-y-3">
+                    <Layers className="w-10 h-10 text-neutral-600 mx-auto" />
+                    <div className="text-neutral-300 font-bold text-sm">
+                      Aún no hay órdenes registradas en la pestaña &quot;{ordersTabName}&quot;
+                    </div>
+                    <p className="text-neutral-500 max-w-md mx-auto text-[11px]">
+                      Puedes crear una pestaña llamada <span className="text-cyan-400 font-mono font-bold">&quot;{ordersTabName}&quot;</span> en tu archivo Google Sheet y pegar la plantilla estándar con encabezados de órdenes.
+                    </p>
+                    <div className="flex justify-center gap-2 pt-2">
+                      <button
+                        onClick={handleCopyOrdersTemplate}
+                        className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-semibold transition-colors flex items-center gap-1.5 shadow-md shadow-cyan-950/50"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar Plantilla de Órdenes</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto max-h-[45vh]">
+                    <table className="w-full text-left text-xs font-mono">
+                      <thead className="sticky top-0 bg-neutral-900 border-b border-neutral-800 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider z-10">
+                        <tr>
+                          <th className="py-2 px-3">ID / Ref</th>
+                          <th className="py-2 px-3">Estrategia</th>
+                          <th className="py-2 px-3">Par</th>
+                          <th className="py-2 px-3">Tipo</th>
+                          <th className="py-2 px-3">Lado</th>
+                          <th className="py-2 px-3">Precio</th>
+                          <th className="py-2 px-3">Cantidad</th>
+                          <th className="py-2 px-3">Apalancamiento</th>
+                          <th className="py-2 px-3">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800/60 font-sans">
+                        {sheetOrders.map((ord) => {
+                          const isBuy = ord.side === 'BUY';
+                          return (
+                            <tr key={ord.orderId} className="hover:bg-neutral-900/60 transition-colors font-mono">
+                              <td className="py-2.5 px-3 text-neutral-300 font-bold whitespace-nowrap">
+                                {ord.orderId}
+                              </td>
+                              <td className="py-2.5 px-3 text-amber-300 font-bold whitespace-nowrap">
+                                {ord.strategyId || '-'}
+                              </td>
+                              <td className="py-2.5 px-3 text-white font-bold whitespace-nowrap">
+                                {ord.symbol}
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 text-[10px]">
+                                  {ord.type}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap font-bold">
+                                <span className={isBuy ? 'text-emerald-400' : 'text-rose-400'}>
+                                  {isBuy ? 'COMPRA' : 'VENTA'}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-neutral-200 whitespace-nowrap">
+                                ${ord.price > 0 ? ord.price.toFixed(2) : (ord.stopPrice?.toFixed(2) || 'MKT')}
+                              </td>
+                              <td className="py-2.5 px-3 text-neutral-300 whitespace-nowrap">
+                                {ord.origQty}
+                              </td>
+                              <td className="py-2.5 px-3 text-amber-400 font-bold whitespace-nowrap">
+                                {ord.leverage || 3}x
+                              </td>
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                  {ord.status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* TAB 2: WRITE / EXPORT TO GOOGLE DOCS */}
           {activeTab === 'WRITE' && (
             <div className="space-y-5">
@@ -544,10 +833,10 @@ function doPost(e) {
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-white">
-                      1. Conexión Directa a URL de Google Sheets
+                      1. Archivo Único Centralizado de Google Sheets
                     </h4>
                     <p className="text-xs text-neutral-400">
-                      Ingresa el enlace público o publicado en la web de tu Google Sheets para leer los datos en tiempo real.
+                      La aplicación lee tanto las <strong className="text-emerald-400">Estrategias</strong> (pestaña &quot;Estrategias&quot;) como las <strong className="text-cyan-400">Órdenes</strong> (pestaña &quot;{ordersTabName}&quot;) de este único archivo de Google Sheets.
                     </p>
                   </div>
                 </div>
@@ -556,7 +845,7 @@ function doPost(e) {
                   <div className="flex items-center gap-2">
                     <input
                       type="url"
-                      placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv"
+                      placeholder="https://docs.google.com/spreadsheets/d/.../edit?usp=sharing"
                       value={customSheetUrl}
                       onChange={(e) => setCustomSheetUrl(e.target.value)}
                       className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 font-mono"
@@ -567,7 +856,7 @@ function doPost(e) {
                       className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                      <span>{isSyncing ? 'Leyendo...' : 'Leer Ahora'}</span>
+                      <span>{isSyncing ? 'Leyendo Todo...' : 'Leer Ahora (Estrategias y Órdenes)'}</span>
                     </button>
                   </div>
                 </div>

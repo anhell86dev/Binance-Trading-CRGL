@@ -6,6 +6,7 @@ import {
   TradeProcessStageInfo,
   ParsedStrategyPrices,
 } from '../types/strategy';
+import { OpenOrder } from '../types/binance';
 
 export const SAMPLE_GOOGLE_SHEET_CSV = `No. Estrategia,Fecha,Nombre de Estrategia,Par,Temporalidad,Tipo de Orden,Indicadores Clave,Reglas de Entrada,Reglas de Salida / TP,Gestión de Riesgo & Stop Loss,Comentarios / Backtesting,Estado
 ZEC-20260902-RETROCESO,2026-09-02,Acumulación en Retroceso y Testeo de SMA-15,ZECUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"SMA-15 ($760.45), Mínimo $789.12, SMA-7 ($813.98), Resistencia $839.76, Máx 8 años $888","DCA: E1 (50%) @ $785.00, E2 (30%) @ $770.00, E3 (20%) @ $760.00 (Promedio: $775.50)",TP1 (50%) @ $838.00; TP2 (30%) @ $885.00; TP Final (20%) @ $950.00,SL Global @ $748.00 (bajo SMA-15 $760.45). ROE Máx 5X: -17.73%. Margen Aislado,Superada por análisis del 03/09.,Obsoleto
@@ -269,27 +270,272 @@ export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] 
 }
 
 /**
- * Transforms a standard Google Sheets sharing link into a direct CSV export endpoint
+ * Transforms a standard Google Sheets sharing link into a direct CSV export endpoint.
+ * Supports optional specific sheet tab name (e.g. 'Ordenes') or specific gid.
  */
-export function convertToGoogleSheetCsvUrl(url: string): string {
+export function convertToGoogleSheetCsvUrl(
+  url: string,
+  options?: { sheetTabName?: string; gid?: string }
+): string {
   const trimmed = url.trim();
   if (!trimmed) return '';
 
-  // Match /spreadsheets/d/([a-zA-Z0-9-_]+)
+  // Extract sheet ID from standard Google Sheets URL format
   const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
   if (!match) {
-    return trimmed; // return as-is if not standard google spreadsheet URL
+    // If it's already a direct published CSV link or other format, return as-is
+    return trimmed;
   }
 
   const sheetId = match[1];
-  let gid = '0';
-  const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
-  if (gidMatch) {
-    gid = gidMatch[1];
+
+  // If a specific sheet tab name is requested (e.g. 'Ordenes' or 'Estrategias')
+  if (options?.sheetTabName && options.sheetTabName.trim().length > 0) {
+    const cleanTab = options.sheetTabName.trim();
+    // If the tab is given as a numeric gid
+    if (/^\d+$/.test(cleanTab)) {
+      return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${cleanTab}`;
+    }
+    // Tab name via gviz/tq endpoint
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cleanTab)}`;
   }
 
-  // Google Sheets direct CSV export URL
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+  // If a specific gid is provided
+  if (options?.gid && options.gid.trim().length > 0) {
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${options.gid.trim()}`;
+  }
+
+  // Check if original URL contains an explicit gid
+  const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+  if (gidMatch) {
+    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gidMatch[1]}`;
+  }
+
+  // Default export of the active/primary sheet (WITHOUT hardcoded &gid=0 to avoid 404 when gid 0 was deleted)
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+}
+
+/**
+ * Robust fetch helper that fetches a Google Sheet CSV either through local proxy or direct
+ */
+export async function fetchGoogleSheetCsv(
+  url: string,
+  options?: { sheetTabName?: string; gid?: string; timeoutMs?: number }
+): Promise<string> {
+  const directUrl = convertToGoogleSheetCsvUrl(url, options);
+  if (!directUrl) return '';
+
+  const timeoutMs = options?.timeoutMs || 9000;
+
+  // 1. First attempt: via local proxy endpoint to bypass any browser CORS restrictions
+  try {
+    const proxyUrl = `/api/sheets-proxy?url=${encodeURIComponent(directUrl)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(proxyUrl, {
+      signal: controller.signal,
+      headers: { Accept: 'text/csv, text/plain, */*' },
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.length > 10 && !text.includes('<!DOCTYPE html>') && !text.includes('<html')) {
+        return text;
+      }
+    }
+  } catch (_proxyErr) {
+    // Proxy failed or not available in this context, fall through to direct fetch
+  }
+
+  // 2. Second attempt: direct fetch
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(directUrl, {
+      signal: controller.signal,
+      headers: { Accept: 'text/csv, text/plain, */*' },
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.length > 10 && !text.includes('<!DOCTYPE html>') && !text.includes('<html')) {
+        return text;
+      }
+    }
+  } catch (_directErr) {
+    // Network / CORS error
+  }
+
+  return '';
+}
+
+/**
+ * Normalizes headers and maps CSV rows to OpenOrder[]
+ */
+export function parseCsvToOrders(csvText: string): OpenOrder[] {
+  const rawRows = parseCsvRows(csvText);
+  if (rawRows.length < 2) return [];
+
+  const headers = rawRows[0].map(h =>
+    h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+  );
+
+  const findCol = (regex: RegExp) => headers.findIndex(h => regex.test(h));
+
+  const idIdx = findCol(/^(id|no\.?\s*orden|orderid|clientorderid|codigo)/i);
+  const dateIdx = findCol(/^(fecha|date|timestamp|hora|time)/i);
+  const stratIdx = findCol(/^(estrategia|no\.?\s*estrategia|strategy|strategyid)/i);
+  const symbolIdx = findCol(/^(par|simbolo|symbol|activo|asset|moneda)/i);
+  const typeIdx = findCol(/^(tipo|type|order\s*type|tipo\s*orden)/i);
+  const sideIdx = findCol(/^(lado|side|direccion|direction|operacion|compra\/venta)/i);
+  const priceIdx = findCol(/^(precio|price|entry|precio\s*limite|limit\s*price)/i);
+  const qtyIdx = findCol(/^(cantidad|qty|amount|size|tamano|volumen)/i);
+  const levIdx = findCol(/^(apalancamiento|leverage|lev)/i);
+  const marginIdx = findCol(/^(margen|margin|tipo\s*margen)/i);
+  const slIdx = findCol(/^(stop\s*loss|sl|stop\s*price|precio\s*stop|invalidation)/i);
+  const tpIdx = findCol(/^(take\s*profit|tp|tp1|tp\s*price)/i);
+  const roleIdx = findCol(/^(rol|role|etiqueta|tag|fase)/i);
+  const statusIdx = findCol(/^(estado|status|state)/i);
+
+  const orders: OpenOrder[] = [];
+
+  for (let i = 1; i < rawRows.length; i++) {
+    const row = rawRows[i];
+    if (!row || row.length === 0 || !row.some(c => c.trim().length > 0)) continue;
+
+    // Symbol extraction
+    let rawSymbol = symbolIdx >= 0 ? row[symbolIdx]?.trim().toUpperCase() : '';
+    rawSymbol = rawSymbol.replace(/[^A-Z0-9]/g, '');
+    if (!rawSymbol) rawSymbol = 'ZECUSDT';
+    if (!rawSymbol.endsWith('USDT') && !rawSymbol.endsWith('BUSD')) {
+      rawSymbol = `${rawSymbol}USDT`;
+    }
+
+    // Side extraction
+    const rawSide = sideIdx >= 0 ? row[sideIdx]?.trim().toUpperCase() : '';
+    const side: 'BUY' | 'SELL' = (rawSide.includes('SELL') || rawSide.includes('VENTA') || rawSide.includes('SHORT'))
+      ? 'SELL'
+      : 'BUY';
+
+    // Type extraction
+    const rawType = typeIdx >= 0 ? row[typeIdx]?.trim().toUpperCase() : '';
+    let orderType: OpenOrder['type'] = 'LIMIT';
+    if (rawType.includes('STOP_MARKET') || rawType === 'STOP' || rawType.includes('STOP')) {
+      orderType = 'STOP_MARKET';
+    } else if (rawType.includes('TAKE_PROFIT') || rawType.includes('TP')) {
+      orderType = 'TAKE_PROFIT_MARKET';
+    } else if (rawType.includes('MARKET') || rawType.includes('MERCADO')) {
+      orderType = 'MARKET';
+    }
+
+    // Price extraction
+    const rawPriceStr = priceIdx >= 0 ? row[priceIdx]?.replace(/[\$,]/g, '').trim() : '';
+    let price = parseFloat(rawPriceStr) || 0;
+
+    // Stop price extraction
+    const rawSlStr = slIdx >= 0 ? row[slIdx]?.replace(/[\$,]/g, '').trim() : '';
+    const stopPrice = parseFloat(rawSlStr) || (orderType === 'STOP_MARKET' && price > 0 ? price : undefined);
+
+    if (orderType === 'STOP_MARKET' && price === 0 && stopPrice && stopPrice > 0) {
+      price = stopPrice;
+    }
+
+    // Qty extraction
+    const rawQtyStr = qtyIdx >= 0 ? row[qtyIdx]?.replace(/[\$,]/g, '').trim() : '';
+    const origQty = parseFloat(rawQtyStr) || 0.1;
+
+    // Leverage
+    const rawLevStr = levIdx >= 0 ? row[levIdx]?.replace(/[^0-9]/g, '').trim() : '';
+    const levVal = parseInt(rawLevStr, 10);
+    const leverage = !isNaN(levVal) ? Math.min(5, Math.max(1, levVal)) : 5;
+
+    // Status
+    const rawStatus = statusIdx >= 0 ? row[statusIdx]?.trim().toUpperCase() : '';
+    let status: OpenOrder['status'] = 'NEW';
+    if (rawStatus.includes('FILL') || rawStatus.includes('EJECUT')) {
+      status = 'FILLED';
+    } else if (rawStatus.includes('CANC') || rawStatus.includes('ANUL')) {
+      status = 'CANCELED';
+    }
+
+    // Order IDs
+    const strategyId = stratIdx >= 0 ? row[stratIdx]?.trim() : undefined;
+    const role = roleIdx >= 0 ? row[roleIdx]?.trim() : undefined;
+    const rawId = idIdx >= 0 ? row[idIdx]?.trim() : '';
+    const orderId = rawId || `GSH-${rawSymbol}-${i}`;
+    const clientOrderId = `GSH-${strategyId || rawSymbol}-${role || 'ORD'}-${i}`;
+
+    orders.push({
+      orderId,
+      clientOrderId,
+      symbol: rawSymbol,
+      side,
+      type: orderType,
+      price,
+      origQty,
+      executedQty: status === 'FILLED' ? origQty : 0,
+      status,
+      timeInForce: 'GTC',
+      leverage,
+      marginType: 'ISOLATED',
+      stopPrice,
+      createdTime: Date.now() - (rawRows.length - i) * 60000,
+      strategyId,
+      strategyName: strategyId ? `Estrategia ${strategyId}` : undefined,
+    });
+  }
+
+  return orders;
+}
+
+/**
+ * Standard CSV Template for Orders sheet tab in Google Sheets
+ */
+export const DEFAULT_ORDERS_SHEET_CSV_TEMPLATE = `ID,Fecha,Estrategia,Par,Tipo,Lado,Precio,Cantidad,Apalancamiento,Margen,StopLoss,TakeProfit,Rol,Estado
+ORD-ZEC-001,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,LIMIT,BUY,820.00,0.50,5x,ISOLATED,778.00,835.00,E1 (50%),NEW
+ORD-ZEC-002,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,LIMIT,BUY,812.00,0.30,5x,ISOLATED,778.00,840.00,E2 (30%),NEW
+ORD-ZEC-003,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,LIMIT,BUY,795.00,0.20,5x,ISOLATED,778.00,855.00,E3 (20%),NEW
+ORD-ZEC-004,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,STOP_MARKET,SELL,778.00,1.00,5x,ISOLATED,778.00,,SL-Global,NEW
+ORD-ZEC-005,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,TAKE_PROFIT_MARKET,SELL,835.00,0.50,5x,ISOLATED,,835.00,TP1 (50%),NEW
+ORD-ZEC-006,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,TAKE_PROFIT_MARKET,SELL,840.00,0.30,5x,ISOLATED,,840.00,TP2 (30%),NEW`;
+
+/**
+ * Serializes OpenOrder[] to CSV format for export or writing back to Google Sheets
+ */
+export function ordersToCsv(orders: OpenOrder[]): string {
+  const headers = ['ID', 'Fecha', 'Estrategia', 'Par', 'Tipo', 'Lado', 'Precio', 'Cantidad', 'Apalancamiento', 'Margen', 'StopLoss', 'TakeProfit', 'Rol', 'Estado'];
+  const rows = orders.map(o => {
+    const dateStr = o.createdTime ? new Date(o.createdTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const role = o.clientOrderId?.includes('E1') ? 'E1 (50%)'
+      : o.clientOrderId?.includes('E2') ? 'E2 (30%)'
+      : o.clientOrderId?.includes('E3') ? 'E3 (20%)'
+      : o.clientOrderId?.includes('SL') ? 'SL-Global'
+      : o.clientOrderId?.includes('TP1') ? 'TP1 (50%)'
+      : o.clientOrderId?.includes('TP2') ? 'TP2 (30%)'
+      : o.clientOrderId?.includes('TP') ? 'TP Final'
+      : 'Orden';
+
+    return [
+      `"${o.orderId}"`,
+      `"${dateStr}"`,
+      `"${o.strategyId || ''}"`,
+      `"${o.symbol}"`,
+      `"${o.type}"`,
+      `"${o.side}"`,
+      o.price.toFixed(4),
+      o.origQty.toFixed(4),
+      `"${o.leverage || 5}x"`,
+      `"${o.marginType || 'ISOLATED'}"`,
+      o.stopPrice ? o.stopPrice.toFixed(4) : '',
+      '',
+      `"${role}"`,
+      `"${o.status}"`
+    ].join(',');
+  });
+
+  return [headers.join(','), ...rows].join('\n');
 }
 
 /**

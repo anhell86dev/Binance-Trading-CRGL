@@ -8,6 +8,7 @@ import {
   BookOpen,
   CheckCircle2,
   Clock,
+  Copy,
   Download,
   Edit2,
   ExternalLink,
@@ -26,6 +27,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
+import { ordersSheetService } from '../services/ordersSheetService';
 import { OpenOrder, PositionRisk, TradeHistoryItem, VolatilityAlert } from '../types/binance';
 import { alertsSheetService, OFFICIAL_ALERTS_SHEET_NAME, OFFICIAL_WORKBOOK_NAME } from '../services/alertsSheetService';
 import { OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
@@ -57,6 +59,13 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
   const [lastSyncTime, setLastSyncTime] = useState<number>(binanceWs.getLastDataSyncTime());
   const [lastSyncError, setLastSyncError] = useState<string | null>(binanceWs.getLastDataSyncError());
   const mode = binanceWs.getMode();
+
+  // Orders Sheet Live State
+  const [ordersSheetTab, setOrdersSheetTab] = useState(() => ordersSheetService.getSheetTabName());
+  const [ordersSheetLastSync, setOrdersSheetLastSync] = useState(() => ordersSheetService.getLastSyncTime());
+  const [ordersSheetError, setOrdersSheetError] = useState(() => ordersSheetService.getLastSyncError());
+  const [isSyncingOrdersSheet, setIsSyncingOrdersSheet] = useState(() => ordersSheetService.getIsSyncing());
+  const [copiedTemplateNotice, setCopiedTemplateNotice] = useState(false);
 
   // Modal for editing TP/SL on active position
   const [editingPos, setEditingPos] = useState<PositionRisk | null>(null);
@@ -91,9 +100,18 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
       setSheetAlerts([...alertsSheetService.getAlerts()]);
     });
 
+    const unsubOrdersSheet = ordersSheetService.subscribe(() => {
+      setOrders(binanceWs.getOpenOrders());
+      setOrdersSheetTab(ordersSheetService.getSheetTabName());
+      setOrdersSheetLastSync(ordersSheetService.getLastSyncTime());
+      setOrdersSheetError(ordersSheetService.getLastSyncError());
+      setIsSyncingOrdersSheet(ordersSheetService.getIsSyncing());
+    });
+
     return () => {
       unsub();
       unsubAlertsSheet();
+      unsubOrdersSheet();
     };
   }, []);
 
