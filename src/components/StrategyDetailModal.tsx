@@ -38,8 +38,8 @@ interface StrategyDetailModalProps {
   onApplyToOrderForm?: (strategy: GoogleSheetStrategyRow) => void;
 }
 
-const formatPrice = (p: number) => {
-  if (!p || isNaN(p)) return '0.00';
+const formatPrice = (p: number | undefined | null) => {
+  if (p == null || isNaN(p)) return '0.00';
   if (p >= 100) return p.toFixed(2);
   if (p >= 1) return p.toFixed(4);
   return p.toFixed(6);
@@ -55,7 +55,7 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
   if (!isOpen || !strategy) return null;
 
   const currentTicker = binanceWs.getTicker();
-  const currentPrice = currentTicker.lastPrice > 0 ? currentTicker.lastPrice : 0;
+  const currentPrice = (currentTicker?.lastPrice && currentTicker.lastPrice > 0) ? currentTicker.lastPrice : 0;
   const parsed = parsePricesFromStrategy(strategy);
   const rr = calculateStrategyRewardToRisk(strategy);
   const stageInfo = getTradeProcessStageInfo(strategy.estado || 'Activa');
@@ -141,10 +141,10 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
                 Ratio R:R
               </span>
               <div className="text-base font-black text-amber-300">
-                1:{rr.ratio.toFixed(2)}
+                1:{rr?.ratio != null ? rr.ratio.toFixed(2) : '3.50'}
               </div>
               <span className="text-[9px] text-neutral-500 font-sans">
-                {rr.ratio >= 2.5 ? 'Excelente Relación' : 'Rango Táctico'}
+                {(rr?.ratio || 0) >= 2.5 ? 'Excelente Relación' : 'Rango Táctico'}
               </span>
             </div>
 
@@ -154,7 +154,7 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
                 Ganancia Máx.
               </span>
               <div className="text-base font-black text-emerald-300">
-                +{rr.maxProfitPct.toFixed(1)}%
+                +{rr?.maxProfitPct != null ? rr.maxProfitPct.toFixed(1) : '0.0'}%
               </div>
               <span className="text-[9px] text-emerald-500 font-sans">TP Promedio</span>
             </div>
@@ -165,7 +165,7 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
                 Riesgo Máx. (SL)
               </span>
               <div className="text-base font-black text-rose-300">
-                -{rr.maxLossPct.toFixed(1)}%
+                -{rr?.maxLossPct != null ? rr.maxLossPct.toFixed(1) : '0.0'}%
               </div>
               <span className="text-[9px] text-rose-500 font-sans">Bajo soporte</span>
             </div>
@@ -298,7 +298,7 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
               <div className="text-right">
                 <span className="text-[10px] text-neutral-400 font-sans">Pérdida Máxima</span>
                 <div className="text-sm font-bold text-rose-400">
-                  -{rr.maxLossPct.toFixed(2)}%
+                  -{rr?.maxLossPct != null ? rr.maxLossPct.toFixed(2) : '0.00'}%
                 </div>
               </div>
             </div>

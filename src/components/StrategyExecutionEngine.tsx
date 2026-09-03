@@ -13,6 +13,7 @@ import {
   DollarSign,
   Eye,
   Flame,
+  History,
   Info,
   Layers,
   Lock,
@@ -92,6 +93,8 @@ export const StrategyExecutionEngine: React.FC = () => {
     return found || strategyService.getActiveStrategy() || strategyService.getStrategies()[0];
   }, [activeStrategy, symbol]);
 
+  const isObsolete = (strategy?.estado || '').toLowerCase() === 'obsoleto';
+
   // Available free margin from Binance WS engine
   const availableMargin = Math.max(0, balance.availableBalance || 0);
 
@@ -141,18 +144,28 @@ export const StrategyExecutionEngine: React.FC = () => {
     return getTradeProcessStageInfo(strategy.estado || 'Activa');
   }, [strategy]);
 
+  // Average Entry Price
+  const avgEntryPrice = useMemo(() => {
+    if (!parsedPrices) return ticker?.lastPrice || 1;
+    if (parsedPrices.entry1Price > 0 && parsedPrices.entry2Price > 0) {
+      return (parsedPrices.entry1Price * 0.5) + (parsedPrices.entry2Price * 0.5);
+    }
+    return parsedPrices.entry1Price || ticker?.lastPrice || 1;
+  }, [parsedPrices, ticker]);
+
   // Notional Position Size = Capital * Leverage (Max 5x)
   const notionalPosition = allocatedCapital * clampedLeverage;
 
   // Real-time distance of current price to Entry 1
-  const currentPrice = ticker.lastPrice || 1;
-  const entry1Dist = parsedPrices
-    ? (((currentPrice - parsedPrices.entry1Price) / parsedPrices.entry1Price) * 100).toFixed(2)
-    : '0.00';
+  const currentPrice = ticker?.lastPrice || 1;
+  const entry1Dist =
+    parsedPrices && parsedPrices.entry1Price > 0
+      ? (((currentPrice - parsedPrices.entry1Price) / parsedPrices.entry1Price) * 100).toFixed(2)
+      : '0.00';
 
   // Projected Return and Max Loss
-  const projectedReturnUsdt = executionPlan ? executionPlan.projectedProfitUsdt : 0;
-  const maxLossUsdt = executionPlan ? executionPlan.maxLossUsdt : 0;
+  const projectedReturnUsdt = executionPlan ? (executionPlan.maxProfitUsdt || 0) : 0;
+  const maxLossUsdt = executionPlan ? (executionPlan.maxLossUsdt || 0) : 0;
 
   const projectedReturnRoe = allocatedCapital > 0 ? (projectedReturnUsdt / allocatedCapital) * 100 : 0;
   const maxLossRoe = allocatedCapital > 0 ? (maxLossUsdt / allocatedCapital) * 100 : 0;
@@ -163,11 +176,16 @@ export const StrategyExecutionEngine: React.FC = () => {
 
   // Validation
   const hasInsufficientFunds = allocatedCapital > availableMargin;
-  const isReadyToExecute = allocatedCapital > 0 && !hasInsufficientFunds && clampedLeverage >= 1 && clampedLeverage <= 5;
+  const isReadyToExecute =
+    !isObsolete &&
+    allocatedCapital > 0 &&
+    !hasInsufficientFunds &&
+    clampedLeverage >= 1 &&
+    clampedLeverage <= 5;
 
   // Dispatch orders to Binance after Google Authenticator confirmation
   const handleConfirm2FAExecution = async (authCode: string) => {
-    if (!executionPlan) return;
+    if (!executionPlan || isObsolete) return;
     setIsExecuting(true);
     try {
       const createdIds = await binanceWs.executeStrategyPlan(executionPlan);
@@ -181,11 +199,48 @@ export const StrategyExecutionEngine: React.FC = () => {
     }
   };
 
+  const handleSwitchToLatestActive = () => {
+    if (strategy?.par) {
+      strategyService.setActiveStrategyBySymbol(strategy.par);
+    }
+  };
+
   return (
     <div
       id="strategy_execution_engine_container"
       className="flex-1 flex flex-col h-full overflow-y-auto bg-neutral-950 p-3 sm:p-4 gap-3.5 custom-scrollbar text-neutral-100"
     >
+      {/* Obsolete Historical Warning Banner */}
+      {isObsolete && (
+        <div className="bg-amber-950/40 border border-amber-500/50 rounded-2xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <History className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-black bg-amber-400 text-black uppercase">
+                  Histórico / Obsoleto
+                </span>
+                <h4 className="text-xs sm:text-sm font-bold text-white">
+                  Estrategia sustituida por análisis técnico más reciente
+                </h4>
+              </div>
+              <p className="text-xs text-neutral-300 mt-0.5">
+                Esta estrategia ({strategy?.noEstrategia} - {strategy?.fecha}) se muestra solo para fines de registro histórico y backtest.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSwitchToLatestActive}
+            className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-bold font-mono transition-all shrink-0 shadow-sm"
+          >
+            Cargar Versión Activa
+          </button>
+        </div>
+      )}
+
       {/* 1. Top Strategy Header Banner */}
       <div className="bg-neutral-900/90 rounded-2xl p-3.5 sm:p-4 border border-neutral-800 shadow-xl flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2.5">
@@ -209,6 +264,8 @@ export const StrategyExecutionEngine: React.FC = () => {
               </div>
               <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-2">
                 <span>Par: <strong className="text-white font-mono">{strategy?.par || symbol}</strong></span>
+                <span>•</span>
+                <span>Fecha: <strong className="text-neutral-300 font-mono">{strategy?.fecha || '2026-09-03'}</strong></span>
                 <span>•</span>
                 <span>Temporalidad: <strong className="text-neutral-300 font-mono">{strategy?.temporalidad || '4H'}</strong></span>
                 <span>•</span>
@@ -240,7 +297,7 @@ export const StrategyExecutionEngine: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Binance Price & Entry 1 Proximity Banner */}
+        {/* Live Binance Price & Entry Proximity Banner */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-neutral-800/80 text-xs font-mono">
           <div className="bg-neutral-950 p-2 rounded-xl border border-neutral-800 flex flex-col">
             <span className="text-[10px] text-neutral-500 uppercase">Precio Binance Actual</span>
@@ -285,7 +342,7 @@ export const StrategyExecutionEngine: React.FC = () => {
       {/* Optional Embedded Tactical Candlestick Chart */}
       {showChartPreview && (
         <div className="h-72 bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden relative shadow-xl">
-          <StrategyChartRenderer />
+          <StrategyChartRenderer symbol={strategy.par} strategy={strategy} />
         </div>
       )}
 
@@ -475,13 +532,13 @@ export const StrategyExecutionEngine: React.FC = () => {
             <div>
               <span className="text-[10px] text-neutral-500 block">Precio Promedio:</span>
               <span className="text-white font-bold text-sm">
-                ${executionPlan?.avgEntryPrice != null ? executionPlan.avgEntryPrice.toFixed(2) : '0.00'}
+                ${avgEntryPrice.toFixed(2)}
               </span>
             </div>
             <div>
               <span className="text-[10px] text-neutral-500 block">Liquidación Est.:</span>
               <span className="text-amber-400 font-bold text-sm">
-                ${(executionPlan?.avgEntryPrice != null ? (executionPlan.avgEntryPrice * (1 - 1 / clampedLeverage + 0.005)).toFixed(2) : '0.00')}
+                ${(avgEntryPrice * (1 - 1 / clampedLeverage + 0.005)).toFixed(2)}
               </span>
             </div>
           </div>
@@ -500,14 +557,20 @@ export const StrategyExecutionEngine: React.FC = () => {
             onClick={() => setIsAuthModalOpen(true)}
             disabled={!isReadyToExecute || isExecuting}
             className={`w-full py-3 px-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-xl ${
-              isReadyToExecute && !isExecuting
+              isObsolete
+                ? 'bg-neutral-850 text-neutral-500 border border-neutral-700 cursor-not-allowed'
+                : isReadyToExecute && !isExecuting
                 ? 'bg-amber-400 hover:bg-amber-300 text-black shadow-amber-950/50 cursor-pointer hover:scale-[1.01]'
                 : 'bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed'
             }`}
           >
             <ShieldCheck className="w-5 h-5" />
-            <span>Autorizar y Crear en Binance (2FA)</span>
-            <ArrowRight className="w-4 h-4" />
+            <span>
+              {isObsolete
+                ? 'Estrategia Histórica (Solo Consulta)'
+                : 'Autorizar y Crear en Binance (2FA)'}
+            </span>
+            {!isObsolete && <ArrowRight className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -528,10 +591,9 @@ export const StrategyExecutionEngine: React.FC = () => {
 
         {/* Orders Grid / Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {executionPlan?.orders.map((ord, idx) => {
+          {executionPlan?.orders.map((ord) => {
             const isEntry = ord.role === 'ENTRY';
             const isSL = ord.role === 'STOP_LOSS';
-            const isTP = ord.role === 'TAKE_PROFIT';
 
             const cardBg = isEntry
               ? 'bg-blue-950/20 border-blue-500/30'
@@ -560,7 +622,7 @@ export const StrategyExecutionEngine: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono py-1 bg-neutral-950/60 rounded-lg p-2 border border-neutral-800/80">
                   <div>
                     <span className="text-[9px] text-neutral-500 block uppercase">Precio Objetivo</span>
-                    <strong className="text-white text-sm">${ord.price.toFixed(2)}</strong>
+                    <strong className="text-white text-sm">${(ord.price || 0).toFixed(2)}</strong>
                   </div>
                   <div>
                     <span className="text-[9px] text-neutral-500 block uppercase">Cantidad / %</span>
@@ -570,7 +632,7 @@ export const StrategyExecutionEngine: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[9px] text-neutral-500 block uppercase">Notional</span>
-                    <span className="text-neutral-300">${ord.estNotional.toFixed(2)}</span>
+                    <span className="text-neutral-300">${(ord.estNotional || 0).toFixed(2)}</span>
                   </div>
                   <div>
                     <span className="text-[9px] text-neutral-500 block uppercase">
@@ -582,9 +644,9 @@ export const StrategyExecutionEngine: React.FC = () => {
                       }`}
                     >
                       {isEntry
-                        ? `$${ord.estMargin.toFixed(2)}`
+                        ? `$${(ord.estMargin || 0).toFixed(2)}`
                         : isSL
-                        ? `-$${maxLossUsdt.toFixed(2)}`
+                        ? `-$${(maxLossUsdt || 0).toFixed(2)}`
                         : `+$${(ord.pnlTarget || 0).toFixed(2)}`}
                     </span>
                   </div>

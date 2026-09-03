@@ -1,6 +1,12 @@
 import React from 'react';
 import TerminalLayout from './components/TerminalLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
-  return <TerminalLayout />;
+  return (
+    <ErrorBoundary>
+      <TerminalLayout />
+    </ErrorBoundary>
+  );
 }
+

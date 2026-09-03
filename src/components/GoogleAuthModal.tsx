@@ -185,7 +185,7 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  {plan.noEstrategia}
+                  {plan.strategyId}
                 </span>
                 <span className="text-sm font-bold text-white">{plan.name}</span>
               </div>
@@ -197,31 +197,31 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-neutral-900 font-mono text-xs">
               <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
                 <span className="text-[10px] text-neutral-400 block">Capital USDT:</span>
-                <span className="text-sm font-bold text-emerald-400">${allocatedCapital.toFixed(2)}</span>
+                <span className="text-sm font-bold text-emerald-400">${(allocatedCapital || 0).toFixed(2)}</span>
               </div>
               <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
                 <span className="text-[10px] text-neutral-400 block">Apalancamiento:</span>
-                <span className="text-sm font-bold text-amber-400">{leverage}x ISOLATED</span>
+                <span className="text-sm font-bold text-amber-400">{leverage || 1}x ISOLATED</span>
               </div>
               <div className="bg-neutral-900/60 p-2 rounded-lg border border-neutral-800">
                 <span className="text-[10px] text-neutral-400 block">Notional Total:</span>
-                <span className="text-sm font-bold text-white">${(allocatedCapital * leverage).toFixed(2)}</span>
+                <span className="text-sm font-bold text-white">${((allocatedCapital || 0) * (leverage || 1)).toFixed(2)}</span>
               </div>
             </div>
 
             {/* Stepped Orders Mini-Badges */}
             <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px] font-mono">
               <span className="px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/60">
-                E1 (50%): ${plan.entry1Price}
+                E1: ${plan.orders.find((o) => o.role === 'ENTRY')?.price || 0}
               </span>
               <span className="px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 border border-blue-800/60">
-                E2 (50%): ${plan.entry2Price}
+                E2: ${plan.orders.filter((o) => o.role === 'ENTRY')[1]?.price || 0}
               </span>
               <span className="px-1.5 py-0.5 rounded bg-rose-950/60 text-rose-300 border border-rose-800/60">
-                SL Estricto: ${plan.slPrice}
+                SL: ${plan.orders.find((o) => o.role === 'STOP_LOSS')?.price || 0}
               </span>
               <span className="px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-800/60">
-                TP1/TP2/TP Final
+                TP1 / TP2 / TP3 Escalonados
               </span>
             </div>
           </div>
@@ -246,7 +246,9 @@ export const GoogleAuthModal: React.FC<GoogleAuthModalProps> = ({
               {digits.map((digit, index) => (
                 <input
                   key={index}
-                  ref={(el) => (inputRefs.current[index] = el)}
+                  ref={(el) => {
+                    inputRefs.current[index] = el;
+                  }}
                   type="text"
                   inputMode="numeric"
                   maxLength={6}

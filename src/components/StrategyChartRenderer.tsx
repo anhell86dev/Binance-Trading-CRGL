@@ -39,8 +39,8 @@ interface StrategyChartRendererProps {
   strategy?: GoogleSheetStrategyRow;
 }
 
-const formatPrice = (p: number) => {
-  if (!p || isNaN(p)) return '0.00';
+const formatPrice = (p: number | undefined | null) => {
+  if (p == null || isNaN(p)) return '0.00';
   if (p >= 100) return p.toFixed(2);
   if (p >= 1) return p.toFixed(4);
   return p.toFixed(6);
@@ -368,21 +368,21 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
   };
 
   // Live distance calculations from current market price
-  const livePrice = ticker.lastPrice > 0 ? ticker.lastPrice : parsedLevels?.entry1Price || 0;
+  const livePrice = (ticker?.lastPrice && ticker.lastPrice > 0) ? ticker.lastPrice : parsedLevels?.entry1Price || 0;
 
-  const distanceE1 = parsedLevels?.entry1Price
+  const distanceE1 = parsedLevels?.entry1Price && parsedLevels.entry1Price > 0
     ? ((livePrice - parsedLevels.entry1Price) / parsedLevels.entry1Price) * 100
     : 0;
 
-  const distanceSL = parsedLevels?.slPrice
+  const distanceSL = parsedLevels?.slPrice && parsedLevels.slPrice > 0
     ? ((livePrice - parsedLevels.slPrice) / parsedLevels.slPrice) * 100
     : 0;
 
-  const distanceTP1 = parsedLevels?.tp1Price
+  const distanceTP1 = parsedLevels?.tp1Price && livePrice > 0
     ? ((parsedLevels.tp1Price - livePrice) / livePrice) * 100
     : 0;
 
-  const distanceTPFinal = parsedLevels?.tpFinalPrice
+  const distanceTPFinal = parsedLevels?.tpFinalPrice && livePrice > 0
     ? ((parsedLevels.tpFinalPrice - livePrice) / livePrice) * 100
     : 0;
 

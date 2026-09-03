@@ -61,6 +61,24 @@ export interface StrategyExecutionPlan {
   riskRewardRatio?: number;
 }
 
+export interface ParsedStrategyPrices {
+  entry1Price: number;
+  entry1Pct: number;
+  entry2Price: number;
+  entry2Pct: number;
+  entry3Price?: number;
+  entry3Pct?: number;
+  avgEntryPrice: number;
+  slPrice: number;
+  tp1Price: number;
+  tp1Pct: number;
+  tp2Price: number;
+  tp2Pct: number;
+  tpFinalPrice: number;
+  tpFinalPct: number;
+  leverage: number;
+}
+
 export interface SheetAlertRow {
   id: string; // e.g. "ALT-ZEC-001"
   timestamp: string; // e.g. "2026-09-02 15:15:00"

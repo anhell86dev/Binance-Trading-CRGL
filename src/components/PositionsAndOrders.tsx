@@ -24,6 +24,7 @@ import {
 import { binanceWs } from '../services/binanceWs';
 import { OpenOrder, PositionRisk, TradeHistoryItem, VolatilityAlert } from '../types/binance';
 import { alertsSheetService, OFFICIAL_ALERTS_SHEET_NAME, OFFICIAL_WORKBOOK_NAME } from '../services/alertsSheetService';
+import { OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
 import { SheetAlertRow } from '../types/strategy';
 import { StrategyCreator } from './StrategyCreator';
 import { DiarioEstrategias } from './DiarioEstrategias';
@@ -247,11 +248,11 @@ export const PositionsAndOrders: React.FC = () => {
                   Sincronizar con Binance
                 </button>
                 <button
-                  onClick={() => setTab('strategy_creator')}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  onClick={() => setTab('alerts')}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Abrir Creador de Estrategia
+                  <Bell className="w-3.5 h-3.5" />
+                  Ver Alertas de Volatilidad
                 </button>
                 {mode === 'simulation' && (
                   <button
@@ -300,19 +301,19 @@ export const PositionsAndOrders: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-3 px-3 font-semibold text-neutral-200">
-                        {Math.abs(pos.positionAmt).toFixed(3)} {pos.symbol.replace('USDT', '')}
+                        {Math.abs(pos.positionAmt || 0).toFixed(3)} {pos.symbol.replace('USDT', '')}
                       </td>
-                      <td className="py-3 px-3 text-neutral-300">${pos.entryPrice.toFixed(2)}</td>
-                      <td className="py-3 px-3 text-amber-400">${pos.markPrice.toFixed(2)}</td>
-                      <td className="py-3 px-3 text-rose-400 font-bold">${pos.liquidationPrice.toFixed(2)}</td>
-                      <td className="py-3 px-3 text-neutral-300">${pos.isolatedMargin.toFixed(2)} USDT</td>
+                      <td className="py-3 px-3 text-neutral-300">${(pos.entryPrice || 0).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-amber-400">${(pos.markPrice || 0).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-rose-400 font-bold">${(pos.liquidationPrice || 0).toFixed(2)}</td>
+                      <td className="py-3 px-3 text-neutral-300">${(pos.isolatedMargin || 0).toFixed(2)} USDT</td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1 font-bold">
                           <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                            {isProfit ? '+' : ''}${pos.unRealizedProfit.toFixed(2)}
+                            {isProfit ? '+' : ''}${(pos.unRealizedProfit || 0).toFixed(2)}
                           </span>
                           <span className={`text-[11px] ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            ({isProfit ? '+' : ''}{pos.roePercent.toFixed(2)}%)
+                            ({isProfit ? '+' : ''}{(pos.roePercent || 0).toFixed(2)}%)
                           </span>
                         </div>
                       </td>
@@ -368,11 +369,11 @@ export const PositionsAndOrders: React.FC = () => {
                   Sincronizar Órdenes
                 </button>
                 <button
-                  onClick={() => setTab('strategy_creator')}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  onClick={() => setTab('alerts')}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                 >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Crear Estrategia
+                  <Bell className="w-3.5 h-3.5" />
+                  Ver Alertas
                 </button>
                 {mode === 'simulation' && (
                   <button
@@ -515,19 +516,19 @@ export const PositionsAndOrders: React.FC = () => {
                           {item.side}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-neutral-200">${item.price.toFixed(2)}</td>
+                      <td className="py-2.5 px-3 text-neutral-200">${(item.price || 0).toFixed(2)}</td>
                       <td className="py-2.5 px-3 text-neutral-300">{item.quantity}</td>
-                      <td className="py-2.5 px-3 text-neutral-400">${item.notional.toFixed(2)}</td>
+                      <td className="py-2.5 px-3 text-neutral-400">${(item.notional || 0).toFixed(2)}</td>
                       <td className="py-2.5 px-3 font-bold">
                         {item.realizedPnl !== 0 ? (
                           <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                            {isProfit ? '+' : ''}${item.realizedPnl.toFixed(2)}
+                            {isProfit ? '+' : ''}${(item.realizedPnl || 0).toFixed(2)}
                           </span>
                         ) : (
                           <span className="text-neutral-500">-</span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-neutral-400">${item.commission.toFixed(3)}</td>
+                      <td className="py-2.5 px-3 text-neutral-400">${(item.commission || 0).toFixed(3)}</td>
                     </tr>
                   );
                 })}
@@ -572,14 +573,16 @@ export const PositionsAndOrders: React.FC = () => {
                 <span>Exportar CSV (alertas)</span>
               </button>
 
-              <button
-                onClick={() => setTab('strategy_creator')}
+              <a
+                href={OFFICIAL_GOOGLE_SHEET_URL}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center gap-1"
-                title="Ver hoja completa de alertas en el Creador de Estrategias"
+                title="Abrir hoja oficial de alertas en Google Sheets"
               >
-                <span>Ver Hoja en Libro</span>
+                <span>Ver Hoja en Sheets</span>
                 <ExternalLink className="w-3.5 h-3.5" />
-              </button>
+              </a>
             </div>
           </div>
 
@@ -640,7 +643,7 @@ export const PositionsAndOrders: React.FC = () => {
                   value={newAlertPrice}
                   onChange={e => setNewAlertPrice(e.target.value)}
                   className="bg-neutral-900 border border-neutral-700 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white w-36"
-                  placeholder={ticker.lastPrice.toFixed(2)}
+                  placeholder={(ticker?.lastPrice || 0).toFixed(2)}
                 />
               </div>
             )}
@@ -801,7 +804,7 @@ export const PositionsAndOrders: React.FC = () => {
 
             <div className="text-xs text-neutral-400">
               Posición: <strong className="text-white">{editingPos.symbol}</strong> Entrada: $
-              {editingPos.entryPrice.toFixed(2)} | Marca: ${editingPos.markPrice.toFixed(2)}
+              {(editingPos.entryPrice || 0).toFixed(2)} | Marca: ${(editingPos.markPrice || 0).toFixed(2)}
             </div>
 
             <div className="flex flex-col gap-3">

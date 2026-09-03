@@ -54,18 +54,18 @@ export const RiskProtocolWidget: React.FC = () => {
     }
   };
 
-  const isProfit = balance.totalUnrealizedProfit >= 0;
+  const isProfit = (balance?.totalUnrealizedProfit || 0) >= 0;
 
   // Margin Ratio and Risk Level
-  const marginRatio = balance.marginRatio || 0;
+  const marginRatio = balance?.marginRatio || 0;
   const isDanger = marginRatio >= 70;
   const isWarning = marginRatio >= 40 && marginRatio < 70;
 
   // Stacked Progress Percentages
-  const total = Math.max(1, marginBreakdown.totalMarginBalance);
-  const ordersMargin = Math.max(0, marginBreakdown.openOrdersMargin);
-  const positionsMargin = Math.max(0, marginBreakdown.activePositionsMargin);
-  const availableMargin = Math.max(0, marginBreakdown.availableMargin);
+  const total = Math.max(1, marginBreakdown?.totalMarginBalance || 1);
+  const ordersMargin = Math.max(0, marginBreakdown?.openOrdersMargin || 0);
+  const positionsMargin = Math.max(0, marginBreakdown?.activePositionsMargin || 0);
+  const availableMargin = Math.max(0, marginBreakdown?.availableMargin || 0);
 
   const ordersPct = Math.min(100, Math.max(0, (ordersMargin / total) * 100));
   const positionsPct = Math.min(100 - ordersPct, Math.max(0, (positionsMargin / total) * 100));
@@ -163,7 +163,7 @@ export const RiskProtocolWidget: React.FC = () => {
         <div className="bg-neutral-900/70 p-2 rounded-lg border border-neutral-800 flex flex-col justify-between">
           <span className="text-[10px] text-neutral-400 font-sans">Balance Total</span>
           <div className="text-sm font-bold text-white tracking-tight">
-            ${balance.totalMarginBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(balance?.totalMarginBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <span className="text-[9px] text-neutral-500">USDT</span>
         </div>
@@ -172,9 +172,9 @@ export const RiskProtocolWidget: React.FC = () => {
         <div className="bg-emerald-950/20 p-2 rounded-lg border border-emerald-500/30 flex flex-col justify-between">
           <span className="text-[10px] text-emerald-400 font-sans font-semibold">Margen Libre</span>
           <div className="text-sm font-bold text-emerald-300 tracking-tight">
-            ${balance.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(balance?.availableBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <span className="text-[9px] text-emerald-500">{availPct.toFixed(0)}% libre</span>
+          <span className="text-[9px] text-emerald-500">{(availPct || 0).toFixed(0)}% libre</span>
         </div>
       </div>
 
@@ -201,7 +201,7 @@ export const RiskProtocolWidget: React.FC = () => {
               isProfit ? 'text-emerald-400' : 'text-rose-400'
             }`}
           >
-            {isProfit ? '+' : ''}${balance.totalUnrealizedProfit.toFixed(2)}
+            {isProfit ? '+' : ''}${(balance?.totalUnrealizedProfit || 0).toFixed(2)}
           </div>
         </div>
 
@@ -209,7 +209,7 @@ export const RiskProtocolWidget: React.FC = () => {
         <div className="bg-neutral-900/70 p-2 rounded-lg border border-neutral-800 flex flex-col justify-between">
           <span className="text-[10px] text-neutral-400 font-sans">Mantenimiento</span>
           <div className="text-xs font-bold text-neutral-300">
-            ${balance.maintMargin.toFixed(2)}
+            ${(balance?.maintMargin || 0).toFixed(2)}
           </div>
         </div>
       </div>
@@ -221,12 +221,12 @@ export const RiskProtocolWidget: React.FC = () => {
             <Layers className="w-3 h-3 text-amber-400" />
             Distribución de Margen:
           </span>
-          <span className="text-emerald-400 font-bold">{availPct.toFixed(0)}% Disp.</span>
+          <span className="text-emerald-400 font-bold">{(availPct || 0).toFixed(0)}% Disp.</span>
         </div>
 
         <div
           className="w-full bg-neutral-900 rounded-md h-2 flex overflow-hidden border border-neutral-800"
-          title={`Disponible: ${availPct.toFixed(1)}% | Posiciones: ${positionsPct.toFixed(1)}% | Órdenes: ${ordersPct.toFixed(1)}%`}
+          title={`Disponible: ${(availPct || 0).toFixed(1)}% | Posiciones: ${(positionsPct || 0).toFixed(1)}% | Órdenes: ${(ordersPct || 0).toFixed(1)}%`}
         >
           {ordersPct > 0 && (
             <div className="bg-amber-500 h-full transition-all duration-300" style={{ width: `${ordersPct}%` }} />
@@ -240,9 +240,9 @@ export const RiskProtocolWidget: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-between text-[9px] text-neutral-500">
-          <span>Órdenes: ${ordersMargin.toFixed(1)}</span>
-          <span>Pos: ${positionsMargin.toFixed(1)}</span>
-          <span>Libre: ${availableMargin.toFixed(1)}</span>
+          <span>Órdenes: ${(ordersMargin || 0).toFixed(1)}</span>
+          <span>Pos: ${(positionsMargin || 0).toFixed(1)}</span>
+          <span>Libre: ${(availableMargin || 0).toFixed(1)}</span>
         </div>
       </div>
 

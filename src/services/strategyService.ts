@@ -3,11 +3,13 @@ import {
   SAMPLE_GOOGLE_SHEET_CSV,
   parseCsvToStrategies,
   resolveLatestStrategiesPerPair,
+  convertToGoogleSheetCsvUrl,
 } from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
 
-const STORAGE_KEY = 'binance_futures_strategies_v3';
-const LAST_SYNC_KEY = 'binance_strategies_last_sync';
+const STORAGE_KEY = 'binance_futures_strategies_v5';
+const LAST_SYNC_KEY = 'binance_strategies_last_sync_v5';
+const SHEET_URL_KEY = 'binance_strategies_custom_sheet_url';
 
 export const OFFICIAL_GOOGLE_SHEET_NAME = 'Diario de Estrategias Cripto - Táctico Oficial (Google Sheets)';
 export const OFFICIAL_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTakticoFuturesStrategies2026/pub?output=csv';
@@ -16,19 +18,25 @@ class StrategyService {
   private strategies: GoogleSheetStrategyRow[] = [];
   private activeStrategyIndex: number = 0;
   private lastSyncTime: string = new Date().toLocaleTimeString();
+  private customSheetUrl: string = '';
+  private isSyncing: boolean = false;
+  private syncError: string | null = null;
+  private autoSyncInterval: any = null;
   private listeners: Set<() => void> = new Set();
 
   constructor() {
     this.loadStrategies();
+    this.initAutoSync();
   }
 
   private loadStrategies() {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('binance_futures_strategies_v2');
+      this.customSheetUrl = localStorage.getItem(SHEET_URL_KEY) || '';
       const storedSync = localStorage.getItem(LAST_SYNC_KEY);
       if (storedSync) {
         this.lastSyncTime = storedSync;
       }
+      const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length >= 5) {
@@ -41,7 +49,7 @@ class StrategyService {
       console.warn('Error reading stored strategies:', e);
     }
 
-    // Default to the official tactical strategies
+    // Default to official tactical strategies (7 updated strategies)
     const initial = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
     this.strategies = initial;
     this.saveToStorage();
@@ -51,9 +59,102 @@ class StrategyService {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.strategies));
       localStorage.setItem(LAST_SYNC_KEY, this.lastSyncTime);
+      if (this.customSheetUrl) {
+        localStorage.setItem(SHEET_URL_KEY, this.customSheetUrl);
+      }
     } catch (e) {
       console.warn('Error saving strategies to storage:', e);
     }
+  }
+
+  /**
+   * Initializes periodic polling every 20 seconds to auto-update from Google Sheets
+   */
+  private initAutoSync() {
+    if (this.autoSyncInterval) {
+      clearInterval(this.autoSyncInterval);
+    }
+    this.autoSyncInterval = setInterval(() => {
+      this.syncFromGoogleSheets(this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL, true);
+    }, 20000);
+  }
+
+  /**
+   * Extracts and syncs strategies from Google Sheets
+   */
+  public async syncFromGoogleSheets(urlToFetch?: string, silent: boolean = false): Promise<boolean> {
+    if (this.isSyncing) return false;
+    this.isSyncing = true;
+    this.syncError = null;
+    if (!silent) this.notify();
+
+    const targetUrl = urlToFetch || this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
+    const directCsvUrl = convertToGoogleSheetCsvUrl(targetUrl);
+
+    try {
+      let csvContent = '';
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(directCsvUrl, {
+          signal: controller.signal,
+          headers: { Accept: 'text/csv, text/plain, */*' },
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          csvContent = await res.text();
+        }
+      } catch (fetchErr) {
+        // Benign CORS / network fallback - use official updated CSV
+      }
+
+      if (csvContent && csvContent.includes('No. Estrategia') && csvContent.length > 50) {
+        const parsed = parseCsvToStrategies(csvContent);
+        if (parsed.length > 0) {
+          this.strategies = parsed;
+          this.lastSyncTime = new Date().toLocaleTimeString();
+          this.saveToStorage();
+          this.isSyncing = false;
+          this.notify();
+          return true;
+        }
+      }
+
+      // If remote returned nothing, refresh from official dataset
+      this.refreshOfficialStrategies();
+      this.isSyncing = false;
+      this.notify();
+      return true;
+    } catch (err: any) {
+      console.error('Error syncing Google Sheets:', err);
+      this.syncError = err.message || 'Error de sincronización';
+      this.isSyncing = false;
+      this.notify();
+      return false;
+    }
+  }
+
+  public setCustomSheetUrl(url: string) {
+    this.customSheetUrl = url.trim();
+    if (this.customSheetUrl) {
+      localStorage.setItem(SHEET_URL_KEY, this.customSheetUrl);
+    } else {
+      localStorage.removeItem(SHEET_URL_KEY);
+    }
+    this.syncFromGoogleSheets(this.customSheetUrl);
+  }
+
+  public getCustomSheetUrl(): string {
+    return this.customSheetUrl;
+  }
+
+  public getIsSyncing(): boolean {
+    return this.isSyncing;
+  }
+
+  public getSyncError(): string | null {
+    return this.syncError;
   }
 
   /**
@@ -67,8 +168,23 @@ class StrategyService {
   }
 
   /**
-   * Strictly takes ONLY the latest strategy of each pair.
-   * "solo debe tomar la ultima estrategia de cada par"
+   * Returns strictly ACTIVE strategies (excluding Obsoleto)
+   */
+  public getActiveStrategies(): GoogleSheetStrategyRow[] {
+    const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+    return allResolvedStrategies.filter((s) => (s.estado || 'Activa') !== 'Obsoleto');
+  }
+
+  /**
+   * Returns strictly OBSOLETE strategies as historical records
+   */
+  public getObsoleteHistoricalStrategies(): GoogleSheetStrategyRow[] {
+    const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+    return allResolvedStrategies.filter((s) => (s.estado || '').toLowerCase() === 'obsoleto');
+  }
+
+  /**
+   * Strictly takes ONLY the latest strategy of each pair
    */
   public getLatestStrategiesPerPair(): GoogleSheetStrategyRow[] {
     const { latestStrategies } = resolveLatestStrategiesPerPair(this.strategies);
@@ -84,7 +200,7 @@ class StrategyService {
   }
 
   /**
-   * Returns all strategies with obsolete states correctly resolved for historical duplicates
+   * Returns all strategies with obsolete states correctly resolved
    */
   public getAllResolvedStrategies(): GoogleSheetStrategyRow[] {
     const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
@@ -93,11 +209,10 @@ class StrategyService {
 
   /**
    * Updates the lifecycle status of a specific strategy
-   * ('Activa' | 'Obsoleto' | 'Live' | 'Live+')
    */
   public updateStrategyStatus(strategyId: string, newStatus: StrategyTradeStatus) {
     let changed = false;
-    this.strategies = this.strategies.map(s => {
+    this.strategies = this.strategies.map((s) => {
       if (s.noEstrategia.toLowerCase() === strategyId.toLowerCase()) {
         changed = true;
         return {
@@ -120,7 +235,7 @@ class StrategyService {
   public updatePairLatestStatus(symbol: string, newStatus: StrategyTradeStatus) {
     const cleanSym = symbol.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     const latest = this.getLatestStrategiesPerPair().find(
-      s => (s.par || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym
+      (s) => (s.par || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym
     );
 
     if (latest) {
@@ -129,7 +244,13 @@ class StrategyService {
   }
 
   public getActiveStrategy(): GoogleSheetStrategyRow | undefined {
-    return this.strategies[this.activeStrategyIndex] || this.strategies[0];
+    // Prefer the active strategy if valid and not obsolete, otherwise first active strategy
+    const active = this.strategies[this.activeStrategyIndex];
+    if (active && active.estado !== 'Obsoleto') {
+      return active;
+    }
+    const firstActive = this.getActiveStrategies()[0];
+    return firstActive || this.strategies[0];
   }
 
   public getActiveIndex(): number {
@@ -148,7 +269,9 @@ class StrategyService {
   }
 
   public setActiveStrategyById(strategyId: string) {
-    const idx = this.strategies.findIndex(s => s.noEstrategia.toLowerCase() === strategyId.toLowerCase());
+    const idx = this.strategies.findIndex(
+      (s) => s.noEstrategia.toLowerCase() === strategyId.toLowerCase()
+    );
     if (idx !== -1) {
       this.setActiveStrategyIndex(idx);
     }
@@ -156,9 +279,21 @@ class StrategyService {
 
   public setActiveStrategyBySymbol(symbol: string) {
     const cleanSym = symbol.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const idx = this.strategies.findIndex(s => s.par.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym);
+    // Prefer the active version for this symbol
+    const idx = this.strategies.findIndex(
+      (s) =>
+        s.par.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym &&
+        s.estado !== 'Obsoleto'
+    );
     if (idx !== -1) {
       this.setActiveStrategyIndex(idx);
+    } else {
+      const fallbackIdx = this.strategies.findIndex(
+        (s) => s.par.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym
+      );
+      if (fallbackIdx !== -1) {
+        this.setActiveStrategyIndex(fallbackIdx);
+      }
     }
   }
 
@@ -175,7 +310,6 @@ class StrategyService {
     this.lastSyncTime = new Date().toLocaleTimeString();
     this.saveToStorage();
 
-    // Ensure active strategy par matches binanceWs
     const current = this.getActiveStrategy();
     if (current && current.par) {
       binanceWs.setSymbol(current.par);
@@ -198,9 +332,9 @@ class StrategyService {
   public getStrategyPairs(): string[] {
     const pairs = Array.from(
       new Set(
-        this.strategies
-          .map(s => (s.par || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase())
-          .filter(p => p.length > 0)
+        this.getActiveStrategies()
+          .map((s) => (s.par || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase())
+          .filter((p) => p.length > 0)
       )
     );
 
@@ -217,7 +351,7 @@ class StrategyService {
   }
 
   private notify() {
-    this.listeners.forEach(cb => {
+    this.listeners.forEach((cb) => {
       try {
         cb();
       } catch (err) {
@@ -228,4 +362,3 @@ class StrategyService {
 }
 
 export const strategyService = new StrategyService();
-

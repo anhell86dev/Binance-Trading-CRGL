@@ -60,10 +60,10 @@ export const AccountSummary: React.FC = () => {
     }
   };
 
-  const isProfit = balance.totalUnrealizedProfit >= 0;
+  const isProfit = (balance?.totalUnrealizedProfit || 0) >= 0;
 
   // Compute Risk Level and Semantic Border Styling
-  const marginRatio = balance.marginRatio || 0;
+  const marginRatio = balance?.marginRatio || 0;
   const isDanger = marginRatio >= 70;
   const isWarning = marginRatio >= 40 && marginRatio < 70;
   const isSafe = marginRatio < 40;
@@ -75,10 +75,10 @@ export const AccountSummary: React.FC = () => {
     : 'border-neutral-800/90 bg-neutral-900/90 shadow-xl';
 
   // Stacked Progress Bar Percentages
-  const total = Math.max(1, marginBreakdown.totalMarginBalance);
-  const ordersMargin = Math.max(0, marginBreakdown.openOrdersMargin);
-  const positionsMargin = Math.max(0, marginBreakdown.activePositionsMargin);
-  const availableMargin = Math.max(0, marginBreakdown.availableMargin);
+  const total = Math.max(1, marginBreakdown?.totalMarginBalance || 1);
+  const ordersMargin = Math.max(0, marginBreakdown?.openOrdersMargin || 0);
+  const positionsMargin = Math.max(0, marginBreakdown?.activePositionsMargin || 0);
+  const availableMargin = Math.max(0, marginBreakdown?.availableMargin || 0);
 
   const ordersPct = Math.min(100, Math.max(0, (ordersMargin / total) * 100));
   const positionsPct = Math.min(100 - ordersPct, Math.max(0, (positionsMargin / total) * 100));
@@ -215,11 +215,11 @@ export const AccountSummary: React.FC = () => {
             <span className="text-[10px] font-mono text-neutral-500">USDT</span>
           </div>
           <div className="text-xl sm:text-2xl font-black font-mono tracking-tight text-white">
-            ${balance.totalMarginBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(balance?.totalMarginBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-neutral-400 font-mono mt-1 pt-1 border-t border-neutral-900 flex justify-between">
             <span>Wallet Total:</span>
-            <span className="text-neutral-300">${balance.totalWalletBalance.toFixed(2)}</span>
+            <span className="text-neutral-300">${(balance?.totalWalletBalance || 0).toFixed(2)}</span>
           </div>
         </div>
 
@@ -233,11 +233,11 @@ export const AccountSummary: React.FC = () => {
             <span className="text-[10px] font-mono text-emerald-500 font-bold">LIBRE</span>
           </div>
           <div className="text-xl sm:text-2xl font-black font-mono tracking-tight text-emerald-300">
-            ${balance.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${(balance?.availableBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-[11px] text-neutral-400 font-mono mt-1 pt-1 border-t border-neutral-900 flex justify-between">
             <span>Para nuevas órdenes:</span>
-            <span className="text-emerald-400 font-bold">{availPct.toFixed(1)}%</span>
+            <span className="text-emerald-400 font-bold">{(availPct || 0).toFixed(1)}%</span>
           </div>
         </div>
 
@@ -265,7 +265,7 @@ export const AccountSummary: React.FC = () => {
               isProfit ? 'text-emerald-400' : 'text-rose-400'
             }`}
           >
-            {isProfit ? '+' : ''}${balance.totalUnrealizedProfit.toFixed(2)}
+            {isProfit ? '+' : ''}${(balance?.totalUnrealizedProfit || 0).toFixed(2)}
           </div>
           <div className="text-[11px] text-neutral-400 font-mono mt-1 pt-1 border-t border-neutral-900 flex justify-between">
             <span>Posiciones activas:</span>
@@ -283,11 +283,11 @@ export const AccountSummary: React.FC = () => {
             <span className="text-[10px] font-mono text-neutral-500">Maint</span>
           </div>
           <div className="text-xl sm:text-2xl font-black font-mono tracking-tight text-neutral-200">
-            ${balance.maintMargin.toFixed(2)}
+            ${(balance?.maintMargin || 0).toFixed(2)}
           </div>
           <div className="text-[11px] text-neutral-400 font-mono mt-1 pt-1 border-t border-neutral-900 flex justify-between">
             <span>Margen Inicial:</span>
-            <span className="text-neutral-300">${(marginBreakdown.activePositionsMargin).toFixed(2)}</span>
+            <span className="text-neutral-300">${(marginBreakdown?.activePositionsMargin || 0).toFixed(2)}</span>
           </div>
         </div>
 
@@ -311,7 +311,7 @@ export const AccountSummary: React.FC = () => {
                 isDanger ? 'text-rose-400' : isWarning ? 'text-amber-400' : 'text-emerald-400'
               }`}
             >
-              {marginRatio.toFixed(1)}%
+              {(marginRatio || 0).toFixed(1)}%
             </span>
           </div>
 
@@ -347,19 +347,19 @@ export const AccountSummary: React.FC = () => {
             <div className="flex items-center gap-1.5" title="Capital en órdenes pendientes">
               <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block shrink-0" />
               <span className="text-neutral-400">Órdenes Abiertas:</span>
-              <strong className="text-amber-300">${ordersMargin.toFixed(2)} ({ordersPct.toFixed(1)}%)</strong>
+              <strong className="text-amber-300">${(ordersMargin || 0).toFixed(2)} ({(ordersPct || 0).toFixed(1)}%)</strong>
             </div>
 
             <div className="flex items-center gap-1.5" title="Margen asignado en posiciones activas">
               <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 inline-block shrink-0" />
               <span className="text-neutral-400">Posiciones Aisladas:</span>
-              <strong className="text-blue-300">${positionsMargin.toFixed(2)} ({positionsPct.toFixed(1)}%)</strong>
+              <strong className="text-blue-300">${(positionsMargin || 0).toFixed(2)} ({(positionsPct || 0).toFixed(1)}%)</strong>
             </div>
 
             <div className="flex items-center gap-1.5" title="Margen libre disponible para operar">
               <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block shrink-0" />
               <span className="text-neutral-400">Disponible:</span>
-              <strong className="text-emerald-300">${availableMargin.toFixed(2)} ({availPct.toFixed(1)}%)</strong>
+              <strong className="text-emerald-300">${(availableMargin || 0).toFixed(2)} ({(availPct || 0).toFixed(1)}%)</strong>
             </div>
           </div>
         </div>
@@ -367,7 +367,7 @@ export const AccountSummary: React.FC = () => {
         {/* Stacked Progress Bar Bar */}
         <div
           className="w-full bg-neutral-950 rounded-lg h-3 flex overflow-hidden border border-neutral-800 shadow-inner"
-          title={`Disponible: ${availPct.toFixed(1)}% | Posiciones: ${positionsPct.toFixed(1)}% | Órdenes: ${ordersPct.toFixed(1)}%`}
+          title={`Disponible: ${(availPct || 0).toFixed(1)}% | Posiciones: ${(positionsPct || 0).toFixed(1)}% | Órdenes: ${(ordersPct || 0).toFixed(1)}%`}
         >
           {/* 1. Órdenes Comprometidas (Amber) */}
           {ordersPct > 0 && (
@@ -399,7 +399,7 @@ export const AccountSummary: React.FC = () => {
           <span>
             {positions.length} pos. activa{positions.length === 1 ? '' : 's'} • {openOrdersCount} orden{openOrdersCount === 1 ? '' : 'es'}
           </span>
-          <span>Balance Total: ${total.toFixed(2)} USDT</span>
+          <span>Balance Total: ${(total || 0).toFixed(2)} USDT</span>
         </div>
       </div>
 

@@ -1046,7 +1046,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       </td>
                       <td className="py-2.5 font-bold text-white">${formatPrice(ord.price)} USDT</td>
                       <td className="py-2.5 text-neutral-300">{ord.quantity.toFixed(3)}</td>
-                      <td className="py-2.5 text-neutral-400">{ord.allocationPercent}%</td>
+                      <td className="py-2.5 text-neutral-400">{ord.percentage}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1162,7 +1162,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                       <td className="p-3 font-bold text-white">{alt.symbol}</td>
                       <td className="p-3 text-neutral-300">{alt.noEstrategia}</td>
                       <td className="p-3 font-bold text-emerald-400">
-                        ${formatPrice(distInfo?.liveP || alt.precioActual)}
+                        ${formatPrice(distInfo?.liveP || alt.livePrice)}
                       </td>
                       <td className="p-3">
                         {distInfo ? (
@@ -1181,10 +1181,10 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                           <span className="text-neutral-500">-</span>
                         )}
                       </td>
-                      <td className="p-3 text-neutral-400">{alt.condicion}</td>
+                      <td className="p-3 text-neutral-400">{alt.thresholdOrTarget}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                          {alt.estado || 'MONITOREANDO'}
+                          {alt.status || 'MONITOREANDO'}
                         </span>
                       </td>
                     </tr>
@@ -1211,15 +1211,15 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
             </div>
             <div className="p-3 bg-neutral-900 rounded-lg border border-neutral-800 col-span-2">
               <span className="text-neutral-500 block">Reglas de Entrada</span>
-              <p className="mt-1">{currentStrategy.reglasEntrada}</p>
+              <p className="mt-1">{currentStrategy.reglasDeEntrada}</p>
             </div>
             <div className="p-3 bg-neutral-900 rounded-lg border border-neutral-800 col-span-2">
               <span className="text-neutral-500 block">Reglas de Salida / TP</span>
-              <p className="mt-1">{currentStrategy.reglasSalidaTp}</p>
+              <p className="mt-1">{currentStrategy.reglasDeSalidaTP}</p>
             </div>
             <div className="p-3 bg-neutral-900 rounded-lg border border-neutral-800 col-span-2">
               <span className="text-neutral-500 block">Gestión de Riesgo</span>
-              <p className="mt-1">{currentStrategy.gestionRiesgo}</p>
+              <p className="mt-1">{currentStrategy.gestionDeRiesgoStopLoss}</p>
             </div>
             <div className="p-3 bg-neutral-900 rounded-lg border border-neutral-800 col-span-2">
               <span className="text-neutral-500 block">Comentarios / Backtesting</span>

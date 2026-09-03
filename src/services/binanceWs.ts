@@ -345,14 +345,18 @@ class BinanceWsEngine {
     return this.lastDataSyncError;
   }
 
-  public subscribe(listener: Function) {
+  public subscribe(listener: Function): () => void {
     this.stateListeners.add(listener);
-    return () => this.stateListeners.delete(listener);
+    return () => {
+      this.stateListeners.delete(listener);
+    };
   }
 
-  public subscribeLogs(listener: Function) {
+  public subscribeLogs(listener: Function): () => void {
     this.logListeners.add(listener);
-    return () => this.logListeners.delete(listener);
+    return () => {
+      this.logListeners.delete(listener);
+    };
   }
 
   private notify() {
