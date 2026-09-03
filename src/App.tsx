@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Header } from './components/Header';
 import { AccountSummary } from './components/AccountSummary';
+import { AssetInfoCard } from './components/AssetInfoCard';
+import { PositionsAndOrders } from './components/PositionsAndOrders';
+import { StrategyCreator } from './components/StrategyCreator';
 import { ChartSection } from './components/ChartSection';
 import { OrderForm } from './components/OrderForm';
-import { PositionsAndOrders } from './components/PositionsAndOrders';
 import { MetricsDashboard } from './components/MetricsDashboard';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { WebSocketConsole } from './components/WebSocketConsole';
@@ -25,24 +27,32 @@ export default function App() {
 
       {/* Main Workspace Container */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-3 sm:p-4 flex flex-col gap-4">
-        {/* Real-time Account Balance & Strict Risk Compliance Banner */}
+        {/* 1. Protocolo de Riesgo Activo y Balance de Cuenta */}
         <AccountSummary />
 
-        {/* Core Trading Split: Charts & Analytics (Left 8 cols) vs Order Form (Right 4 cols) */}
+        {/* 2. Información en Tiempo Real del Activo (Precio en Vivo, Cambio 24h, Máx 24h, Mín 24h, Vol. 24h) */}
+        <AssetInfoCard />
+
+        {/* 3. Posiciones Activas, Órdenes Abiertas, Historial de Trade y Alertas de Volatilidad */}
+        <PositionsAndOrders />
+
+        {/* 4. Creador de Estrategia (Tarjeta Separada con Catálogo tipo lista ordenado del 1 al X por R/B) */}
+        <div id="strategy_creator_card" className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 sm:p-4 shadow-xl">
+          <StrategyCreator />
+        </div>
+
+        {/* 5. Core Trading Split: Gráfico Táctico & Analítica (Izquierda 8 cols) vs Formulario de Creación de Órdenes (Derecha 4 cols) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-          {/* Left Column: Interactive Candlestick Chart, Positions & Metrics */}
+          {/* Left Column: Interactive Candlestick Chart with Strategy SL/TP Lines & Metrics */}
           <div className="lg:col-span-8 flex flex-col gap-4">
             {/* Real-time Candlestick & Volume Chart with Order Book */}
             <ChartSection />
-
-            {/* Positions, Orders, Trade History & Volatility Alerts */}
-            <PositionsAndOrders />
 
             {/* Advanced Performance Analytics Dashboard */}
             <MetricsDashboard />
           </div>
 
-          {/* Right Column: Execution Form (Limit, Escalonada, Trailing Stop, TP/SL, 1-5x, ISOLATED) */}
+          {/* Right Column: Execution Form (Limit, Escalonada, Trailing Stop, TP/SL, 1-5x, ISOLATED para cualquier activo) */}
           <div className="lg:col-span-4 sticky top-[72px]">
             <OrderForm />
           </div>

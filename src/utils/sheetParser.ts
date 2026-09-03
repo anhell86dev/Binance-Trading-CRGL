@@ -379,6 +379,42 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow) {
 }
 
 /**
+ * Computes Risk/Reward metrics for any strategy row for ranking and catalog display
+ */
+export function calculateStrategyRewardToRisk(strategy: GoogleSheetStrategyRow): {
+  ratio: number;
+  maxProfitPct: number;
+  maxLossPct: number;
+  avgEntry: number;
+  riskPerCoin: number;
+  rewardPerCoin: number;
+} {
+  const parsed = parsePricesFromStrategy(strategy);
+  const avgEntry = (parsed.entry1Price + parsed.entry2Price) / 2;
+  
+  const riskPerCoin = Math.max(0.000001, avgEntry - parsed.slPrice);
+  const maxLossPct = avgEntry > 0 ? (riskPerCoin / avgEntry) * 100 : 0;
+  
+  // Weighted target: 40% TP1, 40% TP2, 20% TP Final
+  const gain1 = Math.max(0, parsed.tp1Price - avgEntry);
+  const gain2 = Math.max(0, parsed.tp2Price - avgEntry);
+  const gainFinal = Math.max(0, parsed.tpFinalPrice - avgEntry);
+  const rewardPerCoin = gain1 * 0.4 + gain2 * 0.4 + gainFinal * 0.2;
+  
+  const maxProfitPct = avgEntry > 0 ? (rewardPerCoin / avgEntry) * 100 : 0;
+  const ratio = riskPerCoin > 0 ? Number((rewardPerCoin / riskPerCoin).toFixed(2)) : 0;
+
+  return {
+    ratio,
+    maxProfitPct: Number(maxProfitPct.toFixed(2)),
+    maxLossPct: Number(maxLossPct.toFixed(2)),
+    avgEntry: Number(avgEntry.toFixed(4)),
+    riskPerCoin: Number(riskPerCoin.toFixed(4)),
+    rewardPerCoin: Number(rewardPerCoin.toFixed(4)),
+  };
+}
+
+/**
  * Builds the comprehensive Strategy Execution Plan with 6 Binance orders
  * Only to be created in Binance upon explicit operator authorization!
  */

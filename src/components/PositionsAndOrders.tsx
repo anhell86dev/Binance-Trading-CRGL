@@ -29,7 +29,7 @@ import { StrategyCreator } from './StrategyCreator';
 import { DiarioEstrategias } from './DiarioEstrategias';
 
 export const PositionsAndOrders: React.FC = () => {
-  const [tab, setTab] = useState<'positions' | 'orders' | 'strategy_creator' | 'strategy_journal' | 'history' | 'alerts'>('strategy_creator');
+  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal'>('positions');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
   const [history, setHistory] = useState<TradeHistoryItem[]>(binanceWs.getTradeHistory());
@@ -148,38 +148,6 @@ export const PositionsAndOrders: React.FC = () => {
             <span>Órdenes Abiertas</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono">
               {orders.length}
-            </span>
-          </button>
-
-          <button
-            id="tab-strategy-creator-btn"
-            onClick={() => setTab('strategy_creator')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
-              tab === 'strategy_creator'
-                ? 'border-emerald-400 text-emerald-300 bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Creador de Estrategia</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono">
-              Google Sheet
-            </span>
-          </button>
-
-          <button
-            id="tab-strategy-journal-btn"
-            onClick={() => setTab('strategy_journal')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
-              tab === 'strategy_journal'
-                ? 'border-amber-400 text-amber-300 bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span>Diario de Estrategias</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono">
-              DiarioBitcoin
             </span>
           </button>
 
@@ -480,13 +448,6 @@ export const PositionsAndOrders: React.FC = () => {
               </tbody>
             </table>
           )}
-        </div>
-      )}
-
-      {/* Tab: Creador de Estrategia */}
-      {tab === 'strategy_creator' && (
-        <div className="p-3">
-          <StrategyCreator onSwitchToOrders={() => setTab('orders')} />
         </div>
       )}
 

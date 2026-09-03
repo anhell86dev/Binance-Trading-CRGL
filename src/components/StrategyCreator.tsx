@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   AlertCircle,
   ArrowRight,
+  Award,
   Bell,
   CheckCircle2,
+  Crown,
   Database,
   Download,
   ExternalLink,
@@ -11,7 +13,9 @@ import {
   FileSpreadsheet,
   Filter,
   Layers,
+  LayoutGrid,
   LineChart,
+  List,
   Lock,
   Plus,
   Radio,
@@ -28,6 +32,7 @@ import {
   Trash2,
   TrendingDown,
   TrendingUp,
+  Trophy,
   X,
   Zap,
 } from 'lucide-react';
@@ -42,6 +47,7 @@ import {
   parsePricesFromStrategy,
   resolveLatestStrategiesPerPair,
   getTradeProcessStageInfo,
+  calculateStrategyRewardToRisk,
 } from '../utils/sheetParser';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
@@ -87,6 +93,7 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [onlyLatestPerPair, setOnlyLatestPerPair] = useState<boolean>(true);
   const [statusFilter, setStatusFilter] = useState<'ALL' | StrategyTradeStatus>('ALL');
+  const [catalogViewMode, setCatalogViewMode] = useState<'list' | 'grid'>('list');
 
   // Execution Plan & Account Margin State
   const [usdtAllocation, setUsdtAllocation] = useState<number>(() => {
@@ -163,6 +170,27 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
       return matchesStatus && matchesSearch;
     });
   }, [onlyLatestPerPair, latestStrategies, allResolvedStrategies, statusFilter, searchQuery]);
+
+  // Ranked strategies from 1 to X based on Risk/Reward (R/B) ratio (1 = Best Trade by R/B)
+  const rankedStrategies = useMemo(() => {
+    const items = filteredStrategies.map((strat) => {
+      const rewardToRisk = calculateStrategyRewardToRisk(strat);
+      const prices = parsePricesFromStrategy(strat);
+      return {
+        strat,
+        rewardToRisk,
+        prices,
+      };
+    });
+
+    // Sort descending by R/B ratio (higher ratio = better trade = #1)
+    items.sort((a, b) => b.rewardToRisk.ratio - a.rewardToRisk.ratio);
+
+    return items.map((item, index) => ({
+      ...item,
+      rank: index + 1,
+    }));
+  }, [filteredStrategies]);
 
   const currentStrategy = strategies[selectedStrategyIndex] || strategies[0];
 
@@ -429,8 +457,8 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
 
       {/* 3. TAB CONTENT: 1. CATÁLOGO DE ESTRATEGIAS */}
       {activeTab === 'catalog' && (
-        <div className="flex flex-col gap-4">
-          {/* Controls Bar: Search + Filters */}
+        <div className="flex flex-col gap-3">
+          {/* Controls Bar: Search + Filters + View Mode Toggle */}
           <div className="p-3 bg-neutral-950 rounded-xl border border-neutral-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
             {/* Search Input */}
             <div className="relative flex-1">
@@ -439,12 +467,12 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por símbolo (ej: ZEC, SOL, AAVE, TAO, XRP) o estrategia..."
+                placeholder="Buscar por símbolo (ej: ZEC, SOL, AAVE, TAO, XRP) o nombre..."
                 className="w-full bg-neutral-900 border border-neutral-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500"
               />
             </div>
 
-            {/* Quick Filters */}
+            {/* Quick Filters & View Switcher */}
             <div className="flex items-center gap-2 flex-wrap text-xs">
               <button
                 onClick={() => setOnlyLatestPerPair(!onlyLatestPerPair)}
@@ -474,42 +502,159 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                   </button>
                 ))}
               </div>
+
+              {/* View Switcher: List vs Grid */}
+              <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-lg border border-neutral-800">
+                <button
+                  onClick={() => setCatalogViewMode('list')}
+                  className={`px-2.5 py-0.5 rounded text-[11px] font-mono flex items-center gap-1 transition-all ${
+                    catalogViewMode === 'list'
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Vista tipo lista clasificada del 1 al X por mejor R/B"
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>Lista R/B</span>
+                </button>
+                <button
+                  onClick={() => setCatalogViewMode('grid')}
+                  className={`px-2.5 py-0.5 rounded text-[11px] font-mono flex items-center gap-1 transition-all ${
+                    catalogViewMode === 'grid'
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Vista de cuadrícula en tarjetas"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Cuadrícula</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Strategies Grid - Clean Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredStrategies.map((strat) => {
-              const prices = parsePricesFromStrategy(strat);
-              const isSelected = currentStrategy?.noEstrategia === strat.noEstrategia;
-              const distInfo = getDistanceToEntry(strat);
-              const stageInfo = getTradeProcessStageInfo(strat.estado || 'Activa');
+          {/* Ranking Guide Header */}
+          <div className="px-3.5 py-2.5 bg-neutral-950/90 rounded-xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="p-1 rounded bg-amber-500/20 border border-amber-500/40 text-amber-400">
+                <Trophy className="w-4 h-4" />
+              </div>
+              <span className="text-neutral-300 font-medium">
+                Catálogo Ordenado por <strong>Ratio Riesgo/Beneficio (R/B)</strong>:
+              </span>
+              <span className="text-amber-400 font-bold">
+                El Puesto #1 es el Mejor Trade del mercado
+              </span>
+            </div>
+            <div className="text-[11px] text-neutral-400 font-mono">
+              Total listado: <strong className="text-white">{rankedStrategies.length}</strong> estrategias
+            </div>
+          </div>
 
-              return (
-                <div
-                  key={strat.noEstrategia}
-                  className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
-                    isSelected
-                      ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
-                      : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-950'
-                  }`}
-                >
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-base font-bold text-white font-mono">{strat.par}</span>
-                        <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold border font-mono ${stageInfo.badgeClass}`}>
-                          {strat.estado || 'Activa'}
-                        </span>
+          {/* LIST VIEW (TIPO LISTA) - DEFAULT & RECOMMENDED */}
+          {catalogViewMode === 'list' && (
+            <div className="flex flex-col gap-2.5">
+              {rankedStrategies.map(({ strat, rank, rewardToRisk, prices }) => {
+                const isSelected = currentStrategy?.noEstrategia === strat.noEstrategia;
+                const distInfo = getDistanceToEntry(strat);
+                const stageInfo = getTradeProcessStageInfo(strat.estado || 'Activa');
+                const isRank1 = rank === 1;
+
+                return (
+                  <div
+                    key={strat.noEstrategia}
+                    className={`p-3.5 rounded-xl border transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-3 ${
+                      isRank1
+                        ? isSelected
+                          ? 'bg-gradient-to-r from-amber-950/40 via-neutral-950 to-neutral-950 border-amber-500 ring-2 ring-amber-500/40 shadow-lg'
+                          : 'bg-gradient-to-r from-amber-950/20 via-neutral-950 to-neutral-950 border-amber-500/60 shadow-md'
+                        : isSelected
+                        ? 'bg-amber-500/10 border-amber-500/50 ring-1 ring-amber-500/30'
+                        : 'bg-neutral-950/80 border-neutral-800/90 hover:border-neutral-700 hover:bg-neutral-900/60'
+                    }`}
+                  >
+                    {/* Left: Rank Badge + Pair & Details */}
+                    <div className="flex items-start sm:items-center gap-3 min-w-[280px]">
+                      {/* Rank Indicator */}
+                      <div className="shrink-0">
+                        {isRank1 ? (
+                          <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-neutral-950 font-black shadow-md flex items-center gap-1">
+                            <Crown className="w-4 h-4 fill-neutral-950" />
+                            <span className="font-mono text-xs font-black">#1 TOP</span>
+                          </div>
+                        ) : rank <= 3 ? (
+                          <div className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold flex items-center gap-1">
+                            <Award className="w-3.5 h-3.5" />
+                            <span className="font-mono text-xs font-bold">#{rank}</span>
+                          </div>
+                        ) : (
+                          <div className="px-2.5 py-1 rounded-lg bg-neutral-900 text-neutral-400 border border-neutral-800 font-mono text-xs font-semibold">
+                            #{rank}
+                          </div>
+                        )}
                       </div>
-                      <span className="text-[11px] font-mono text-neutral-400 block mt-0.5">
-                        {strat.noEstrategia} • {strat.temporalidad}
-                      </span>
+
+                      {/* Pair Symbol & Info */}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base font-extrabold text-white font-mono tracking-tight">
+                            {strat.par}
+                          </span>
+                          <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold border font-mono ${stageInfo.badgeClass}`}>
+                            {strat.estado || 'Activa'}
+                          </span>
+                          {isRank1 && (
+                            <span className="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
+                              MEJOR R/B
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-neutral-400 flex items-center gap-2 mt-0.5">
+                          <span className="font-mono text-neutral-300">{strat.noEstrategia}</span>
+                          <span>•</span>
+                          <span className="text-neutral-500">{strat.temporalidad}</span>
+                          <span>•</span>
+                          <span className="text-neutral-400 truncate max-w-[220px] hidden sm:inline" title={strat.nombreEstrategia}>
+                            {strat.nombreEstrategia}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="text-right font-mono">
-                      <span className="text-[10px] text-neutral-400 block">Distancia Entrada 1</span>
+                    {/* Middle Column 1: Ratio R/B Box */}
+                    <div className="bg-neutral-900/90 border border-neutral-800 rounded-lg p-2.5 min-w-[170px] flex flex-col justify-center">
+                      <div className="flex items-center justify-between text-xs mb-0.5">
+                        <span className="text-neutral-400 text-[10px] uppercase font-mono tracking-wider">Ratio R/B</span>
+                        <span className="font-mono font-extrabold text-amber-400 text-sm">
+                          {rewardToRisk.ratio > 0 ? `${rewardToRisk.ratio}:1` : 'N/D'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-emerald-400 font-bold">+{rewardToRisk.maxProfitPct}% TP</span>
+                        <span className="text-neutral-600">/</span>
+                        <span className="text-rose-400 font-bold">-{rewardToRisk.maxLossPct}% SL</span>
+                      </div>
+                    </div>
+
+                    {/* Middle Column 2: Tactical Levels Summary */}
+                    <div className="grid grid-cols-3 gap-2 bg-neutral-900/60 border border-neutral-800/80 rounded-lg p-2 text-[11px] font-mono min-w-[240px]">
+                      <div>
+                        <span className="text-neutral-500 block text-[10px]">Entrada E1</span>
+                        <span className="font-bold text-white">${formatPrice(prices.entry1Price)}</span>
+                      </div>
+                      <div>
+                        <span className="text-rose-400 block text-[10px]">Stop Loss</span>
+                        <span className="font-bold text-rose-300">${formatPrice(prices.slPrice)}</span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-400 block text-[10px]">TP Final</span>
+                        <span className="font-bold text-emerald-300">${formatPrice(prices.tpFinalPrice)}</span>
+                      </div>
+                    </div>
+
+                    {/* Middle Column 3: Live Market Distance */}
+                    <div className="min-w-[120px] text-left sm:text-right font-mono">
+                      <span className="text-[10px] text-neutral-500 block">Distancia a E1</span>
                       {distInfo ? (
                         <span
                           className={`text-xs font-bold ${
@@ -526,55 +671,138 @@ export const StrategyCreator: React.FC<StrategyCreatorProps> = ({ onSwitchToOrde
                         <span className="text-xs text-neutral-500">En rango</span>
                       )}
                     </div>
-                  </div>
 
-                  {/* Strategy Description */}
-                  <p className="text-xs text-neutral-300 line-clamp-2 leading-relaxed">
-                    {strat.nombreEstrategia}
-                  </p>
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleSelectStrategy(strat)}
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all ${
+                          isSelected
+                            ? 'bg-amber-500 text-neutral-950 shadow-md font-extrabold'
+                            : 'bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200'
+                        }`}
+                        title="Configurar capital, apalancamiento y autorizar en Binance"
+                      >
+                        <span>Configurar</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
 
-                  {/* Tactical Levels Grid */}
-                  <div className="grid grid-cols-3 gap-1.5 p-2 rounded-lg bg-neutral-900/80 border border-neutral-800/80 text-[11px] font-mono">
-                    <div>
-                      <span className="text-neutral-500 block text-[10px]">Entrada E1</span>
-                      <span className="font-bold text-white">${formatPrice(prices.entry1Price)}</span>
-                    </div>
-                    <div>
-                      <span className="text-emerald-400 block text-[10px]">TP1 (40%)</span>
-                      <span className="font-bold text-emerald-300">${formatPrice(prices.tp1Price)}</span>
-                    </div>
-                    <div>
-                      <span className="text-rose-400 block text-[10px]">Stop Loss</span>
-                      <span className="font-bold text-rose-300">${formatPrice(prices.slPrice)}</span>
+                      <button
+                        onClick={() => handleViewOnChart(strat)}
+                        className="px-2.5 py-2 rounded-lg bg-neutral-850 hover:bg-neutral-800 text-amber-300 border border-amber-500/40 text-xs font-mono transition-all flex items-center gap-1"
+                        title="Trazar líneas de E1, E2, SL y TPs directamente en el gráfico"
+                      >
+                        <Target className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="hidden sm:inline">Gráfico</span>
+                      </button>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleSelectStrategy(strat)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
-                        isSelected
-                          ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                          : 'bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200'
-                      }`}
-                    >
-                      <span>Configurar</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleViewOnChart(strat)}
-                      className="px-2.5 py-2 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 text-xs font-mono transition-all flex items-center gap-1"
-                      title="Ver líneas de E1, E2, SL y TP dibujadas en el gráfico"
-                    >
-                      <Target className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Gráfico</span>
-                    </button>
+          {/* GRID VIEW (OPTIONAL) */}
+          {catalogViewMode === 'grid' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {rankedStrategies.map(({ strat, rank, rewardToRisk, prices }) => {
+                const isSelected = currentStrategy?.noEstrategia === strat.noEstrategia;
+                const distInfo = getDistanceToEntry(strat);
+                const stageInfo = getTradeProcessStageInfo(strat.estado || 'Activa');
+                const isRank1 = rank === 1;
+
+                return (
+                  <div
+                    key={strat.noEstrategia}
+                    className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                      isRank1
+                        ? isSelected
+                          ? 'bg-gradient-to-b from-amber-950/30 to-neutral-950 border-amber-500 ring-2 ring-amber-500/40 shadow-lg'
+                          : 'bg-gradient-to-b from-amber-950/20 to-neutral-950 border-amber-500/60 shadow-md'
+                        : isSelected
+                        ? 'bg-amber-500/10 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                        : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-950'
+                    }`}
+                  >
+                    {/* Card Header with Rank */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {isRank1 ? (
+                          <span className="px-2 py-0.5 rounded-lg bg-gradient-to-r from-amber-500 to-yellow-400 text-neutral-950 text-xs font-black font-mono">
+                            #1 MEJOR
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-lg bg-neutral-800 text-neutral-300 text-xs font-bold font-mono">
+                            #{rank}
+                          </span>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-bold text-white font-mono">{strat.par}</span>
+                            <span className={`px-2 py-0.2 rounded-full text-[10px] font-bold border font-mono ${stageInfo.badgeClass}`}>
+                              {strat.estado || 'Activa'}
+                            </span>
+                          </div>
+                          <span className="text-[11px] font-mono text-neutral-400 block mt-0.5">
+                            {strat.noEstrategia} • {strat.temporalidad}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="text-right font-mono">
+                        <span className="text-[10px] text-neutral-400 block">R/B</span>
+                        <span className="text-xs font-extrabold text-amber-400">{rewardToRisk.ratio}:1</span>
+                      </div>
+                    </div>
+
+                    {/* Strategy Description */}
+                    <p className="text-xs text-neutral-300 line-clamp-2 leading-relaxed">
+                      {strat.nombreEstrategia}
+                    </p>
+
+                    {/* Tactical Levels Grid */}
+                    <div className="grid grid-cols-3 gap-1.5 p-2 rounded-lg bg-neutral-900/80 border border-neutral-800/80 text-[11px] font-mono">
+                      <div>
+                        <span className="text-neutral-500 block text-[10px]">Entrada E1</span>
+                        <span className="font-bold text-white">${formatPrice(prices.entry1Price)}</span>
+                      </div>
+                      <div>
+                        <span className="text-emerald-400 block text-[10px]">TP1 (40%)</span>
+                        <span className="font-bold text-emerald-300">${formatPrice(prices.tp1Price)}</span>
+                      </div>
+                      <div>
+                        <span className="text-rose-400 block text-[10px]">Stop Loss</span>
+                        <span className="font-bold text-rose-300">${formatPrice(prices.slPrice)}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleSelectStrategy(strat)}
+                        className={`flex-1 py-2 rounded-lg text-xs font-bold font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+                          isSelected
+                            ? 'bg-amber-500 text-neutral-950 shadow-sm'
+                            : 'bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200'
+                        }`}
+                      >
+                        <span>Configurar</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleViewOnChart(strat)}
+                        className="px-2.5 py-2 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 text-xs font-mono transition-all flex items-center gap-1"
+                        title="Ver líneas de E1, E2, SL y TP dibujadas en el gráfico"
+                      >
+                        <Target className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Gráfico</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
