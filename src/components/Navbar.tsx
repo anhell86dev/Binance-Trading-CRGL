@@ -254,19 +254,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
-        {/* Quick Popup Order Form Button */}
-        {onOpenOrderModal && (
-          <button
-            type="button"
-            onClick={onOpenOrderModal}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs transition-all shadow-sm ring-1 ring-amber-400/50"
-            title="Abrir Formulario de Órdenes Binance Futures (Ventana Emergente / Popup)"
-          >
-            <Zap className="w-3.5 h-3.5 fill-neutral-950" />
-            <span className="hidden sm:inline">Nueva Orden</span>
-          </button>
-        )}
-
         {/* API Key Modal Button */}
         <button
           type="button"

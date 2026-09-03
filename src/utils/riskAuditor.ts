@@ -39,15 +39,116 @@ export function auditOrderRisk(
 ): RiskAuditResult {
   const price = order.price > 0 ? order.price : (currentPrice || order.stopPrice || 100);
   const qty = order.origQty || 0;
-  const lev = Math.max(1, order.leverage || 2);
+  const lev = Math.max(1, order.leverage || 3);
   const margin = (price * qty) / lev;
   const isBuy = order.side === 'BUY';
+
+  // Reconocer órdenes de protección (Take Profit y Stop Loss)
+  const isTP =
+    order.type === 'TAKE_PROFIT_MARKET' ||
+    (order.type as string) === 'TAKE_PROFIT' ||
+    order.clientOrderId?.includes('TP-');
+  const isSL =
+    order.type === 'STOP_MARKET' ||
+    (order.type as string) === 'STOP' ||
+    order.type === 'TRAILING_STOP_MARKET' ||
+    order.clientOrderId?.includes('SL-');
+
+  if (isTP) {
+    return {
+      overallStatus: 'OPTIMAL',
+      score: 100,
+      badgeText: 'PROTECCIÓN (TP)',
+      badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+      checks: [
+        {
+          id: 'protective_tp',
+          name: 'Orden de Protección',
+          status: 'PASS',
+          label: 'Take Profit Programado',
+          currentValue: `$${(order.price > 0 ? order.price : order.stopPrice || price).toFixed(2)}`,
+          requirement: 'Toma de beneficios automática',
+          description: 'Orden de salida que asegura ganancias sin arriesgar margen adicional (Reduce-Only).',
+        },
+        {
+          id: 'margin_protective',
+          name: 'Margen Requerido',
+          status: 'PASS',
+          label: '$0.00 (Sin consumo de margen adicional)',
+          currentValue: '$0.00 USDT',
+          requirement: 'Reduce-Only',
+          description: 'Las órdenes de toma de beneficio no inmovilizan colateral nuevo.',
+        },
+        {
+          id: 'leverage_protective',
+          name: 'Apalancamiento',
+          status: 'PASS',
+          label: `${lev}x Aislado`,
+          currentValue: `${lev}x`,
+          requirement: 'Alineado con posición',
+          description: 'Protege la posición aislada correspondiente.',
+        },
+      ],
+      riskRewardRatio: null,
+      riskRewardRatioStr: 'N/A (Cierre)',
+      estimatedLossUsdt: 0,
+      estimatedProfitUsdt: Math.abs((order.price || order.stopPrice || price) - price) * qty,
+      walletRiskPercent: 0,
+      strategyLinked: !!order.strategyId,
+      strategyId: order.strategyId,
+    };
+  }
+
+  if (isSL) {
+    return {
+      overallStatus: 'OPTIMAL',
+      score: 100,
+      badgeText: 'PROTECCIÓN (SL)',
+      badgeColor: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+      checks: [
+        {
+          id: 'protective_sl',
+          name: 'Orden de Protección',
+          status: 'PASS',
+          label: 'Stop Loss Programado',
+          currentValue: `$${(order.stopPrice || order.price || price).toFixed(2)}`,
+          requirement: 'Protección de capital mandatoria',
+          description: 'Orden defensiva que corta pérdidas automáticamente para evitar liquidaciones.',
+        },
+        {
+          id: 'margin_protective',
+          name: 'Margen Requerido',
+          status: 'PASS',
+          label: '$0.00 (Sin consumo de margen adicional)',
+          currentValue: '$0.00 USDT',
+          requirement: 'Reduce-Only',
+          description: 'Las órdenes defensivas de corte no consumen colateral nuevo.',
+        },
+        {
+          id: 'leverage_protective',
+          name: 'Apalancamiento',
+          status: 'PASS',
+          label: `${lev}x Aislado`,
+          currentValue: `${lev}x`,
+          requirement: 'Alineado con posición',
+          description: 'Cierra la exposición aislada ante retrocesos.',
+        },
+      ],
+      riskRewardRatio: null,
+      riskRewardRatioStr: 'N/A (Defensa)',
+      estimatedLossUsdt: 0,
+      estimatedProfitUsdt: 0,
+      walletRiskPercent: 0,
+      strategyLinked: !!order.strategyId,
+      strategyId: order.strategyId,
+    };
+  }
 
   const checks: RiskCheckItem[] = [];
   let score = 100;
 
-  // 1. Margen Aislado Check (Mandatorio)
-  const isIsolated = order.marginType === 'ISOLATED';
+  // 1. Margen Aislado Check (Mandatorio - por defecto en el sistema es ISOLATED)
+  const isIsolated = (order.marginType || 'ISOLATED') === 'ISOLATED';
   if (isIsolated) {
     checks.push({
       id: 'margin_type',

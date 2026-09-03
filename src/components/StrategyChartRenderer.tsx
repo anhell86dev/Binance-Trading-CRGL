@@ -37,6 +37,7 @@ interface StrategyChartRendererProps {
   interval?: string; // '15', '60', '240', 'D', 'W'
   height?: string | number;
   strategy?: GoogleSheetStrategyRow;
+  compact?: boolean;
 }
 
 const formatPrice = (p: number | undefined | null) => {
@@ -69,6 +70,7 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
   interval = '240',
   height = '520px',
   strategy,
+  compact = false,
 }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartInstanceRef = useRef<IChartApi | null>(null);
@@ -388,107 +390,130 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
 
   return (
     <div className="relative w-full h-full flex flex-col bg-neutral-950 overflow-hidden select-none">
-      {/* 1. Tactical Levels Control Ribbon on top of chart */}
-      <div className="bg-neutral-950/90 border-b border-neutral-800/80 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-10 text-xs font-mono">
-        {/* Left: Strategy Key Levels Chips & Toggles */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-neutral-500 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 mr-1">
-            <Layers className="w-3.5 h-3.5 text-amber-400" />
-            Niveles Tácticos:
+      {/* 1. Tactical Levels Control Ribbon on top of chart - Hidden or minimal in compact mode */}
+      {!compact ? (
+        <div className="bg-neutral-950/90 border-b border-neutral-800/80 px-3 py-2 flex flex-wrap items-center justify-between gap-2 z-10 text-xs font-mono">
+          {/* Left: Strategy Key Levels Chips & Toggles */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-neutral-500 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1 mr-1">
+              <Layers className="w-3.5 h-3.5 text-amber-400" />
+              Niveles Tácticos:
+            </span>
+
+            {/* Toggle Entries */}
+            <button
+              id="toggle-chart-entries-btn"
+              onClick={() => setShowEntries(!showEntries)}
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 border ${
+                showEntries
+                  ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
+                  : 'bg-neutral-900 text-neutral-500 border-neutral-800 opacity-60'
+              }`}
+              title="Mostrar/Ocultar niveles de Entrada 1 y Entrada 2 en el gráfico"
+            >
+              <span className="w-2 h-2 rounded-full bg-sky-400" />
+              <span>Entradas (E1 / E2)</span>
+              {parsedLevels && (
+                <span className="text-[10px] opacity-80">${formatPrice(parsedLevels.entry1Price)}</span>
+              )}
+            </button>
+
+            {/* Toggle Stop Loss */}
+            <button
+              id="toggle-chart-sl-btn"
+              onClick={() => setShowStopLoss(!showStopLoss)}
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 border ${
+                showStopLoss
+                  ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm'
+                  : 'bg-neutral-900 text-neutral-500 border-neutral-800 opacity-60'
+              }`}
+              title="Mostrar/Ocultar Stop Loss en el gráfico"
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500" />
+              <span>Stop Loss (SL)</span>
+              {parsedLevels && (
+                <span className="text-[10px] opacity-80">${formatPrice(parsedLevels.slPrice)}</span>
+              )}
+            </button>
+
+            {/* Toggle Take Profits */}
+            <button
+              id="toggle-chart-tp-btn"
+              onClick={() => setShowTakeProfits(!showTakeProfits)}
+              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 border ${
+                showTakeProfits
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
+                  : 'bg-neutral-900 text-neutral-500 border-neutral-800 opacity-60'
+              }`}
+              title="Mostrar/Ocultar Take Profits (TP1, TP2, TP Final) en el gráfico"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>Take Profits (TPs)</span>
+              {parsedLevels && (
+                <span className="text-[10px] opacity-80">
+                  ${formatPrice(parsedLevels.tp1Price)} / ${formatPrice(parsedLevels.tpFinalPrice)}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Right: Quick Zoom / Fit Strategy button */}
+          <div className="flex items-center gap-2">
+            <button
+              id="fit-strategy-chart-btn"
+              onClick={handleFitStrategyRange}
+              className="px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-400 border border-neutral-800 hover:border-amber-500/40 text-[11px] font-semibold transition-all flex items-center gap-1.5"
+              title="Auto-ajustar escala para ver todas las líneas de entrada, SL y TP"
+            >
+              <Target className="w-3.5 h-3.5 text-amber-400" />
+              <span>Enfocar Niveles</span>
+            </button>
+
+            <button
+              onClick={() => setShowZonesBadge(!showZonesBadge)}
+              className={`p-1 rounded-md border text-xs transition-all ${
+                showZonesBadge
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  : 'bg-neutral-900 text-neutral-500 border-neutral-800'
+              }`}
+              title="Mostrar/ocultar panel flotante de métricas"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-neutral-950/80 px-2.5 py-1.5 flex items-center justify-between border-b border-neutral-800/80 text-[11px] font-mono">
+          <span className="text-neutral-400 text-[10px] font-semibold flex items-center gap-1">
+            <Layers className="w-3 h-3 text-amber-400" />
+            Velas Binance 4h
           </span>
-
-          {/* Toggle Entries */}
           <button
-            id="toggle-chart-entries-btn"
-            onClick={() => setShowEntries(!showEntries)}
-            className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 border ${
-              showEntries
-                ? 'bg-sky-500/20 text-sky-300 border-sky-500/50 shadow-sm'
-                : 'bg-neutral-900 text-neutral-500 border-neutral-800 opacity-60'
-            }`}
-            title="Mostrar/Ocultar niveles de Entrada 1 y Entrada 2 en el gráfico"
-          >
-            <span className="w-2 h-2 rounded-full bg-sky-400" />
-            <span>Entradas (E1 / E2)</span>
-            {parsedLevels && (
-              <span className="text-[10px] opacity-80">${formatPrice(parsedLevels.entry1Price)}</span>
-            )}
-          </button>
-
-          {/* Toggle Stop Loss */}
-          <button
-            id="toggle-chart-sl-btn"
-            onClick={() => setShowStopLoss(!showStopLoss)}
-            className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 border ${
-              showStopLoss
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm'
-                : 'bg-neutral-900 text-neutral-500 border-neutral-800 opacity-60'
-            }`}
-            title="Mostrar/Ocultar Stop Loss en el gráfico"
-          >
-            <span className="w-2 h-2 rounded-full bg-rose-500" />
-            <span>Stop Loss (SL)</span>
-            {parsedLevels && (
-              <span className="text-[10px] opacity-80">${formatPrice(parsedLevels.slPrice)}</span>
-            )}
-          </button>
-
-          {/* Toggle Take Profits */}
-          <button
-            id="toggle-chart-tp-btn"
-            onClick={() => setShowTakeProfits(!showTakeProfits)}
-            className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all flex items-center gap-1.5 border ${
-              showTakeProfits
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm'
-                : 'bg-neutral-900 text-neutral-500 border-neutral-800 opacity-60'
-            }`}
-            title="Mostrar/Ocultar Take Profits (TP1, TP2, TP Final) en el gráfico"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Take Profits (TPs)</span>
-            {parsedLevels && (
-              <span className="text-[10px] opacity-80">
-                ${formatPrice(parsedLevels.tp1Price)} / ${formatPrice(parsedLevels.tpFinalPrice)}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Right: Quick Zoom / Fit Strategy button */}
-        <div className="flex items-center gap-2">
-          <button
-            id="fit-strategy-chart-btn"
+            type="button"
             onClick={handleFitStrategyRange}
-            className="px-2.5 py-1 rounded-md bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-400 border border-neutral-800 hover:border-amber-500/40 text-[11px] font-semibold transition-all flex items-center gap-1.5"
-            title="Auto-ajustar escala para ver todas las líneas de entrada, SL y TP"
+            className="px-2 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-amber-300 text-[10px] font-semibold border border-neutral-800 flex items-center gap-1"
+            title="Auto-ajustar niveles"
           >
-            <Target className="w-3.5 h-3.5 text-amber-400" />
-            <span>Enfocar Niveles</span>
-          </button>
-
-          <button
-            onClick={() => setShowZonesBadge(!showZonesBadge)}
-            className={`p-1 rounded-md border text-xs transition-all ${
-              showZonesBadge
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                : 'bg-neutral-900 text-neutral-500 border-neutral-800'
-            }`}
-            title="Mostrar/ocultar panel flotante de métricas"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
+            <Target className="w-3 h-3 text-amber-400" />
+            <span>Enfocar</span>
           </button>
         </div>
-      </div>
+      )}
 
       {/* 2. Main Canvas Container */}
-      <div className="relative flex-1 w-full min-h-[440px] bg-neutral-950">
+      <div
+        className={`relative flex-1 w-full bg-neutral-950 ${
+          compact ? 'min-h-[190px]' : 'min-h-[440px]'
+        }`}
+        style={compact ? { height: typeof height === 'number' ? `${height}px` : height } : undefined}
+      >
         <div ref={chartContainerRef} className="w-full h-full absolute inset-0" />
 
         {/* Loading Spinner */}
         {isLoading && (
           <div className="absolute inset-0 bg-neutral-950/75 backdrop-blur-xs flex items-center justify-center gap-2 text-xs font-mono text-amber-400 z-20">
             <RefreshCw className="w-4 h-4 animate-spin" />
-            <span>Cargando velas Binance ({symbol} {mapIntervalToBinance(interval)})...</span>
+            <span>Cargando velas Binance ({symbol})...</span>
           </div>
         )}
 
@@ -499,8 +524,8 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
           </div>
         )}
 
-        {/* 3. Floating Tactical HUD Overlay (Top-Left on chart) */}
-        {showZonesBadge && parsedLevels && strategy && (
+        {/* 3. Floating Tactical HUD Overlay (Only in non-compact mode) */}
+        {!compact && showZonesBadge && parsedLevels && strategy && (
           <div className="absolute top-3 left-3 z-10 bg-neutral-950/90 backdrop-blur-md p-2.5 rounded-xl border border-neutral-800/90 shadow-2xl flex flex-col gap-2 max-w-[290px] text-xs font-mono pointer-events-auto">
             {/* Header info */}
             <div className="flex items-center justify-between gap-2 border-b border-neutral-800 pb-1.5">

@@ -43,8 +43,15 @@ import {
 import { normalizeBinanceSymbol } from '../data/binancePairs';
 import { StrategyDetailModal } from './StrategyDetailModal';
 import { GoogleAuthModal } from './GoogleAuthModal';
-import { StrategyChartRenderer } from './StrategyChartRenderer';
+import { StrategyBreakdownModal } from './StrategyBreakdownModal';
 import { AssetSelectorModal } from './AssetSelectorModal';
+
+const formatOrderPrice = (p: number) => {
+  if (!p || isNaN(p)) return '0.00';
+  if (p >= 100) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p >= 1) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+  return p.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 6 });
+};
 
 export const StrategyExecutionEngine: React.FC = () => {
   const [symbol, setSymbol] = useState(binanceWs.getCurrentSymbol());
@@ -63,9 +70,9 @@ export const StrategyExecutionEngine: React.FC = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [isBreakdownModalOpen, setIsBreakdownModalOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionSuccessIds, setExecutionSuccessIds] = useState<string[] | null>(null);
-  const [showChartPreview, setShowChartPreview] = useState(false);
 
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
@@ -287,18 +294,6 @@ export const StrategyExecutionEngine: React.FC = () => {
             </button>
 
             <button
-              onClick={() => setShowChartPreview(!showChartPreview)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all ${
-                showChartPreview
-                  ? 'bg-neutral-800 text-amber-300 border-amber-500/40'
-                  : 'bg-neutral-900 text-neutral-300 border-neutral-700 hover:text-white'
-              }`}
-            >
-              <BarChart2 className="w-3.5 h-3.5 text-amber-400" />
-              <span>{showChartPreview ? 'Ocultar Gráfico' : 'Ver Gráfico Táctico'}</span>
-            </button>
-
-            <button
               onClick={() => setIsDetailModalOpen(true)}
               className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 transition-all shadow-xs"
             >
@@ -349,13 +344,6 @@ export const StrategyExecutionEngine: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Optional Embedded Tactical Candlestick Chart */}
-      {showChartPreview && (
-        <div className="h-72 bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden relative shadow-xl">
-          <StrategyChartRenderer symbol={strategy.par} strategy={strategy} />
-        </div>
-      )}
 
       {/* 2. Asignación de Capital y Riesgo (Balance Disponible) + Apalancamiento 1x-5x */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
@@ -562,10 +550,10 @@ export const StrategyExecutionEngine: React.FC = () => {
             </div>
           )}
 
-          {/* Primary Action Button: Autorizar y Crear en Binance (Requiere 2FA) */}
+          {/* Primary Action Button: Abrir Ventana Modal de Desglose y Envío a Binance */}
           <button
             type="button"
-            onClick={() => setIsAuthModalOpen(true)}
+            onClick={() => setIsBreakdownModalOpen(true)}
             disabled={!isReadyToExecute || isExecuting}
             className={`w-full py-3 px-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 transition-all shadow-xl ${
               isObsolete
@@ -575,156 +563,47 @@ export const StrategyExecutionEngine: React.FC = () => {
                 : 'bg-neutral-800 text-neutral-500 border border-neutral-700 cursor-not-allowed'
             }`}
           >
-            <ShieldCheck className="w-5 h-5" />
+            <Layers className="w-5 h-5" />
             <span>
               {isObsolete
                 ? 'Estrategia Histórica (Solo Consulta)'
-                : 'Autorizar y Crear en Binance (2FA)'}
+                : 'Ver Desglose y Enviar a Binance'}
             </span>
             {!isObsolete && <ArrowRight className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
-      {/* 3. Desglose de Órdenes a Enviar a Binance (6 Órdenes Escalonadas) - Formato Lista */}
-      <div className="bg-neutral-900/90 rounded-2xl p-4 border border-neutral-800 shadow-xl flex flex-col gap-3">
-        <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-              Desglose de Órdenes a Enviar a Binance (6 Órdenes Escalonadas)
-            </h3>
+      {/* 3. Desglose y Envío de Órdenes a Binance (Ventana Modal Popup) */}
+      <div className="bg-neutral-900/90 rounded-2xl p-4 border border-neutral-800 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+            <Layers className="w-5 h-5 text-amber-400" />
           </div>
-          <div className="flex items-center gap-2 font-mono text-[11px]">
-            <span className="text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
-              Apalancamiento: <strong className="text-amber-300">{clampedLeverage}x</strong> ISOLATED
-            </span>
-            <span className="hidden sm:inline-block text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
-              6 Órdenes Listadas
-            </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                Desglose y Envío a Binance Futures
+              </h3>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/15 text-amber-300 border border-amber-400/30 font-mono">
+                6 Órdenes Escalonadas
+              </span>
+            </div>
+            <p className="text-xs text-neutral-400 font-sans mt-0.5">
+              Apalancamiento: <strong className="text-amber-300 font-mono">{clampedLeverage}x Isolated</strong> • Capital: <strong className="text-white font-mono">${allocatedCapital.toFixed(2)} USDT</strong>
+            </p>
           </div>
         </div>
 
-        {/* Orders List View */}
-        <div className="flex flex-col divide-y divide-neutral-800/80 bg-neutral-950/60 rounded-xl border border-neutral-800 overflow-hidden">
-          {executionPlan?.orders.map((ord, idx) => {
-            const isEntry = ord.role === 'ENTRY';
-            const isSL = ord.role === 'STOP_LOSS';
-
-            const roleBadgeClass = isEntry
-              ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
-              : isSL
-              ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
-              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
-
-            const roleIconText = isEntry
-              ? `E${idx + 1}`
-              : isSL
-              ? 'SL'
-              : `TP${idx - 2}`;
-
-            const orderPrice = ord.price || 0;
-            const distFromLive = currentPrice > 0 ? ((orderPrice - currentPrice) / currentPrice) * 100 : 0;
-
-            return (
-              <div
-                key={ord.id}
-                className="p-3 hover:bg-neutral-900/60 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono"
-              >
-                {/* Left: Badge, Step Identifier, Label & Type */}
-                <div className="flex items-center gap-3 min-w-[220px]">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0 border ${roleBadgeClass}`}
-                  >
-                    {roleIconText}
-                  </div>
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-white text-xs">{ord.label}</span>
-                      <span
-                        className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${roleBadgeClass}`}
-                      >
-                        {ord.side} {ord.type}
-                      </span>
-                    </div>
-                    <span className="text-[11px] text-neutral-400 font-sans mt-0.5 line-clamp-1">
-                      {ord.description}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Middle Data Columns: Price, Quantity & %, Notional, Margin / PnL */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs flex-1 max-w-2xl bg-neutral-900/40 md:bg-transparent p-2 md:p-0 rounded-lg">
-                  {/* Precio Objetivo */}
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-neutral-500 uppercase">Precio Objetivo</span>
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-white font-bold text-sm sm:text-base">
-                        ${orderPrice.toFixed(2)}
-                      </span>
-                      <span
-                        className={`text-[10px] ${
-                          Math.abs(distFromLive) < 0.5
-                            ? 'text-amber-300 font-bold'
-                            : distFromLive > 0
-                            ? 'text-cyan-400'
-                            : 'text-neutral-400'
-                        }`}
-                        title="Distancia respecto al precio de mercado en vivo"
-                      >
-                        ({distFromLive >= 0 ? '+' : ''}{distFromLive.toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Cantidad & % */}
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-neutral-500 uppercase">Cantidad</span>
-                    <span className="text-neutral-200 font-bold text-sm">
-                      {ord.quantity} <span className="text-neutral-400 text-xs font-normal">({ord.percentage}%)</span>
-                    </span>
-                  </div>
-
-                  {/* Notional */}
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-neutral-500 uppercase">Notional</span>
-                    <span className="text-neutral-300 font-semibold text-sm">
-                      ${(ord.estNotional || 0).toFixed(2)}
-                    </span>
-                  </div>
-
-                  {/* Margen Requerido o PnL Proyectado */}
-                  <div className="flex flex-col">
-                    <span className="text-[10px] text-neutral-500 uppercase">
-                      {isEntry ? 'Margen Aislado' : isSL ? 'Pérdida SL' : 'Ganancia TP'}
-                    </span>
-                    <span
-                      className={`font-bold text-sm ${
-                        isEntry ? 'text-amber-300' : isSL ? 'text-rose-400' : 'text-emerald-400'
-                      }`}
-                    >
-                      {isEntry
-                        ? `$${(ord.estMargin || 0).toFixed(2)} USDT`
-                        : isSL
-                        ? `-$${(maxLossUsdt || 0).toFixed(2)} USDT`
-                        : `+$${(ord.pnlTarget || 0).toFixed(2)} USDT`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Right: Status Pill */}
-                <div className="shrink-0 flex md:flex-col items-center md:items-end justify-between md:justify-center gap-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-900 text-neutral-300 border border-neutral-700">
-                    LISTA
-                  </span>
-                  <span className="text-[10px] text-neutral-500">
-                    {clampedLeverage}x Isolated
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <button
+          type="button"
+          onClick={() => setIsBreakdownModalOpen(true)}
+          className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer shrink-0"
+        >
+          <Layers className="w-4 h-4" />
+          <span>Abrir Desglose y Formulario Binance</span>
+          <ArrowRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Execution Success Banner if just executed */}
@@ -754,6 +633,24 @@ export const StrategyExecutionEngine: React.FC = () => {
           strategy={strategy}
           isOpen={isDetailModalOpen}
           onClose={() => setIsDetailModalOpen(false)}
+        />
+      )}
+
+      {/* Modal de Desglose de 6 Órdenes y Formulario Binance Futures Integrado */}
+      {strategy && (
+        <StrategyBreakdownModal
+          isOpen={isBreakdownModalOpen}
+          onClose={() => setIsBreakdownModalOpen(false)}
+          strategy={strategy}
+          executionPlan={executionPlan}
+          allocatedCapital={allocatedCapital}
+          clampedLeverage={clampedLeverage}
+          currentPrice={currentPrice}
+          maxLossUsdt={maxLossUsdt}
+          onAuthorize2FA={() => setIsAuthModalOpen(true)}
+          isExecuting={isExecuting}
+          isReadyToExecute={isReadyToExecute}
+          isObsolete={isObsolete}
         />
       )}
 

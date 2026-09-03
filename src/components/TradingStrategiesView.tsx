@@ -34,20 +34,26 @@ import { StrategyDetailModal } from './StrategyDetailModal';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
+import { StrategyCardItem } from './StrategyCardItem';
 
 interface TradingStrategiesViewProps {
   onOpenOrderModal?: () => void;
+  onNavigateToFutures?: () => void;
 }
 
-export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ onOpenOrderModal }) => {
+export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
+  onOpenOrderModal,
+  onNavigateToFutures,
+}) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => strategyService.getIsSyncing());
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => strategyService.getLastSyncTime());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'LONG' | 'SHORT' | 'HIGH_RR'>('ALL');
-  const [catalogViewMode, setCatalogViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
+  const [catalogViewMode, setCatalogViewMode] = useState<'TABLE' | 'CARDS'>('CARDS');
   const [selectedStrategy, setSelectedStrategy] = useState<GoogleSheetStrategyRow | null>(null);
   const [ticker, setTicker] = useState(() => binanceWs.getTicker());
+  const [walletBalance, setWalletBalance] = useState(() => binanceWs.getBalance());
   const [, setPriceTick] = useState(0);
 
   useEffect(() => {
@@ -59,6 +65,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
 
     const unsubWs = binanceWs.subscribe(() => {
       setTicker(binanceWs.getTicker());
+      setWalletBalance(binanceWs.getBalance());
     });
 
     const unsubLive = livePriceService.subscribe(() => {
@@ -74,6 +81,15 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
 
   const handleSync = async () => {
     await strategyService.syncFromGoogleSheets();
+  };
+
+  const handleNavigateToFutures = (strat: GoogleSheetStrategyRow) => {
+    // Sincronizar par en Binance WS y estrategia activa en el servicio
+    binanceWs.setSymbol(strat.par);
+    strategyService.setActiveStrategy(strat);
+    if (onNavigateToFutures) {
+      onNavigateToFutures();
+    }
   };
 
   const handleSelectStrategyForExecution = (strat: GoogleSheetStrategyRow) => {
@@ -316,233 +332,23 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
           </div>
         </div>
 
-        {/* VISTA 1: MODO TARJETAS (GRIDS CON NÚMEROS GRANDES Y VISIBLES) */}
+        {/* VISTA 1: MODO TARJETAS (DISEÑO DE DOS POR FILA CON ASIGNACIÓN DE CAPITAL, GRÁFICO INTEGRADO Y MÉTRICAS) */}
         {catalogViewMode === 'CARDS' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
             {filteredStrategies.length === 0 ? (
               <div className="col-span-full py-16 text-center text-sm text-neutral-400 font-sans bg-neutral-950/80 rounded-xl border border-neutral-800">
                 No se encontraron estrategias activas que coincidan con los filtros aplicados.
               </div>
             ) : (
-              filteredStrategies.map((strat) => {
-                const prices = parsePricesFromStrategy(strat);
-                const rr = calculateStrategyRewardToRisk(strat);
-                const isLong =
-                  !strat.tipoDeOrden?.toLowerCase().includes('short') &&
-                  !strat.tipoDeOrden?.toLowerCase().includes('venta');
-
-                const liveData = livePriceService.getPriceData(strat.par);
-                const livePrice = liveData.price;
-                const entry1Price = prices.entry1Price || 0;
-
-                let diffDollar = 0;
-                let diffPercent = 0;
-                let isCloseToEntry = false;
-                let absDiffPercent = 9999;
-
-                if (entry1Price > 0 && livePrice > 0) {
-                  diffDollar = livePrice - entry1Price;
-                  diffPercent = ((livePrice - entry1Price) / entry1Price) * 100;
-                  absDiffPercent = Math.abs(diffPercent);
-                  isCloseToEntry = absDiffPercent <= 0.75;
-                }
-
-                const isClosestGlobal = strat.noEstrategia === closestToEntryStrategyId;
-                const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
-
-                return (
-                  <div
-                    key={strat.noEstrategia}
-                    className={`rounded-xl border p-4 flex flex-col justify-between gap-3.5 transition-all relative shadow-lg ${
-                      isClosestGlobal
-                        ? 'bg-amber-950/20 border-amber-500/60 ring-2 ring-amber-500/40 shadow-amber-950/30'
-                        : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
-                    }`}
-                  >
-                    {/* Top Bar: Par, Tipo, ID y R:B */}
-                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-neutral-800">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300">
-                          #{strat.noEstrategia}
-                        </span>
-                        <span className="text-base font-bold font-mono text-white tracking-tight">
-                          {strat.par}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
-                            isLong
-                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                          }`}
-                        >
-                          {isLong ? (
-                            <>
-                              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-                              LONG
-                            </>
-                          ) : (
-                            <>
-                              <ArrowDownRight className="w-3 h-3 text-rose-400" />
-                              SHORT
-                            </>
-                          )}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span
-                          className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs border ${
-                            rr.ratio >= 2.0
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-neutral-900 text-neutral-300 border-neutral-800'
-                          }`}
-                          title="Ratio Recompensa / Riesgo"
-                        >
-                          1:{rr.ratio > 0 ? rr.ratio.toFixed(1) : '-'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Nombre de Estrategia y Tags */}
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="font-bold text-white text-sm line-clamp-1" title={strat.nombreEstrategia}>
-                          {strat.nombreEstrategia}
-                        </h4>
-                        {isClosestGlobal && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-neutral-950 shrink-0 shadow-xs animate-pulse">
-                            <Target className="w-3 h-3" />
-                            MÁS PRÓXIMA
-                          </span>
-                        )}
-                      </div>
-                      {strat.comentariosBacktesting && (
-                        <p className="text-xs text-neutral-400 line-clamp-2">
-                          {strat.comentariosBacktesting}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* SECCIÓN DE NÚMEROS GRANDES (Precio Live y Entrada 1) */}
-                    <div className="grid grid-cols-2 gap-2.5 font-mono">
-                      {/* Precio Live - NÚMERO BIEN GRANDE */}
-                      <div className="flex flex-col bg-amber-500/10 p-3 rounded-lg border border-amber-500/30">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                          <Radio className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
-                          Precio Live
-                        </span>
-                        <span className="text-xl sm:text-2xl font-black text-amber-300 tracking-tight mt-1">
-                          ${livePrice.toFixed(decimalPlaces)}
-                        </span>
-                        <span
-                          className={`text-xs font-bold flex items-center gap-0.5 mt-1 ${
-                            liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          {liveData.change24hPercent >= 0 ? (
-                            <ArrowUpRight className="w-3 h-3" />
-                          ) : (
-                            <ArrowDownRight className="w-3 h-3" />
-                          )}
-                          <span>
-                            {liveData.change24hPercent >= 0 ? '+' : ''}
-                            {liveData.change24hPercent.toFixed(2)}% (24h)
-                          </span>
-                        </span>
-                      </div>
-
-                      {/* Entrada 1 (E1) - NÚMERO BIEN GRANDE */}
-                      <div className="flex flex-col bg-neutral-900 p-3 rounded-lg border border-neutral-800">
-                        <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
-                          Entrada 1 (E1)
-                        </span>
-                        <span className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1">
-                          {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
-                        </span>
-                        {entry1Price > 0 && (
-                          <span
-                            className={`text-xs font-bold mt-1 ${
-                              isCloseToEntry
-                                ? 'text-emerald-400'
-                                : isClosestGlobal
-                                ? 'text-amber-300'
-                                : 'text-sky-300'
-                            }`}
-                          >
-                            {diffPercent >= 0 ? '+' : ''}
-                            {diffPercent.toFixed(2)}% vs E1
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* SL, TP1 y Diferencia vs E1 - NÚMEROS CLAROS Y GRANDES */}
-                    <div className="grid grid-cols-2 gap-2 bg-neutral-900/80 p-2.5 rounded-lg border border-neutral-800 text-xs font-mono">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-neutral-400 font-semibold uppercase">Stop Loss</span>
-                        <span className="text-base font-bold text-rose-400 font-mono mt-0.5">
-                          {prices.slPrice ? `$${prices.slPrice.toFixed(decimalPlaces)}` : '-'}
-                        </span>
-                      </div>
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-neutral-400 font-semibold uppercase">Take Profit (TP1)</span>
-                        <span className="text-base font-bold text-emerald-400 font-mono mt-0.5">
-                          {prices.tp1Price ? `$${prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
-                        </span>
-                        {prices.tp2Price && (
-                          <span className="text-[11px] font-bold text-emerald-300/90 font-mono">
-                            TP2: ${prices.tp2Price.toFixed(decimalPlaces)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Proximidad Status Pill */}
-                    {entry1Price > 0 && (
-                      <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 rounded-md border border-neutral-800 text-xs font-mono">
-                        <span className="text-neutral-400 text-[11px]">Distancia a E1:</span>
-                        <span
-                          className={`font-bold ${
-                            isClosestGlobal
-                              ? 'text-amber-300 font-black'
-                              : isCloseToEntry
-                              ? 'text-emerald-400'
-                              : 'text-neutral-200'
-                          }`}
-                        >
-                          {diffDollar >= 0 ? '+' : ''}${diffDollar.toFixed(decimalPlaces)} ({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(2)}%)
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Barra Visual Interactiva de Precios */}
-                    <div className="w-full">
-                      <StrategyPriceBar strategy={strat} livePrice={livePrice} compact={false} />
-                    </div>
-
-                    {/* Botones de Acción */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedStrategy(strat)}
-                        className="flex-1 py-2 px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-neutral-700"
-                      >
-                        <Eye className="w-3.5 h-3.5 text-neutral-400" />
-                        <span>Detalles</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleSelectStrategyForExecution(strat)}
-                        className="flex-1 py-2 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
-                      >
-                        <Zap className="w-3.5 h-3.5 fill-neutral-950" />
-                        <span>Cargar Orden</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
+              filteredStrategies.map((strat) => (
+                <StrategyCardItem
+                  key={strat.noEstrategia}
+                  strat={strat}
+                  availableBalance={walletBalance.availableBalance}
+                  isClosestGlobal={strat.noEstrategia === closestToEntryStrategyId}
+                  onNavigateToFutures={handleNavigateToFutures}
+                />
+              ))
             )}
           </div>
         ) : (
@@ -554,7 +360,6 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                   <tr className="bg-neutral-900/90 text-[11px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
                     <th className="py-3 px-3 font-semibold w-14">ID</th>
                     <th className="py-3 px-3 font-semibold">Par</th>
-                    <th className="py-3 px-3 font-semibold">Tipo</th>
                     <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
                     <th className="py-3 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
                       Precio Live
@@ -565,13 +370,13 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                     <th className="py-3 px-3 font-semibold">Take Profit</th>
                     <th className="py-3 px-3 font-semibold text-center">Ratio R:B</th>
                     <th className="py-3 px-3 font-semibold text-center">Estado</th>
-                    <th className="py-3 px-3 font-semibold text-right min-w-[160px]">Acciones</th>
+                    <th className="py-3 px-3 font-semibold text-right min-w-[80px]">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-850 font-mono">
                   {filteredStrategies.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="py-12 text-center text-xs text-neutral-500 font-sans">
+                      <td colSpan={11} className="py-12 text-center text-xs text-neutral-500 font-sans">
                         No se encontraron estrategias activas que coincidan con los filtros aplicados.
                       </td>
                     </tr>
@@ -628,29 +433,6 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                                 PERP
                               </span>
                             </div>
-                          </td>
-
-                          {/* Tipo / Dirección */}
-                          <td className="py-3.5 px-3">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${
-                                isLong
-                                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                                  : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                              }`}
-                            >
-                              {isLong ? (
-                                <>
-                                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-                                  LONG
-                                </>
-                              ) : (
-                                <>
-                                  <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
-                                  SHORT
-                                </>
-                              )}
-                            </span>
                           </td>
 
                           {/* Nombre de Estrategia */}
@@ -817,27 +599,16 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                             </span>
                           </td>
 
-                          {/* Acciones */}
+                          {/* Acciones: Botón de detalles como icono para navegar a Futuros */}
                           <td className="py-3.5 px-3 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end">
                               <button
                                 type="button"
-                                onClick={() => setSelectedStrategy(strat)}
-                                className="px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1 transition-colors border border-neutral-800"
-                                title="Ver detalles completos de la estrategia"
+                                onClick={() => handleNavigateToFutures(strat)}
+                                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-300 border border-neutral-750 transition-colors shadow-xs cursor-pointer active:scale-95"
+                                title="Ver detalles y operar en Futuros"
                               >
-                                <Eye className="w-3.5 h-3.5 text-neutral-400" />
-                                <span className="hidden sm:inline">Detalles</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleSelectStrategyForExecution(strat)}
-                                className="px-3 py-1.5 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black flex items-center gap-1 transition-all shadow-xs"
-                                title="Cargar orden y abrir formulario popup de Binance Futures"
-                              >
-                                <Zap className="w-3.5 h-3.5 fill-neutral-950" />
-                                <span>Cargar</span>
+                                <Eye className="w-4 h-4 text-amber-400" />
                               </button>
                             </div>
                           </td>
@@ -850,7 +621,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                             isClosestGlobal ? 'bg-amber-500/10' : 'bg-neutral-950/40'
                           }`}
                         >
-                          <td colSpan={12} className="px-3 py-2">
+                          <td colSpan={11} className="px-3 py-2">
                             <StrategyPriceBar
                               strategy={strat}
                               livePrice={livePrice}

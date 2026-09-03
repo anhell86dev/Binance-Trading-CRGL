@@ -232,19 +232,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
               {alerts.length}
             </span>
           </button>
-
-          <button
-            id="tab-journal-btn"
-            onClick={() => setTab('strategy_journal')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
-              tab === 'strategy_journal'
-                ? 'border-amber-400 text-white bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
-            <span>Diario Binance Futures</span>
-          </button>
         </div>
 
         <div className="flex items-center gap-2 pb-2">
@@ -361,11 +348,23 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
               </thead>
               <tbody className="divide-y divide-neutral-800/60">
                 {orders.map(ord => {
+                  const isProtective =
+                    ord.type === 'STOP_MARKET' ||
+                    (ord.type as string) === 'STOP' ||
+                    ord.type === 'TAKE_PROFIT_MARKET' ||
+                    (ord.type as string) === 'TAKE_PROFIT' ||
+                    ord.type === 'TRAILING_STOP_MARKET' ||
+                    ord.clientOrderId?.includes('TP-') ||
+                    ord.clientOrderId?.includes('SL-') ||
+                    ord.clientOrderId?.includes('CLS-') ||
+                    Boolean((ord as any).reduceOnly);
+
                   const orderPrice = ord.price > 0 ? ord.price : (ord.stopPrice || 0);
                   const remainingQty = Math.max(0, ord.origQty - (ord.executedQty || 0));
-                  const lev = Math.max(1, ord.leverage || 2);
-                  const orderMargin = (orderPrice * remainingQty) / lev;
-                  const audit = auditOrderRisk(ord, balance.totalMarginBalance);
+                  const posMatch = positions.find(p => p.symbol === ord.symbol);
+                  const lev = ord.leverage && ord.leverage > 0 ? ord.leverage : (posMatch?.leverage || 3);
+                  const orderMargin = isProtective ? 0 : ((orderPrice * remainingQty) / lev);
+                  const audit = auditOrderRisk(ord, balance.totalMarginBalance, orderPrice);
 
                   return (
                     <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
@@ -443,10 +442,16 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                       </td>
                       <td className="py-3 px-3 text-neutral-300">{ord.origQty}</td>
                       <td className="py-3 px-3 font-bold text-amber-300">
-                        {ord.leverage}x
+                        {lev}x
                       </td>
                       <td className="py-3 px-3 font-semibold text-neutral-200">
-                        ${orderMargin.toFixed(2)} USDT
+                        {isProtective ? (
+                          <span className="text-emerald-400 font-medium">
+                            $0.00 <span className="text-[10px] text-neutral-400 font-sans font-normal">(Protección)</span>
+                          </span>
+                        ) : (
+                          <span>${orderMargin.toFixed(2)} USDT</span>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-right">
                         <button
@@ -572,13 +577,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
               </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Tab: Diario de Estrategias */}
-      {tab === 'strategy_journal' && (
-        <div className="p-3">
-          <DiarioEstrategias />
         </div>
       )}
 

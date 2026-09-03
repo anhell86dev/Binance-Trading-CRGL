@@ -58,7 +58,10 @@ export default function TerminalLayout() {
       {activeTab === 'estrategias' && (
         <main className="flex-1 overflow-y-auto p-3 sm:p-5 bg-neutral-950 h-[calc(100vh-3rem)]">
           <div className="max-w-7xl mx-auto">
-            <TradingStrategiesView onOpenOrderModal={() => setIsOrderModalOpen(true)} />
+            <TradingStrategiesView
+              onOpenOrderModal={() => setIsOrderModalOpen(true)}
+              onNavigateToFutures={() => setActiveTab('futuros')}
+            />
           </div>
         </main>
       )}

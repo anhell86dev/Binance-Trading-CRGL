@@ -191,7 +191,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
 
   // VISTA NORMAL (Ancha y espaciosa, con la bandeja operativa hasta abajo ocupando toda la página)
   return (
-    <div id="wallet-view-container" className="w-full max-w-none px-3 sm:px-6 lg:px-8 mx-auto flex flex-col gap-5 min-h-screen pb-6 flex-1">
+    <div id="wallet-view-container" className="w-full max-w-none px-3 sm:px-6 lg:px-8 mx-auto flex flex-col gap-6 min-h-[1400px] pb-32 flex-1">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-900/80 p-4 rounded-xl border border-neutral-800">
         <div className="flex items-center gap-3">
@@ -266,75 +266,90 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
       </div>
 
-      {/* 1. SECCIÓN SUPERIOR: Saldo Margen, Garantía, PnL y Protección + Riesgo & Margen Isolated A SU ALTURA */}
+      {/* 1. SECCIÓN SUPERIOR: Saldo Margen, Garantía, PnL y Protección (VALORES CENTRADOS Y MÁS GRANDES) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-        {/* Bloque de 4 Tarjetas: PnL abajo de Saldo Margen, y Protección Riesgo abajo de Garantía */}
+        {/* Bloque de 4 Tarjetas Métricas: Centradas y de gran tamaño */}
         <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Columna Izquierda: Saldo Total Margen (arriba) y PnL No Realizado (abajo) */}
           <div className="flex flex-col gap-4">
-            {/* Card 1: Saldo Total Margen */}
-            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
-              <div className="flex items-center justify-between text-neutral-400 text-xs">
-                <span className="font-semibold">Saldo Total Margen</span>
+            {/* Card 1: Saldo Total Margen - Centrado y Grande */}
+            <div className="p-5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col items-center justify-between text-center gap-2.5 shadow-sm flex-1">
+              <div className="w-full flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold uppercase tracking-wider text-[11px]">Saldo Total Margen</span>
                 <DollarSign className="w-4 h-4 text-amber-400" />
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
-                ${(balance.totalWalletBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                <span className="text-xs text-neutral-400 font-sans font-normal">USDT</span>
+              <div className="my-auto py-2">
+                <div className="text-3xl sm:text-4xl font-black font-mono text-white tracking-tight">
+                  ${(balance.totalWalletBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-amber-400/90 font-mono font-semibold mt-1">USDT</div>
               </div>
-              <div className="text-[11px] text-neutral-400 flex items-center gap-1">
+              <div className="text-[11px] text-neutral-400 flex items-center justify-center gap-1.5 border-t border-neutral-800/80 pt-2 w-full">
                 <span>Disponible:</span>
-                <span className="font-mono text-neutral-200 font-bold">
+                <span className="font-mono text-emerald-400 font-bold">
                   ${(balance.availableBalance || 0).toFixed(2)} USDT
                 </span>
               </div>
             </div>
 
-            {/* Card 2: PnL No Realizado Total (ABAJO de Saldo Margen) */}
-            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
-              <div className="flex items-center justify-between text-neutral-400 text-xs">
-                <span className="font-semibold">PnL No Realizado Total</span>
+            {/* Card 2: PnL No Realizado Total - Centrado y Grande */}
+            <div className="p-5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col items-center justify-between text-center gap-2.5 shadow-sm flex-1">
+              <div className="w-full flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold uppercase tracking-wider text-[11px]">PnL No Realizado Total</span>
                 <TrendingUp className={`w-4 h-4 ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} />
               </div>
-              <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {totalUnrealizedPnl >= 0 ? '+' : ''}${totalUnrealizedPnl.toFixed(2)}{' '}
-                <span className="text-xs text-neutral-400 font-sans font-normal">USDT</span>
+              <div className="my-auto py-2">
+                <div className={`text-3xl sm:text-4xl font-black font-mono tracking-tight ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {totalUnrealizedPnl >= 0 ? '+' : ''}${totalUnrealizedPnl.toFixed(2)}
+                </div>
+                <div className={`text-xs font-mono font-semibold mt-1 ${totalUnrealizedPnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  USDT
+                </div>
               </div>
-              <div className="text-[11px] text-neutral-400">
-                {totalUnrealizedPnl >= 0 ? 'Rendimiento positivo' : 'Exposición controlada'}
+              <div className="text-[11px] text-neutral-400 border-t border-neutral-800/80 pt-2 w-full text-center">
+                {totalUnrealizedPnl >= 0 ? (
+                  <span className="text-emerald-400 font-medium">Rendimiento positivo en posiciones</span>
+                ) : (
+                  <span className="text-neutral-400">Exposición acotada por SL</span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Columna Derecha: Garantía en Margen Aislado (arriba) y Protección de Riesgo (abajo) */}
+          {/* Columna Derecha: Garantía en Margen Aislado (arriba) y Protección de Riesgo (abajo) - Centradas y Grandes */}
           <div className="flex flex-col gap-4">
-            {/* Card 3: Garantía en Margen Aislado */}
-            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
-              <div className="flex items-center justify-between text-neutral-400 text-xs">
-                <span className="font-semibold">Garantía en Margen Aislado</span>
+            {/* Card 3: Garantía en Margen Aislado - Centrado y Grande */}
+            <div className="p-5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col items-center justify-between text-center gap-2.5 shadow-sm flex-1">
+              <div className="w-full flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold uppercase tracking-wider text-[11px]">Garantía Margen Aislado</span>
                 <Lock className="w-4 h-4 text-blue-400" />
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-blue-300 tracking-tight">
-                ${totalIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                <span className="text-xs text-neutral-400 font-sans font-normal">USDT</span>
+              <div className="my-auto py-2">
+                <div className="text-3xl sm:text-4xl font-black font-mono text-blue-300 tracking-tight">
+                  ${totalIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-blue-400 font-mono font-semibold mt-1">USDT Comprometido</div>
               </div>
-              <div className="text-[11px] text-neutral-400 flex items-center gap-1">
-                <span>En {positions.length} posiciones activas</span>
+              <div className="text-[11px] text-neutral-400 border-t border-neutral-800/80 pt-2 w-full text-center">
+                <span>En <strong className="text-white font-mono">{positions.length}</strong> posiciones activas</span>
               </div>
             </div>
 
-            {/* Card 4: Protección de Riesgo (ABAJO de Garantía) */}
-            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
-              <div className="flex items-center justify-between text-neutral-400 text-xs">
-                <span className="font-semibold">Protección de Riesgo</span>
+            {/* Card 4: Protección de Riesgo - Centrado y Grande */}
+            <div className="p-5 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col items-center justify-between text-center gap-2.5 shadow-sm flex-1">
+              <div className="w-full flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold uppercase tracking-wider text-[11px]">Garantía Protección</span>
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
               </div>
-              <div className="text-xl sm:text-2xl font-black font-mono text-emerald-300 tracking-tight">
-                1x - 5x <span className="text-xs text-neutral-400 font-sans font-normal">Máx</span>
+              <div className="my-auto py-2">
+                <div className="text-3xl sm:text-4xl font-black font-mono text-emerald-300 tracking-tight">
+                  1x - 5x
+                </div>
+                <div className="text-xs text-emerald-400 font-mono font-semibold mt-1">Máx. Institucional</div>
               </div>
-              <div className="text-[11px] text-emerald-400/90 font-medium flex items-center gap-1">
+              <div className="text-[11px] text-emerald-400/90 font-medium border-t border-neutral-800/80 pt-2 w-full flex items-center justify-center gap-1">
                 <CheckCircle2 className="w-3 h-3 shrink-0" />
-                Sin riesgo de contagio cruzado
+                <span>Sin contagio cruzado</span>
               </div>
             </div>
           </div>

@@ -277,6 +277,10 @@ class StrategyService {
     }
   }
 
+  public setActiveStrategy(strat: GoogleSheetStrategyRow) {
+    this.setActiveStrategyById(strat.noEstrategia);
+  }
+
   public setActiveStrategyBySymbol(symbol: string) {
     const cleanSym = symbol.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     // Prefer the active version for this symbol
@@ -310,9 +314,20 @@ class StrategyService {
     this.lastSyncTime = new Date().toLocaleTimeString();
     this.saveToStorage();
 
-    const current = this.getActiveStrategy();
-    if (current && current.par) {
-      binanceWs.setSymbol(current.par);
+    // Preserve the user's currently selected symbol; do not forcibly revert to index 0
+    const currentSym = binanceWs.getCurrentSymbol();
+    if (currentSym) {
+      const matchIdx = this.strategies.findIndex(
+        (s) => s.par.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === currentSym.trim().toUpperCase()
+      );
+      if (matchIdx !== -1) {
+        this.activeStrategyIndex = matchIdx;
+      }
+    } else {
+      const current = this.getActiveStrategy();
+      if (current && current.par) {
+        binanceWs.setSymbol(current.par);
+      }
     }
 
     this.notify();

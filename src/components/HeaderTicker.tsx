@@ -365,10 +365,10 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
 
       {/* Enhanced Explanatory Derivatives Metrics & Semáforo Section */}
       {showDerivatives && (
-        <div className="flex flex-col gap-2 pt-1 border-t border-neutral-800/80">
+        <div className="flex flex-col gap-2.5 pt-1.5 border-t border-neutral-800/80">
           {/* SEMÁFORO INTEGRAL DE MERCADO PARA OPERAR O NO */}
           <div
-            className={`p-2.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 transition-all ${
+            className={`p-3 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-3 transition-all ${
               isTrafficGreen
                 ? 'bg-emerald-950/30 border-emerald-500/40 shadow-emerald-950/20 shadow-md'
                 : isTrafficRed
@@ -376,51 +376,52 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
                 : 'bg-amber-950/30 border-amber-500/40 shadow-amber-950/20 shadow-md'
             }`}
           >
-            {/* Luces del Semáforo + Título de Decisión Operativa */}
-            <div className="flex items-center gap-3">
+            {/* Luces del Semáforo + Título + Resultado del Semáforo */}
+            <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
               {/* Caja de Luces Físicas del Semáforo */}
               <div
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-950 border border-neutral-800 shadow-inner shrink-0"
+                className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl bg-neutral-950 border border-neutral-800 shadow-inner shrink-0"
                 title={`Semáforo Operativo: ${analysis.trafficLightTitle}`}
               >
                 {/* Luz Roja */}
                 <div
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${
                     isTrafficRed
-                      ? 'bg-rose-500 ring-4 ring-rose-500/30 shadow-[0_0_10px_rgba(244,63,94,0.9)] scale-110'
+                      ? 'bg-rose-500 ring-4 ring-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.9)] scale-110'
                       : 'bg-rose-950/40 opacity-20'
                   }`}
                   title="Luz Roja: Posible Caída / No Operar Long"
                 />
                 {/* Luz Amarilla */}
                 <div
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${
                     isTrafficYellow
-                      ? 'bg-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_10px_rgba(251,191,36,0.9)] scale-110'
+                      ? 'bg-amber-400 ring-4 ring-amber-400/30 shadow-[0_0_12px_rgba(251,191,36,0.9)] scale-110'
                       : 'bg-amber-950/40 opacity-20'
                   }`}
                   title="Luz Amarilla: Precaución / Esperar Confirmación"
                 />
                 {/* Luz Verde */}
                 <div
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${
                     isTrafficGreen
-                      ? 'bg-emerald-400 ring-4 ring-emerald-400/30 shadow-[0_0_10px_rgba(52,211,153,0.9)] scale-110'
+                      ? 'bg-emerald-400 ring-4 ring-emerald-400/30 shadow-[0_0_12px_rgba(52,211,153,0.9)] scale-110'
                       : 'bg-emerald-950/40 opacity-20'
                   }`}
                   title="Luz Verde: Continuación Alcista / Apto Operar Long"
                 />
               </div>
 
-              {/* Textos del Dictamen */}
-              <div className="flex flex-col">
+              {/* Textos del Dictamen con Resultado del Semáforo Destacado */}
+              <div className="flex flex-col min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[10px] uppercase font-mono font-bold text-neutral-400 flex items-center gap-1">
                     <Radio className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
-                    Semáforo Operativo ({currentSymbol}):
+                    Semáforo ({currentSymbol}):
                   </span>
+                  {/* Resultado del Semáforo (Badge) */}
                   <span
-                    className={`text-[10px] font-black font-mono px-1.5 py-0.2 rounded border uppercase ${
+                    className={`text-[11px] font-black font-mono px-2 py-0.5 rounded border uppercase tracking-wider ${
                       isTrafficGreen
                         ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                         : isTrafficRed
@@ -428,11 +429,12 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
                         : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                     }`}
                   >
-                    {analysis.trafficLightTitle}
+                    Resultado: {analysis.trafficLightTitle}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 mt-0.5">
+                {/* Acción Dictada por el Semáforo */}
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <span
                     className={`text-sm sm:text-base font-black tracking-tight ${
                       isTrafficGreen ? 'text-emerald-400' : isTrafficRed ? 'text-rose-400' : 'text-amber-400'
@@ -441,175 +443,202 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
                     {analysis.trafficLightAction}
                   </span>
                 </div>
-                <p className="text-[11px] text-neutral-300 font-sans leading-relaxed">
+                <p className="text-[11px] text-neutral-300 font-sans leading-relaxed mt-0.5">
                   {analysis.trafficLightRecommendation}
                 </p>
               </div>
             </div>
 
-            {/* Medidor de Confluencia */}
-            <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-1 w-full sm:w-auto shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-neutral-800/80">
-              <span className="text-[9px] text-neutral-400 font-sans uppercase font-semibold">
-                Fuerza Alcista
+            {/* Medidor de Confluencia Destacado */}
+            <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-1 shrink-0 p-2 sm:p-0 bg-neutral-950/60 sm:bg-transparent rounded-lg border sm:border-0 border-neutral-800/80 w-full sm:w-auto">
+              <span className="text-[10px] text-neutral-400 font-sans uppercase font-bold tracking-wider">
+                Porcentaje de Confluencia
               </span>
-              <div className="flex items-center gap-1.5 font-mono">
+              <div className="flex items-center gap-2 font-mono">
                 <span
-                  className={`text-base font-black ${
+                  className={`text-xl sm:text-2xl font-black ${
                     isTrafficGreen ? 'text-emerald-400' : isTrafficRed ? 'text-rose-400' : 'text-amber-400'
                   }`}
                 >
                   {analysis.confidenceScore}%
                 </span>
-                <span className="text-[9px] text-neutral-500">Confluencia</span>
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase font-mono border ${
+                    analysis.confidenceScore >= 70
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : analysis.confidenceScore >= 45
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                  }`}
+                >
+                  Confluencia {analysis.confidenceScore >= 70 ? 'Alta' : analysis.confidenceScore >= 45 ? 'Media' : 'Baja'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* 4 CARDS: OI, FUNDING, TAKER Y TOP CON LEYENDAS EXPLÍCITAS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-[11px] font-mono">
-            {/* 1. OI (Interés Abierto) con Leyenda Explícita */}
-            <div
-              onClick={() => setIsDerivativesInfoModalOpen(true)}
-              className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-amber-500/50 cursor-pointer transition-all p-2.5 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1.5 group"
-              title="Haz clic para ver explicación técnica completa del Interés Abierto (OI)"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
-                  <Coins className="w-3 h-3 text-amber-400" />
-                  Interés Abierto (OI):
-                </span>
-                <span className="font-extrabold text-amber-300 font-mono text-xs">
-                  ${formatVolume(metrics.openInterestValueUsdt)}
-                </span>
-              </div>
-
-              {/* LEYENDA OI SOLICITADA */}
-              <div className="flex items-center gap-1">
-                <span
-                  className={`text-[10px] font-black px-1.5 py-0.5 rounded inline-flex items-center gap-1 uppercase tracking-tight ${
-                    analysis.oiStatus === 'bullish'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                  }`}
+          {/* TABLA UNIFICADA DE DATOS DERIVADOS: OI, FUNDING, TAKER Y TOP L/S */}
+          <div className="overflow-x-auto custom-scrollbar rounded-xl border border-neutral-800 bg-neutral-950/80">
+            <table className="w-full text-left font-mono border-collapse min-w-[750px] text-xs">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-900/90 text-[10px] sm:text-[11px] uppercase tracking-wider text-neutral-400">
+                  <th scope="col" className="py-2.5 px-3.5 font-semibold text-neutral-300 w-[210px]">
+                    Métrica Derivada
+                  </th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-neutral-300 w-[170px]">
+                    Valor Actual
+                  </th>
+                  <th scope="col" className="py-2.5 px-3 font-semibold text-neutral-300 w-[210px]">
+                    Interpretación / Señal
+                  </th>
+                  <th scope="col" className="py-2.5 px-3.5 font-semibold text-neutral-300">
+                    Significado Operativo
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800/60">
+                {/* 1. Interés Abierto (OI) */}
+                <tr
+                  onClick={() => setIsDerivativesInfoModalOpen(true)}
+                  className="hover:bg-neutral-900/60 cursor-pointer transition-colors"
                 >
-                  {analysis.oiStatus === 'bullish' ? (
-                    <TrendingUp className="w-2.5 h-2.5 text-emerald-400" />
-                  ) : (
-                    <TrendingDown className="w-2.5 h-2.5 text-rose-400" />
-                  )}
-                  {analysis.oiLegend}
-                </span>
-              </div>
+                  <td className="py-2.5 px-3.5 font-sans font-semibold text-neutral-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
+                        <Coins className="w-3.5 h-3.5 text-amber-400" />
+                      </div>
+                      <span className="text-xs">Interés Abierto (OI)</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-amber-300 text-xs">
+                    ${formatVolume(metrics.openInterestValueUsdt)}
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        analysis.oiStatus === 'bullish'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {analysis.oiStatus === 'bullish' ? (
+                        <TrendingUp className="w-3 h-3 text-emerald-400" />
+                      ) : (
+                        <TrendingDown className="w-3 h-3 text-rose-400" />
+                      )}
+                      {analysis.oiLegend}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 font-sans text-[11px] text-neutral-300 leading-relaxed">
+                    {analysis.oiDescription}
+                  </td>
+                </tr>
 
-              <div className="text-[10px] text-neutral-400 font-sans leading-relaxed border-t border-neutral-900 pt-1">
-                {analysis.oiDescription}
-              </div>
-            </div>
-
-            {/* 2. Funding Rate con Leyenda Explícita de qué significa */}
-            <div
-              onClick={() => setIsDerivativesInfoModalOpen(true)}
-              className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-blue-500/50 cursor-pointer transition-all p-2.5 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1.5 group"
-              title="Haz clic para ver explicación técnica completa del Funding Rate"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
-                  <Clock className="w-3 h-3 text-blue-400" />
-                  Funding ({countdownText}):
-                </span>
-                <span className={`font-extrabold font-mono text-xs ${isFundingPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {isFundingPositive ? '+' : ''}{fundingRateValue.toFixed(4)}%
-                </span>
-              </div>
-
-              {/* LEYENDA FUNDING SOLICITADA */}
-              <div className="flex items-center gap-1">
-                <span
-                  className={`text-[10px] font-black px-1.5 py-0.5 rounded inline-flex items-center gap-1 uppercase tracking-tight ${
-                    analysis.fundingIsPositive
-                      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                  }`}
+                {/* 2. Funding Rate */}
+                <tr
+                  onClick={() => setIsDerivativesInfoModalOpen(true)}
+                  className="hover:bg-neutral-900/60 cursor-pointer transition-colors"
                 >
-                  {analysis.fundingLegend}
-                </span>
-              </div>
+                  <td className="py-2.5 px-3.5 font-sans font-semibold text-neutral-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-blue-500/15 border border-blue-500/30 flex items-center justify-center shrink-0">
+                        <Clock className="w-3.5 h-3.5 text-blue-400" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-xs">Tasa de Financiación</span>
+                        <span className="text-[10px] text-neutral-500 font-mono">({countdownText})</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-xs">
+                    <span className={isFundingPositive ? 'text-emerald-400' : 'text-rose-400'}>
+                      {isFundingPositive ? '+' : ''}{fundingRateValue.toFixed(4)}%
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        analysis.fundingIsPositive
+                          ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {analysis.fundingLegend}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 font-sans text-[11px] text-neutral-300 leading-relaxed">
+                    <span>{analysis.fundingMeaning}</span>{' '}
+                    <span className="text-neutral-500 text-[10px] block mt-0.5">{analysis.fundingRiskAlert}</span>
+                  </td>
+                </tr>
 
-              <div className="text-[10px] font-sans leading-relaxed border-t border-neutral-900 pt-1 flex flex-col gap-0.5">
-                <span className="text-neutral-300 font-medium">{analysis.fundingMeaning}</span>
-                <span className="text-neutral-500 text-[9px]">{analysis.fundingRiskAlert}</span>
-              </div>
-            </div>
-
-            {/* 3. Taker Buy/Sell con Leyenda Explícita de qué significa */}
-            <div
-              onClick={() => setIsDerivativesInfoModalOpen(true)}
-              className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-purple-500/50 cursor-pointer transition-all p-2.5 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1.5 group"
-              title="Haz clic para ver explicación técnica completa de Taker Buy/Sell"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
-                  <BarChart2 className="w-3 h-3 text-purple-400" />
-                  Taker C/V:
-                </span>
-                <div className="flex items-center gap-1 font-bold text-xs">
-                  <span className="text-emerald-400">{metrics.buyVolumePercent}% C</span>
-                  <span className="text-neutral-600">/</span>
-                  <span className="text-rose-400">{metrics.sellVolumePercent}% V</span>
-                </div>
-              </div>
-
-              {/* LEYENDA TAKER SOLICITADA */}
-              <div className="flex items-center gap-1">
-                <span
-                  className={`text-[10px] font-black px-1.5 py-0.5 rounded inline-flex items-center gap-1 uppercase tracking-tight ${
-                    analysis.takerDominance === 'COMPRADOR'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                  }`}
+                {/* 3. Volumen Taker Buy/Sell */}
+                <tr
+                  onClick={() => setIsDerivativesInfoModalOpen(true)}
+                  className="hover:bg-neutral-900/60 cursor-pointer transition-colors"
                 >
-                  {analysis.takerLegend}
-                </span>
-              </div>
+                  <td className="py-2.5 px-3.5 font-sans font-semibold text-neutral-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-purple-500/15 border border-purple-500/30 flex items-center justify-center shrink-0">
+                        <BarChart2 className="w-3.5 h-3.5 text-purple-400" />
+                      </div>
+                      <span className="text-xs">Volumen Taker (C/V)</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-xs">
+                    <span className="text-emerald-400">{metrics.buyVolumePercent}% C</span>
+                    <span className="text-neutral-600 mx-1">/</span>
+                    <span className="text-rose-400">{metrics.sellVolumePercent}% V</span>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        analysis.takerDominance === 'COMPRADOR'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {analysis.takerLegend}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 font-sans text-[11px] text-neutral-300 leading-relaxed">
+                    {analysis.takerMeaning}
+                  </td>
+                </tr>
 
-              <div className="text-[10px] text-neutral-400 font-sans leading-relaxed border-t border-neutral-900 pt-1">
-                {analysis.takerMeaning}
-              </div>
-            </div>
-
-            {/* 4. Top Trader Long/Short con Leyenda Explícita de qué significa */}
-            <div
-              onClick={() => setIsDerivativesInfoModalOpen(true)}
-              className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-cyan-500/50 cursor-pointer transition-all p-2.5 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1.5 group"
-              title="Haz clic para ver explicación técnica completa de Top Traders Long/Short"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
-                  <PieChart className="w-3 h-3 text-cyan-400" />
-                  Top L/S:
-                </span>
-                <span className="font-extrabold text-cyan-300 font-mono text-xs">
-                  {metrics.topPositionLongShortRatio}:1 ({metrics.topPositionLongPercent}% L)
-                </span>
-              </div>
-
-              {/* LEYENDA TOP L/S SOLICITADA */}
-              <div className="flex items-center gap-1">
-                <span
-                  className={`text-[10px] font-black px-1.5 py-0.5 rounded inline-flex items-center gap-1 uppercase tracking-tight ${
-                    analysis.topDominance === 'LONGS'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                  }`}
+                {/* 4. Ratio L/S Top Traders */}
+                <tr
+                  onClick={() => setIsDerivativesInfoModalOpen(true)}
+                  className="hover:bg-neutral-900/60 cursor-pointer transition-colors"
                 >
-                  {analysis.topLegend}
-                </span>
-              </div>
-
-              <div className="text-[10px] text-neutral-400 font-sans leading-relaxed border-t border-neutral-900 pt-1">
-                {analysis.topMeaning}
-              </div>
-            </div>
+                  <td className="py-2.5 px-3.5 font-sans font-semibold text-neutral-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-md bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                        <PieChart className="w-3.5 h-3.5 text-cyan-400" />
+                      </div>
+                      <span className="text-xs">Ratio L/S Top Traders</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-3 font-mono font-bold text-cyan-300 text-xs">
+                    {metrics.topPositionLongShortRatio}:1 ({metrics.topPositionLongPercent}% L)
+                  </td>
+                  <td className="py-2.5 px-3">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                        analysis.topDominance === 'LONGS'
+                          ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                      }`}
+                    >
+                      {analysis.topLegend}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3.5 font-sans text-[11px] text-neutral-300 leading-relaxed">
+                    {analysis.topMeaning}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       )}
