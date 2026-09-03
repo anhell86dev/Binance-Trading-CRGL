@@ -305,8 +305,8 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
       </div>
 
-      {/* Bandeja Rápida: Posiciones Activas & Órdenes */}
-      <div className="bg-neutral-900/80 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-lg">
+      {/* Bandeja Rápida: Posiciones Activas & Órdenes (Ocupa toda la parte inferior) */}
+      <div className="flex-1 w-full bg-neutral-900/80 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-lg">
         <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-amber-400" />
@@ -334,33 +334,9 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
           </div>
         </div>
 
-        <div className="p-3 sm:p-4">
+        <div className="p-3 sm:p-4 flex-1 flex flex-col">
           <PositionsAndOrders defaultTab="positions" />
         </div>
-      </div>
-
-      {/* Security Info Card */}
-      <div className="p-4 rounded-xl bg-neutral-900/50 border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shrink-0">
-            <Shield className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-white">Arquitectura de Protección de Capital</h4>
-            <p className="text-[11px] text-neutral-400 mt-0.5 max-w-2xl leading-relaxed">
-              Cada operación en este terminal se ejecuta con <strong>Margen Aislado (ISOLATED)</strong>. La máxima pérdida posible en un trade adverso está estrictamente limitada a la garantía asignada a esa posición específica, protegiendo el resto de tu saldo en USDT.
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onOpenOrderModal || onGoToTrading}
-          className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-bold shrink-0 transition-colors flex items-center gap-1.5"
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span>Nueva Orden (Popup)</span>
-        </button>
       </div>
 
       {/* Deposit Modal */}

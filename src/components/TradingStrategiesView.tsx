@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -29,6 +29,7 @@ import { livePriceService } from '../services/livePriceService';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 import { TopStrategiesRiskRewardList } from './TopStrategiesRiskRewardList';
 import { StrategyDetailModal } from './StrategyDetailModal';
+import { StrategyPriceBar } from './StrategyPriceBar';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 
@@ -333,14 +334,14 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                     const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
 
                     return (
-                      <tr
-                        key={strat.noEstrategia}
-                        className={`transition-all ${
-                          isClosestGlobal
-                            ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
-                            : 'hover:bg-neutral-900/70'
-                        }`}
-                      >
+                      <Fragment key={strat.noEstrategia}>
+                        <tr
+                          className={`transition-all ${
+                            isClosestGlobal
+                              ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
+                              : 'hover:bg-neutral-900/70'
+                          }`}
+                        >
                         {/* ID / Fecha */}
                         <td className="py-3 px-3">
                           <div className="font-bold text-white text-[11px]">{strat.noEstrategia}</div>
@@ -400,20 +401,45 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                           )}
                         </td>
 
-                        {/* 1. PRECIO LIVE (PRIMERO) */}
+                        {/* 1. PRECIO LIVE (PRIMERO: CON % DE DISTANCIA VS E1 ABAJO) */}
                         <td className="py-3 px-3 bg-amber-500/5 border-x border-amber-500/20">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-amber-300 text-xs">
-                              ${livePrice.toFixed(decimalPlaces)}
-                            </span>
-                            <span
-                              className={`text-[9px] font-semibold ${
-                                liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                              }`}
-                            >
-                              {liveData.change24hPercent >= 0 ? '+' : ''}
-                              {liveData.change24hPercent.toFixed(1)}%
-                            </span>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-amber-300 text-xs">
+                                ${livePrice.toFixed(decimalPlaces)}
+                              </span>
+                              <span
+                                className={`text-[9px] font-semibold ${
+                                  liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                }`}
+                              >
+                                {liveData.change24hPercent >= 0 ? '+' : ''}
+                                {liveData.change24hPercent.toFixed(1)}%
+                              </span>
+                            </div>
+                            {/* % de Distancia vs Entrada 1 ubicado directamente abajo del Precio Live */}
+                            {entry1Price > 0 && (
+                              <div
+                                className={`text-[10px] font-mono font-bold mt-0.5 inline-flex items-center gap-1 ${
+                                  isCloseToEntry
+                                    ? 'text-emerald-400'
+                                    : isClosestGlobal
+                                    ? 'text-amber-300'
+                                    : isLong
+                                    ? diffPercent > 0
+                                      ? 'text-amber-400/90'
+                                      : 'text-emerald-400'
+                                    : diffPercent > 0
+                                    ? 'text-emerald-400'
+                                    : 'text-amber-400/90'
+                                }`}
+                              >
+                                <span>
+                                  {diffPercent >= 0 ? '+' : ''}
+                                  {diffPercent.toFixed(2)}% vs E1
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </td>
 
@@ -539,9 +565,26 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                           </div>
                         </td>
                       </tr>
-                    );
-                  })
-                )}
+
+                      {/* BARRA DE PRECIO DINÁMICA DEBAJO DE LA ESTRATEGIA (PRECIO LIVE VS ENTRADAS / SL & TP) */}
+                      <tr
+                        key={`bar-${strat.noEstrategia}`}
+                        className={`border-b border-neutral-800/80 ${
+                          isClosestGlobal ? 'bg-amber-500/10' : 'bg-neutral-950/40'
+                        }`}
+                      >
+                        <td colSpan={12} className="px-3 py-2">
+                          <StrategyPriceBar
+                            strategy={strat}
+                            livePrice={livePrice}
+                            compact={false}
+                          />
+                        </td>
+                      </tr>
+                    </Fragment>
+                  );
+                })
+              )}
               </tbody>
             </table>
           </div>

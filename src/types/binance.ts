@@ -98,6 +98,8 @@ export interface PositionRisk {
   takeProfit?: number;
   stopLoss?: number;
   updatedAt: number;
+  strategyId?: string;
+  strategyName?: string;
 }
 
 export interface AccountBalance {
@@ -130,6 +132,8 @@ export interface OpenOrder {
   tpPrice?: number;
   slPrice?: number;
   createdAt: number;
+  strategyId?: string;
+  strategyName?: string;
 }
 
 export interface ScaledOrderConfig {
@@ -141,6 +145,8 @@ export interface ScaledOrderConfig {
   maxPrice: number;
   distribution: 'flat' | 'arithmetic' | 'geometric'; // volume distribution
   leverage: number; // 1 to 5
+  strategyId?: string;
+  strategyName?: string;
 }
 
 export interface TrailingStopConfig {
@@ -150,6 +156,8 @@ export interface TrailingStopConfig {
   callbackRate: number; // 0.1% to 5.0%
   activationPrice?: number;
   leverage: number; // 1 to 5
+  strategyId?: string;
+  strategyName?: string;
 }
 
 export interface DynamicTPSLConfig {

@@ -4,16 +4,22 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Edit2,
+  Link as LinkIcon,
   Lock,
   RefreshCw,
   Shield,
+  ShieldAlert,
   ShieldCheck,
+  Sparkles,
   X,
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { PositionRisk } from '../types/binance';
 import { EmergencyCloseButton } from './EmergencyCloseButton';
+import { auditPositionRisk } from '../utils/riskAuditor';
+import { RiskAuditModal } from './RiskAuditModal';
+import { LinkStrategyModal } from './LinkStrategyModal';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -21,6 +27,7 @@ interface OpenPositionsTableProps {
 
 export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelectPosition }) => {
   const [positions, setPositions] = useState<PositionRisk[]>(() => binanceWs.getPositions());
+  const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
   const mode = binanceWs.getMode();
 
@@ -29,9 +36,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [editTp, setEditTp] = useState<string>('');
   const [editSl, setEditSl] = useState<string>('');
 
+  // Modals for Risk Audit & Link Strategy
+  const [auditPos, setAuditPos] = useState<PositionRisk | null>(null);
+  const [linkPos, setLinkPos] = useState<PositionRisk | null>(null);
+
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
       setPositions(binanceWs.getPositions());
+      setBalance(binanceWs.getBalance());
       setIsSyncing(binanceWs.getIsSyncingData());
     });
     return () => unsub();
@@ -109,6 +121,8 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
               <tr>
                 <th className="py-2.5 px-3">Par</th>
+                <th className="py-2.5 px-3">Estrategia Ligada</th>
+                <th className="py-2.5 px-3">Gestión de Riesgo</th>
                 <th className="py-2.5 px-3">Apalancamiento</th>
                 <th className="py-2.5 px-3">Margen</th>
                 <th className="py-2.5 px-3">Tamaño</th>
@@ -117,7 +131,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 <th className="py-2.5 px-3">Precio Liq.</th>
                 <th className="py-2.5 px-3">PnL No Realizado</th>
                 <th className="py-2.5 px-3">TP / SL</th>
-                <th className="py-2.5 px-3 text-right">Acción de Emergencia</th>
+                <th className="py-2.5 px-3 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/60">
@@ -125,6 +139,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 const isLong = pos.positionAmt > 0;
                 const isProfit = pos.unRealizedProfit >= 0;
                 const safeLeverage = Math.min(5, Math.max(1, pos.leverage || 2));
+                const audit = auditPositionRisk(pos, balance.totalMarginBalance);
 
                 return (
                   <tr
@@ -146,6 +161,49 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                           {isLong ? 'LONG' : 'SHORT'}
                         </span>
                       </div>
+                    </td>
+
+                    {/* Estrategia Ligada */}
+                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1.5">
+                        {pos.strategyId ? (
+                          <button
+                            type="button"
+                            onClick={() => setLinkPos(pos)}
+                            title={`Estrategia: ${pos.strategyId} - Clic para cambiar`}
+                            className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                            <span>{pos.strategyId}</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setLinkPos(pos)}
+                            className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
+                          >
+                            <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                            <span>Ligar Estrategia</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Gestión de Riesgo Badge */}
+                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setAuditPos(pos)}
+                        title="Ver auditoría de riesgo institucional detallada"
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
+                      >
+                        {audit.overallStatus === 'OPTIMAL' ? (
+                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                        ) : (
+                          <ShieldAlert className="w-3 h-3" />
+                        )}
+                        <span>{audit.badgeText}</span>
+                      </button>
                     </td>
 
                     {/* Apalancamiento Máx 5x */}
@@ -285,6 +343,32 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
           </div>
         </div>
       )}
+
+      {/* Risk Audit Modal */}
+      <RiskAuditModal
+        isOpen={!!auditPos}
+        onClose={() => setAuditPos(null)}
+        position={auditPos}
+        walletBalance={balance.totalMarginBalance}
+        onOpenLinkStrategy={() => {
+          const current = auditPos;
+          setAuditPos(null);
+          setLinkPos(current);
+        }}
+        onOpenEditTPSL={() => {
+          const current = auditPos;
+          setAuditPos(null);
+          if (current) openEditModal(current);
+        }}
+      />
+
+      {/* Link Strategy Modal */}
+      <LinkStrategyModal
+        isOpen={!!linkPos}
+        onClose={() => setLinkPos(null)}
+        position={linkPos}
+      />
     </div>
   );
 };
+

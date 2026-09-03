@@ -1052,6 +1052,48 @@ class BinanceWsEngine {
   }
 
   /**
+   * Link an existing open order to a strategy
+   */
+  public linkOrderToStrategy(orderId: string, strategyId: string, strategyName?: string): boolean {
+    const order = this.openOrders.find(o => o.orderId === orderId || o.clientOrderId === orderId);
+    if (order) {
+      order.strategyId = strategyId || undefined;
+      order.strategyName = strategyName || undefined;
+      notificationService.notify(
+        'SYSTEM',
+        'Orden Vinculada a Estrategia',
+        `Orden ${order.orderId.slice(0, 10)}... vinculada a "${strategyId || 'Sin Estrategia'}"`,
+        'normal'
+      );
+      this.persistState();
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Link an active position to a strategy
+   */
+  public linkPositionToStrategy(symbol: string, strategyId: string, strategyName?: string): boolean {
+    const pos = this.positions.find(p => p.symbol === symbol);
+    if (pos) {
+      pos.strategyId = strategyId || undefined;
+      pos.strategyName = strategyName || undefined;
+      notificationService.notify(
+        'SYSTEM',
+        'Posición Vinculada a Estrategia',
+        `Posición ${pos.symbol} vinculada a "${strategyId || 'Sin Estrategia'}"`,
+        'normal'
+      );
+      this.persistState();
+      this.notify();
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Place Limit Order
    */
   public async placeLimitOrder(config: {
@@ -1062,6 +1104,8 @@ class BinanceWsEngine {
     leverage: number;
     tpPrice?: number;
     slPrice?: number;
+    strategyId?: string;
+    strategyName?: string;
   }): Promise<OpenOrder> {
     const clampedLeverage = this.clampLeverage(config.leverage);
     const orderId = `LMT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -1093,6 +1137,8 @@ class BinanceWsEngine {
       marginType: 'ISOLATED',
       tpPrice: config.tpPrice,
       slPrice: config.slPrice,
+      strategyId: config.strategyId,
+      strategyName: config.strategyName,
       createdAt: Date.now(),
     };
 
@@ -1140,6 +1186,8 @@ class BinanceWsEngine {
     leverage: number;
     tpPrice?: number;
     slPrice?: number;
+    strategyId?: string;
+    strategyName?: string;
   }): Promise<OpenOrder> {
     const clampedLeverage = this.clampLeverage(config.leverage);
     const orderId = `MKT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -1169,6 +1217,8 @@ class BinanceWsEngine {
       marginType: 'ISOLATED',
       tpPrice: config.tpPrice,
       slPrice: config.slPrice,
+      strategyId: config.strategyId,
+      strategyName: config.strategyName,
       createdAt: Date.now(),
     };
 
@@ -1262,6 +1312,8 @@ class BinanceWsEngine {
         leverage: clampedLeverage,
         marginType: 'ISOLATED',
         parentScaledId: scaledParentId,
+        strategyId: config.strategyId,
+        strategyName: config.strategyName,
         createdAt: Date.now(),
       };
 
@@ -1311,6 +1363,8 @@ class BinanceWsEngine {
       marginType: 'ISOLATED',
       callbackRate: callback,
       stopPrice: config.activationPrice || this.ticker.lastPrice,
+      strategyId: config.strategyId,
+      strategyName: config.strategyName,
       createdAt: Date.now(),
     };
 
@@ -1455,6 +1509,8 @@ class BinanceWsEngine {
         timeInForce: 'GTC',
         leverage: clampedLeverage,
         marginType: 'ISOLATED',
+        strategyId: plan.strategyId,
+        strategyName: plan.name,
         createdAt: Date.now(),
       };
 
@@ -1793,6 +1849,10 @@ class BinanceWsEngine {
       }
       existingPos.positionAmt = Number(newAmt.toFixed(4));
       existingPos.isolatedMargin += requiredMargin;
+      if (order.strategyId && !existingPos.strategyId) {
+        existingPos.strategyId = order.strategyId;
+        existingPos.strategyName = order.strategyName;
+      }
     } else {
       // Calculate liquidation price for ISOLATED margin at 1-5x
       // For Long: Liq = Entry * (1 - 1/leverage + maintMarginRate)
@@ -1817,6 +1877,8 @@ class BinanceWsEngine {
         roePercent: 0,
         takeProfit: order.tpPrice,
         stopLoss: order.slPrice,
+        strategyId: order.strategyId,
+        strategyName: order.strategyName,
         updatedAt: Date.now(),
       };
       this.positions.push(newPos);

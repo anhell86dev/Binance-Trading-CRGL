@@ -29,6 +29,7 @@ import {
 import { binanceWs } from '../services/binanceWs';
 import { strategyService } from '../services/strategyService';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
+import { StrategyPriceBar } from './StrategyPriceBar';
 
 interface StrategyDetailModalProps {
   strategy: GoogleSheetStrategyRow;
@@ -180,6 +181,11 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
               </div>
               <span className="text-[9px] text-neutral-500 font-sans">Margen Aislado</span>
             </div>
+          </div>
+
+          {/* Real-time Dynamic Strategy Price Bar */}
+          <div>
+            <StrategyPriceBar strategy={strategy} livePrice={currentPrice} compact={false} />
           </div>
 
           {/* 1. SECCIÓN: ENTRADAS ESCALONADAS */}

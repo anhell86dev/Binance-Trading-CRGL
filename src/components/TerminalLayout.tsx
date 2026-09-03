@@ -10,6 +10,7 @@ import { NotificationToasts } from './NotificationToasts';
 import { Navbar, NavTab } from './Navbar';
 import { TradingStrategiesView } from './TradingStrategiesView';
 import { WalletView } from './WalletView';
+import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 
 export default function TerminalLayout() {
   // Billetera al principio como pestaña por defecto
@@ -17,6 +18,7 @@ export default function TerminalLayout() {
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [isDisciplinesModalOpen, setIsDisciplinesModalOpen] = useState(false);
 
   useEffect(() => {
     // Listen to automatic popup requests (e.g. from Autoejecutar or quick actions)
@@ -37,6 +39,7 @@ export default function TerminalLayout() {
         onSelectTab={setActiveTab}
         onOpenApiModal={() => setIsApiModalOpen(true)}
         onOpenOrderModal={() => setIsOrderModalOpen(true)}
+        onOpenDisciplinesModal={() => setIsDisciplinesModalOpen(true)}
         onOpenConsole={() => setIsConsoleOpen(true)}
         isConsoleOpen={isConsoleOpen}
       />
@@ -71,6 +74,10 @@ export default function TerminalLayout() {
       <FuturesOrderModal
         isOpen={isOrderModalOpen}
         onClose={() => setIsOrderModalOpen(false)}
+      />
+      <TradingDisciplinesModal
+        isOpen={isDisciplinesModalOpen}
+        onClose={() => setIsDisciplinesModalOpen(false)}
       />
       {isApiModalOpen && <ApiKeyModal onClose={() => setIsApiModalOpen(false)} />}
       {isConsoleOpen && <WebSocketConsole onClose={() => setIsConsoleOpen(false)} />}

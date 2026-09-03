@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity,
+  Award,
   BarChart2,
   BookOpen,
   ChevronDown,
@@ -28,6 +29,7 @@ interface NavbarProps {
   onSelectTab: (tab: NavTab) => void;
   onOpenApiModal: () => void;
   onOpenOrderModal?: () => void;
+  onOpenDisciplinesModal?: () => void;
   onOpenConsole?: () => void;
   isConsoleOpen?: boolean;
 }
@@ -37,6 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectTab,
   onOpenApiModal,
   onOpenOrderModal,
+  onOpenDisciplinesModal,
   onOpenConsole,
   isConsoleOpen = false,
 }) => {
@@ -237,6 +240,19 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Quick Disciplines Modal Button */}
+        {onOpenDisciplinesModal && (
+          <button
+            type="button"
+            onClick={onOpenDisciplinesModal}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-bold transition-all shadow-xs"
+            title="Protocolo de las 8 Disciplinas del Trader Institucional"
+          >
+            <Award className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Disciplinas</span>
+          </button>
+        )}
 
         {/* Quick Popup Order Form Button */}
         {onOpenOrderModal && (

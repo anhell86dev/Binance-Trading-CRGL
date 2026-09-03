@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  Award,
   Bell,
   BookOpen,
   CheckCircle2,
@@ -12,10 +13,13 @@ import {
   ExternalLink,
   FileSpreadsheet,
   Layers,
+  Link as LinkIcon,
   Percent,
   Plus,
   RefreshCw,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
   Sparkles,
   Trash2,
   X,
@@ -30,19 +34,24 @@ import { StrategyCreator } from './StrategyCreator';
 import { DiarioEstrategias } from './DiarioEstrategias';
 import { OpenPositionsTable } from './OpenPositionsTable';
 import { TradingStrategiesView } from './TradingStrategiesView';
+import { auditOrderRisk } from '../utils/riskAuditor';
+import { RiskAuditModal } from './RiskAuditModal';
+import { LinkStrategyModal } from './LinkStrategyModal';
+import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 
 interface PositionsAndOrdersProps {
-  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies';
+  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies' | 'disciplines';
 }
 
 export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions' }) => {
-  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies'>(defaultTab);
+  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies' | 'disciplines'>(defaultTab);
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
   const [history, setHistory] = useState<TradeHistoryItem[]>(binanceWs.getTradeHistory());
   const [alerts, setAlerts] = useState<VolatilityAlert[]>(binanceWs.getAlerts());
   const [sheetAlerts, setSheetAlerts] = useState<SheetAlertRow[]>(() => alertsSheetService.getAlerts());
   const [ticker, setTicker] = useState(binanceWs.getTicker());
+  const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(binanceWs.getIsSyncingData());
   const [lastSyncTime, setLastSyncTime] = useState<number>(binanceWs.getLastDataSyncTime());
   const [lastSyncError, setLastSyncError] = useState<string | null>(binanceWs.getLastDataSyncError());
@@ -52,6 +61,11 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
   const [editingPos, setEditingPos] = useState<PositionRisk | null>(null);
   const [editTp, setEditTp] = useState<string>('');
   const [editSl, setEditSl] = useState<string>('');
+
+  // Modals for Order Risk Audit & Link Strategy
+  const [auditOrder, setAuditOrder] = useState<OpenOrder | null>(null);
+  const [linkOrder, setLinkOrder] = useState<OpenOrder | null>(null);
+  const [showDisciplinesModal, setShowDisciplinesModal] = useState<boolean>(false);
 
   // Form for new Volatility Alert
   const [newAlertSymbol, setNewAlertSymbol] = useState<string>(() => binanceWs.getTicker().symbol || 'ZECUSDT');
@@ -66,6 +80,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
       setHistory(binanceWs.getTradeHistory());
       setAlerts(binanceWs.getAlerts());
       setTicker(binanceWs.getTicker());
+      setBalance(binanceWs.getBalance());
       setIsSyncing(binanceWs.getIsSyncingData());
       setLastSyncTime(binanceWs.getLastDataSyncTime());
       setLastSyncError(binanceWs.getLastDataSyncError());
@@ -127,11 +142,11 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
     <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-xl overflow-hidden flex flex-col">
       {/* Tabs Bar */}
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/60 px-3 pt-2">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
           <button
             id="tab-positions-btn"
             onClick={() => setTab('positions')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
               tab === 'positions'
                 ? 'border-amber-400 text-white bg-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -146,7 +161,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           <button
             id="tab-strategies-btn"
             onClick={() => setTab('strategies')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
               tab === 'strategies'
                 ? 'border-amber-400 text-white bg-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -159,7 +174,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           <button
             id="tab-orders-btn"
             onClick={() => setTab('orders')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
               tab === 'orders'
                 ? 'border-amber-400 text-white bg-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -174,7 +189,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           <button
             id="tab-history-btn"
             onClick={() => setTab('history')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
               tab === 'history'
                 ? 'border-amber-400 text-white bg-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -187,9 +202,22 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           </button>
 
           <button
+            id="tab-disciplines-btn"
+            onClick={() => setTab('disciplines')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
+              tab === 'disciplines'
+                ? 'border-amber-400 text-white bg-neutral-900'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5 text-amber-400" />
+            <span>Disciplinas del Trade</span>
+          </button>
+
+          <button
             id="tab-alerts-btn"
             onClick={() => setTab('alerts')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
               tab === 'alerts'
                 ? 'border-amber-400 text-white bg-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -204,7 +232,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           <button
             id="tab-journal-btn"
             onClick={() => setTab('strategy_journal')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
               tab === 'strategy_journal'
                 ? 'border-amber-400 text-white bg-neutral-900'
                 : 'border-transparent text-neutral-400 hover:text-neutral-200'
@@ -312,10 +340,12 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
             </div>
           ) : (
             <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800">
+              <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
                 <tr>
                   <th className="py-2.5 px-3">ID / Fecha</th>
                   <th className="py-2.5 px-3">Símbolo</th>
+                  <th className="py-2.5 px-3">Estrategia Ligada</th>
+                  <th className="py-2.5 px-3">Gestión de Riesgo</th>
                   <th className="py-2.5 px-3">Tipo</th>
                   <th className="py-2.5 px-3">Lado</th>
                   <th className="py-2.5 px-3">Precio</th>
@@ -331,6 +361,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                   const remainingQty = Math.max(0, ord.origQty - (ord.executedQty || 0));
                   const lev = Math.max(1, ord.leverage || 2);
                   const orderMargin = (orderPrice * remainingQty) / lev;
+                  const audit = auditOrderRisk(ord, balance.totalMarginBalance);
 
                   return (
                     <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
@@ -341,6 +372,50 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                         </div>
                       </td>
                       <td className="py-3 px-3 font-bold text-white">{ord.symbol}</td>
+                      
+                      {/* Estrategia Ligada */}
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-1.5">
+                          {ord.strategyId ? (
+                            <button
+                              type="button"
+                              onClick={() => setLinkOrder(ord)}
+                              title={`Estrategia: ${ord.strategyId} - Clic para reasignar`}
+                              className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              <span>{ord.strategyId}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setLinkOrder(ord)}
+                              className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
+                            >
+                              <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                              <span>Ligar Estrategia</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* Gestión de Riesgo Badge */}
+                      <td className="py-3 px-3">
+                        <button
+                          type="button"
+                          onClick={() => setAuditOrder(ord)}
+                          title="Ver auditoría de riesgo institucional detallada"
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
+                        >
+                          {audit.overallStatus === 'OPTIMAL' ? (
+                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <ShieldAlert className="w-3 h-3" />
+                          )}
+                          <span>{audit.badgeText}</span>
+                        </button>
+                      </td>
+
                       <td className="py-3 px-3">
                         <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-amber-300 font-semibold text-[10px]">
                           {ord.type === 'TRAILING_STOP_MARKET'
@@ -384,6 +459,115 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Tab: Disciplinas del Trade */}
+      {tab === 'disciplines' && (
+        <div className="p-4">
+          <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-4 border-b border-neutral-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-400" />
+                  <span>Las 8 Disciplinas Inquebrantables del Trader Institucional</span>
+                </h3>
+                <p className="text-xs text-neutral-400 mt-0.5">
+                  Protocolo de supervivencia, disciplina de ejecución y preservación de capital para Binance Futures.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDisciplinesModal(true)}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-colors flex items-center gap-1.5 shadow-sm"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Abrir Panel de Cumplimiento</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">1</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Margen Aislado Obligatorio</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Toda orden y posición debe utilizar estrictamente <strong>ISOLATED</strong>. Queda prohibido el Cross Margin para aislar el riesgo por operación.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">2</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Apalancamiento Conservador (1x-5x)</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Nunca exceder <strong>5x</strong>. El sobreapalancamiento elimina el margen de error ante la volatilidad natural de criptoactivos.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">3</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Stop Loss Predefinido</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Jamás abras una posición sin un Stop Loss técnico calculado y registrado antes de la entrada al mercado.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">4</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Relación R:B Mínima 1:1.5</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  El beneficio proyectado debe justificar con creces el riesgo monetario asumido. Descartar setups inferiores.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">5</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Ligar Orden a Estrategia</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Toda orden debe obedecer a una hipótesis validada en Google Sheets con niveles de entrada E1, E2 y E3 estructurados.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">6</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Control de Asignación de Capital</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  El margen asignado por operación no debe exceder el <strong>5% al 10%</strong> del saldo total de la billetera.
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">7</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Cero Trading Emocional</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Respeta el plan inicial sin perseguir precios (FOMO) ni doblar posiciones en pérdida (Revenge Trading).
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800/80">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold flex items-center justify-center font-mono">8</span>
+                  <h4 className="text-xs font-bold text-neutral-100">Registro en Diario de Trading</h4>
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Documenta el resultado, las emociones y los aprendizajes de cada trade ejecutado en el diario oficial.
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -796,6 +980,32 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           </div>
         </div>
       )}
+
+      {/* Risk Audit Modal for Order */}
+      <RiskAuditModal
+        isOpen={!!auditOrder}
+        onClose={() => setAuditOrder(null)}
+        order={auditOrder}
+        walletBalance={balance.totalMarginBalance}
+        onOpenLinkStrategy={() => {
+          const current = auditOrder;
+          setAuditOrder(null);
+          setLinkOrder(current);
+        }}
+      />
+
+      {/* Link Strategy Modal for Order */}
+      <LinkStrategyModal
+        isOpen={!!linkOrder}
+        onClose={() => setLinkOrder(null)}
+        order={linkOrder}
+      />
+
+      {/* Trading Disciplines Modal */}
+      <TradingDisciplinesModal
+        isOpen={showDisciplinesModal}
+        onClose={() => setShowDisciplinesModal(false)}
+      />
     </div>
   );
 };

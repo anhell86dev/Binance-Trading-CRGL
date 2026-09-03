@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronDown,
+  ChevronUp,
   Crown,
   Eye,
   Radio,
@@ -16,6 +18,7 @@ import { livePriceService } from '../services/livePriceService';
 import { binanceWs } from '../services/binanceWs';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
+import { StrategyPriceBar } from './StrategyPriceBar';
 
 interface TopStrategiesRiskRewardListProps {
   activeStrategies?: GoogleSheetStrategyRow[];
@@ -236,16 +239,16 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                   const isCloseToEntry = item.absDiffPct <= 0.75;
 
                   return (
-                    <tr
-                      key={strat.noEstrategia}
-                      className={`transition-all ${
-                        isClosest
-                          ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
-                          : isSelected
-                          ? 'bg-amber-500/10 hover:bg-amber-500/15'
-                          : 'hover:bg-neutral-850/60'
-                      }`}
-                    >
+                    <Fragment key={strat.noEstrategia}>
+                      <tr
+                        className={`transition-all ${
+                          isClosest
+                            ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
+                            : isSelected
+                            ? 'bg-amber-500/10 hover:bg-amber-500/15'
+                            : 'hover:bg-neutral-850/60'
+                        }`}
+                      >
                       {/* Rank */}
                       <td className="py-3 px-3 text-center">
                         <span className={`inline-flex w-5 h-5 rounded-md items-center justify-center text-xs ${rankBadgeClass}`}>
@@ -304,20 +307,43 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                         )}
                       </td>
 
-                      {/* 1. PRECIO LIVE (PRIMERO) */}
+                      {/* 1. PRECIO LIVE (PRIMERO: CON % DE DISTANCIA VS E1 ABAJO) */}
                       <td className="py-3 px-3 bg-amber-500/5 border-x border-amber-500/20">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-amber-300 text-xs">
-                            ${item.livePrice.toFixed(decimalPlaces)}
-                          </span>
-                          <span
-                            className={`text-[9px] font-semibold ${
-                              item.liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-amber-300 text-xs">
+                              ${item.livePrice.toFixed(decimalPlaces)}
+                            </span>
+                            <span
+                              className={`text-[9px] font-semibold ${
+                                item.liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                              }`}
+                            >
+                              {item.liveData.change24hPercent >= 0 ? '+' : ''}
+                              {item.liveData.change24hPercent.toFixed(1)}%
+                            </span>
+                          </div>
+                          {/* % de Distancia vs Entrada 1 ubicado directamente abajo del Precio Live */}
+                          <div
+                            className={`text-[10px] font-mono font-bold mt-0.5 inline-flex items-center gap-1 ${
+                              isCloseToEntry
+                                ? 'text-emerald-400'
+                                : isClosest
+                                ? 'text-amber-300'
+                                : item.isLong
+                                ? item.diffPct > 0
+                                  ? 'text-amber-400/90'
+                                  : 'text-emerald-400'
+                                : item.diffPct > 0
+                                ? 'text-emerald-400'
+                                : 'text-amber-400/90'
                             }`}
                           >
-                            {item.liveData.change24hPercent >= 0 ? '+' : ''}
-                            {item.liveData.change24hPercent.toFixed(1)}%
-                          </span>
+                            <span>
+                              {item.diffPct >= 0 ? '+' : ''}
+                              {item.diffPct.toFixed(2)}% vs E1
+                            </span>
+                          </div>
                         </div>
                       </td>
 
@@ -416,9 +442,26 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                         </button>
                       </td>
                     </tr>
-                  );
-                })
-              )}
+
+                    {/* BARRA DE PRECIO DINÁMICA DEBAJO DE LA ESTRATEGIA (PRECIO LIVE VS ENTRADAS / SL & TP) */}
+                    <tr
+                      key={`bar-${strat.noEstrategia}`}
+                      className={`border-b border-neutral-800/80 ${
+                        isClosest ? 'bg-amber-500/10' : 'bg-neutral-950/40'
+                      }`}
+                    >
+                      <td colSpan={12} className="px-3 py-2">
+                        <StrategyPriceBar
+                          strategy={strat}
+                          livePrice={item.livePrice}
+                          compact={false}
+                        />
+                      </td>
+                    </tr>
+                  </Fragment>
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>
