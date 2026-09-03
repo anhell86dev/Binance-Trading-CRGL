@@ -239,9 +239,9 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
               <Clock className="w-3 h-3 text-blue-400" />
               Funding ({countdownText}):
             </span>
-            <span className={`font-bold ${metrics.fundingRate >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {metrics.fundingRate >= 0 ? '+' : ''}
-              {(metrics.fundingRatePercent || metrics.fundingRate * 100).toFixed(4)}%
+            <span className={`font-bold ${(metrics?.fundingRate || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {(metrics?.fundingRate || 0) >= 0 ? '+' : ''}
+              {(metrics?.fundingRatePercent != null ? metrics.fundingRatePercent : (metrics?.fundingRate != null ? metrics.fundingRate * 100 : 0)).toFixed(4)}%
             </span>
           </div>
 

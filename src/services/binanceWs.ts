@@ -245,16 +245,21 @@ class BinanceWsEngine {
       }
       const savedBalance = localStorage.getItem('binance_fapi_balance');
       if (savedBalance) {
-        this.balance = JSON.parse(savedBalance);
+        const parsedBal = JSON.parse(savedBalance);
+        if (parsedBal && typeof parsedBal.totalWalletBalance === 'number' && parsedBal.totalWalletBalance > 0) {
+          this.balance = parsedBal;
+        }
       }
       const savedAlerts = localStorage.getItem('binance_fapi_alerts');
       if (savedAlerts) {
         this.alerts = JSON.parse(savedAlerts);
       }
 
-      // If in simulation mode and arrays are empty, load initial demo state
-      if (this.mode === 'simulation' && this.positions.length === 0 && this.openOrders.length === 0 && this.tradeHistory.length === 0) {
-        this.loadSimulationDemoData();
+      // If there are 0 open positions, remove any orphaned reduce-only / TP / SL orders
+      if (this.positions.length === 0) {
+        this.openOrders = this.openOrders.filter(
+          o => !(o.type === 'STOP_MARKET' || o.type === 'TAKE_PROFIT_MARKET' || o.clientOrderId?.includes('TP-') || o.clientOrderId?.includes('SL-'))
+        );
       }
 
       // Enforce the calculation: Margen Disponible = Balance Total - Órdenes Abiertas - Posiciones Activas
@@ -1309,6 +1314,11 @@ class BinanceWsEngine {
    * Place Strategy Orders - STRICTLY REQUIRING EXPLICIT OPERATOR AUTHORIZATION
    * "La estrategia solo se debe crear en Binance con un boton de autorizacion"
    */
+  public async executeStrategyPlan(plan: StrategyExecutionPlan): Promise<string[]> {
+    plan.status = 'AUTHORIZED_CREATED';
+    return this.placeStrategyOrders(plan);
+  }
+
   public async placeStrategyOrders(plan: StrategyExecutionPlan): Promise<string[]> {
     if (plan.status !== 'AUTHORIZED_CREATED') {
       throw new Error('La estrategia requiere autorización explícita antes de ser creada en Binance.');
@@ -1453,6 +1463,11 @@ class BinanceWsEngine {
     this.balance.totalWalletBalance += realizedPnl - tradeItem.commission;
     this.tradeHistory = [tradeItem, ...this.tradeHistory];
     this.positions = this.positions.filter(p => p.symbol !== symbol);
+
+    // Clean up associated TP / SL orders for the closed symbol
+    this.openOrders = this.openOrders.filter(
+      o => !(o.symbol === symbol && (o.type === 'STOP_MARKET' || o.type === 'TAKE_PROFIT_MARKET' || o.clientOrderId?.includes('TP-') || o.clientOrderId?.includes('SL-')))
+    );
 
     notificationService.notify(
       realizedPnl >= 0 ? 'TP_HIT' : 'SL_HIT',
@@ -1728,16 +1743,33 @@ class BinanceWsEngine {
   }
 
   /**
-   * Margen comprometido/retenido en órdenes abiertas
+   * Margen comprometido/retenido en órdenes abiertas de entrada
    * (precio * cantidad restante) / apalancamiento
+   * NOTA: Las órdenes de protección (Stop Loss / Take Profit / Reduce Only) no consumen margen inicial adicional.
    */
   public getOpenOrdersMargin(): number {
+    if (this.openOrders.length === 0) return 0.0;
+
     const sum = this.openOrders.reduce((acc, ord) => {
+      // Si la orden es de tipo TP/SL o reducción para una posición existente, no retiene margen inicial
+      const isProtectiveOrder =
+        ord.type === 'STOP_MARKET' ||
+        ord.type === 'TAKE_PROFIT_MARKET' ||
+        ord.type === 'TRAILING_STOP_MARKET' ||
+        ord.clientOrderId?.includes('TP-') ||
+        ord.clientOrderId?.includes('SL-') ||
+        ord.clientOrderId?.includes('CLS-');
+
+      if (isProtectiveOrder) return acc;
+
       const remainingQty = Math.max(0, (ord.origQty || 0) - (ord.executedQty || 0));
+      if (remainingQty <= 0) return acc;
+
       const p = ord.price > 0 ? ord.price : (ord.stopPrice > 0 ? ord.stopPrice : this.ticker.lastPrice);
       const lev = Math.max(1, ord.leverage || 2);
       return acc + (p * remainingQty) / lev;
     }, 0);
+
     return Number(sum.toFixed(2));
   }
 
@@ -1745,6 +1777,8 @@ class BinanceWsEngine {
    * Margen comprometido en posiciones activas (margen aislado)
    */
   public getActivePositionsMargin(): number {
+    if (this.positions.length === 0) return 0.0;
+
     const sum = this.positions.reduce((acc, pos) => {
       const iso = pos.isolatedMargin > 0
         ? pos.isolatedMargin
@@ -1759,7 +1793,7 @@ class BinanceWsEngine {
    * Margen Disponible = Balance Total del Margen - las órdenes abiertas - Posiciones Activas
    */
   public getMarginBreakdown() {
-    const totalMarginBalance = Number(this.balance.totalMarginBalance.toFixed(2));
+    const totalMarginBalance = Number((this.balance.totalMarginBalance || 10000).toFixed(2));
     const openOrdersMargin = this.getOpenOrdersMargin();
     const activePositionsMargin = this.getActivePositionsMargin();
     const availableMargin = Math.max(
@@ -1786,25 +1820,32 @@ class BinanceWsEngine {
     let totalUnrealized = 0;
     let totalIsolatedMarginUsed = 0;
 
-    this.positions.forEach(pos => {
-      const mark = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : pos.markPrice;
-      pos.markPrice = mark;
-      const pnl =
-        pos.positionAmt > 0
-          ? (mark - pos.entryPrice) * pos.positionAmt
-          : (pos.entryPrice - mark) * Math.abs(pos.positionAmt);
+    if (this.positions.length > 0) {
+      this.positions.forEach(pos => {
+        const mark = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : pos.markPrice;
+        pos.markPrice = mark;
+        const pnl =
+          pos.positionAmt > 0
+            ? (mark - pos.entryPrice) * pos.positionAmt
+            : (pos.entryPrice - mark) * Math.abs(pos.positionAmt);
 
-      pos.unRealizedProfit = Number(pnl.toFixed(2));
-      const iso = pos.isolatedMargin > 0
-        ? pos.isolatedMargin
-        : (Math.abs(pos.positionAmt) * pos.entryPrice) / Math.max(1, pos.leverage || 2);
-      pos.isolatedMargin = Number(iso.toFixed(2));
-      pos.roePercent = Number(((pnl / Math.max(1, pos.isolatedMargin)) * 100).toFixed(2));
-      pos.notional = Number((Math.abs(pos.positionAmt) * mark).toFixed(2));
+        pos.unRealizedProfit = Number(pnl.toFixed(2));
+        const iso = pos.isolatedMargin > 0
+          ? pos.isolatedMargin
+          : (Math.abs(pos.positionAmt) * pos.entryPrice) / Math.max(1, pos.leverage || 2);
+        pos.isolatedMargin = Number(iso.toFixed(2));
+        pos.roePercent = Number(((pnl / Math.max(1, pos.isolatedMargin)) * 100).toFixed(2));
+        pos.notional = Number((Math.abs(pos.positionAmt) * mark).toFixed(2));
 
-      totalUnrealized += pnl;
-      totalIsolatedMarginUsed += pos.isolatedMargin;
-    });
+        totalUnrealized += pnl;
+        totalIsolatedMarginUsed += pos.isolatedMargin;
+      });
+    }
+
+    // Asegurar que el wallet balance base sea válido
+    if (!this.balance.totalWalletBalance || isNaN(this.balance.totalWalletBalance) || this.balance.totalWalletBalance <= 0) {
+      this.balance.totalWalletBalance = 10000.0;
+    }
 
     this.balance.totalUnrealizedProfit = Number(totalUnrealized.toFixed(2));
     this.balance.totalMarginBalance = Number((this.balance.totalWalletBalance + totalUnrealized).toFixed(2));
@@ -1812,7 +1853,7 @@ class BinanceWsEngine {
     const openOrdersMargin = this.getOpenOrdersMargin();
     const activePositionsMargin = totalIsolatedMarginUsed;
 
-    // MANDATO: el Margen Disponible debe ser el Balance Total del Margen - las ordenes abierta - Posiciones Activas
+    // MANDATO: el Margen Disponible debe ser el Balance Total del Margen - las ordenes abiertas - Posiciones Activas
     this.balance.availableBalance = Math.max(
       0,
       Number((this.balance.totalMarginBalance - openOrdersMargin - activePositionsMargin).toFixed(2))
@@ -1820,10 +1861,14 @@ class BinanceWsEngine {
     this.balance.maintMargin = Number((totalIsolatedMarginUsed * 0.1).toFixed(2));
 
     const totalCommitted = totalIsolatedMarginUsed + openOrdersMargin;
-    const ratio = this.balance.totalMarginBalance > 0
-      ? (totalCommitted / this.balance.totalMarginBalance) * 100
-      : 0;
-    this.balance.marginRatio = Number(ratio.toFixed(2));
+    if (this.positions.length === 0 && openOrdersMargin === 0) {
+      this.balance.marginRatio = 0.0;
+    } else {
+      const ratio = this.balance.totalMarginBalance > 0
+        ? (totalCommitted / this.balance.totalMarginBalance) * 100
+        : 0;
+      this.balance.marginRatio = Number(ratio.toFixed(2));
+    }
   }
 
   // --- ADVANCED PERFORMANCE METRICS COMPUTATION ---

@@ -719,49 +719,49 @@ export const PositionsAndOrders: React.FC = () => {
                     <div className="flex flex-col">
                       <span className="text-[10px] text-neutral-400">Precio en Vivo</span>
                       <span className="font-extrabold text-amber-300">
-                        ${alt.livePrice.toFixed(alt.livePrice >= 10 ? 2 : 4)}
+                        ${(alt.livePrice || 0).toFixed((alt.livePrice || 0) >= 10 ? 2 : 4)}
                       </span>
                     </div>
 
                     {/* Entrada 1 y % Distancia */}
                     <div className="flex flex-col">
                       <span className="text-[10px] text-neutral-400 truncate">
-                        E1: ${alt.entry1Price > 0 ? alt.entry1Price.toFixed(2) : '-'}
+                        E1: {alt.entry1Price != null && alt.entry1Price > 0 ? `$${alt.entry1Price.toFixed(2)}` : '-'}
                       </span>
                       <span
                         className={`font-bold text-[11px] flex items-center gap-0.5 ${
-                          Math.abs(alt.distPctEntry1) <= 0.5
+                          Math.abs(alt.distPctEntry1 || 0) <= 0.5
                             ? 'text-emerald-400'
-                            : alt.distPctEntry1 > 0
+                            : (alt.distPctEntry1 || 0) > 0
                             ? 'text-amber-300'
                             : 'text-cyan-300'
                         }`}
                         title="% Distancia entre el precio en vivo vs Entrada 1"
                       >
-                        {alt.distPctEntry1 > 0 ? '+' : ''}
-                        {alt.distPctEntry1.toFixed(2)}%
-                        {Math.abs(alt.distPctEntry1) <= 0.5 && ' 🎯'}
+                        {(alt.distPctEntry1 || 0) > 0 ? '+' : ''}
+                        {(alt.distPctEntry1 || 0).toFixed(2)}%
+                        {Math.abs(alt.distPctEntry1 || 0) <= 0.5 && ' 🎯'}
                       </span>
                     </div>
 
                     {/* Entrada 2 y % Distancia */}
                     <div className="flex flex-col">
                       <span className="text-[10px] text-neutral-400 truncate">
-                        E2: ${alt.entry2Price > 0 ? alt.entry2Price.toFixed(2) : '-'}
+                        E2: {alt.entry2Price != null && alt.entry2Price > 0 ? `$${alt.entry2Price.toFixed(2)}` : '-'}
                       </span>
                       <span
                         className={`font-bold text-[11px] flex items-center gap-0.5 ${
-                          Math.abs(alt.distPctEntry2) <= 0.5
+                          Math.abs(alt.distPctEntry2 || 0) <= 0.5
                             ? 'text-emerald-400'
-                            : alt.distPctEntry2 > 0
+                            : (alt.distPctEntry2 || 0) > 0
                             ? 'text-amber-300'
                             : 'text-cyan-300'
                         }`}
                         title="% Distancia entre el precio en vivo vs Entrada 2"
                       >
-                        {alt.distPctEntry2 > 0 ? '+' : ''}
-                        {alt.distPctEntry2.toFixed(2)}%
-                        {Math.abs(alt.distPctEntry2) <= 0.5 && ' 🎯'}
+                        {(alt.distPctEntry2 || 0) > 0 ? '+' : ''}
+                        {(alt.distPctEntry2 || 0).toFixed(2)}%
+                        {Math.abs(alt.distPctEntry2 || 0) <= 0.5 && ' 🎯'}
                       </span>
                     </div>
                   </div>

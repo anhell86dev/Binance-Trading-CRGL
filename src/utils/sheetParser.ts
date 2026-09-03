@@ -433,7 +433,7 @@ export function generateExecutionPlan(
   const parsed = parsePricesFromStrategy(strategy);
   const leverage = selectedLeverage || parsed.leverage;
 
-  const avgEntryPrice = (parsed.entry1Price + parsed.entry2Price) / 2;
+  const avgEntryPrice = (parsed.entry1Price + parsed.entry2Price) / 2 || 1;
   const totalNotional = usdtAllocation * leverage;
   const totalCoinQty = Number((totalNotional / avgEntryPrice).toFixed(3));
 
@@ -447,12 +447,12 @@ export function generateExecutionPlan(
   const tpFinalQty = Number((totalCoinQty - tp1Qty - tp2Qty).toFixed(3));
 
   // Max Loss Calculation: if filled at avg price and hits SL
-  const maxLossUsdt = Number(((avgEntryPrice - parsed.slPrice) * totalCoinQty).toFixed(2));
+  const maxLossUsdt = Number(((avgEntryPrice - (parsed.slPrice || 0)) * totalCoinQty).toFixed(2));
 
   // Projected Profit:
-  const profitTp1 = (parsed.tp1Price - avgEntryPrice) * tp1Qty;
-  const profitTp2 = (parsed.tp2Price - avgEntryPrice) * tp2Qty;
-  const profitTpFinal = (parsed.tpFinalPrice - avgEntryPrice) * tpFinalQty;
+  const profitTp1 = ((parsed.tp1Price || 0) - avgEntryPrice) * tp1Qty;
+  const profitTp2 = ((parsed.tp2Price || 0) - avgEntryPrice) * tp2Qty;
+  const profitTpFinal = ((parsed.tpFinalPrice || 0) - avgEntryPrice) * tpFinalQty;
   const maxProfitUsdt = Number((profitTp1 + profitTp2 + profitTpFinal).toFixed(2));
 
   const riskRewardRatio = maxLossUsdt > 0 ? Number((maxProfitUsdt / maxLossUsdt).toFixed(2)) : 0;
@@ -467,9 +467,9 @@ export function generateExecutionPlan(
       price: parsed.entry1Price,
       percentage: 50,
       quantity: entry1Qty,
-      estNotional: Number((entry1Qty * parsed.entry1Price).toFixed(2)),
-      estMargin: Number(((entry1Qty * parsed.entry1Price) / leverage).toFixed(2)),
-      description: `Compra Límite escalonada en nivel soporte $${parsed.entry1Price.toFixed(2)}`,
+      estNotional: Number((entry1Qty * (parsed.entry1Price || 0)).toFixed(2)),
+      estMargin: Number(((entry1Qty * (parsed.entry1Price || 0)) / leverage).toFixed(2)),
+      description: `Compra Límite escalonada en nivel soporte $${(parsed.entry1Price || 0).toFixed(2)}`,
     },
     {
       id: `${strategy.noEstrategia}-ORD-ENT2`,
@@ -480,9 +480,9 @@ export function generateExecutionPlan(
       price: parsed.entry2Price,
       percentage: 50,
       quantity: entry2Qty,
-      estNotional: Number((entry2Qty * parsed.entry2Price).toFixed(2)),
-      estMargin: Number(((entry2Qty * parsed.entry2Price) / leverage).toFixed(2)),
-      description: `Compra Límite de acumulación en soporte SMA-15 a $${parsed.entry2Price.toFixed(2)}`,
+      estNotional: Number((entry2Qty * (parsed.entry2Price || 0)).toFixed(2)),
+      estMargin: Number(((entry2Qty * (parsed.entry2Price || 0)) / leverage).toFixed(2)),
+      description: `Compra Límite de acumulación en soporte SMA-15 a $${(parsed.entry2Price || 0).toFixed(2)}`,
     },
     {
       id: `${strategy.noEstrategia}-ORD-SL`,
@@ -494,10 +494,10 @@ export function generateExecutionPlan(
       stopPrice: parsed.slPrice,
       percentage: 100,
       quantity: totalCoinQty,
-      estNotional: Number((totalCoinQty * parsed.slPrice).toFixed(2)),
+      estNotional: Number((totalCoinQty * (parsed.slPrice || 0)).toFixed(2)),
       estMargin: 0,
       pnlTarget: -maxLossUsdt,
-      description: `Stop Loss de protección bajo SMA-15 a $${parsed.slPrice.toFixed(2)} (Riesgo máx: -$${maxLossUsdt})`,
+      description: `Stop Loss de protección bajo SMA-15 a $${(parsed.slPrice || 0).toFixed(2)} (Riesgo máx: -$${maxLossUsdt})`,
     },
     {
       id: `${strategy.noEstrategia}-ORD-TP1`,
@@ -508,10 +508,10 @@ export function generateExecutionPlan(
       price: parsed.tp1Price,
       percentage: 40,
       quantity: tp1Qty,
-      estNotional: Number((tp1Qty * parsed.tp1Price).toFixed(2)),
+      estNotional: Number((tp1Qty * (parsed.tp1Price || 0)).toFixed(2)),
       estMargin: 0,
       pnlTarget: Number(profitTp1.toFixed(2)),
-      description: `Toma de beneficio 1 en resistencia local $${parsed.tp1Price.toFixed(2)} (+${profitTp1.toFixed(2)} USDT)`,
+      description: `Toma de beneficio 1 en resistencia local $${(parsed.tp1Price || 0).toFixed(2)} (+${profitTp1.toFixed(2)} USDT)`,
     },
     {
       id: `${strategy.noEstrategia}-ORD-TP2`,
@@ -522,10 +522,10 @@ export function generateExecutionPlan(
       price: parsed.tp2Price,
       percentage: 40,
       quantity: tp2Qty,
-      estNotional: Number((tp2Qty * parsed.tp2Price).toFixed(2)),
+      estNotional: Number((tp2Qty * (parsed.tp2Price || 0)).toFixed(2)),
       estMargin: 0,
       pnlTarget: Number(profitTp2.toFixed(2)),
-      description: `Toma de beneficio 2 en zona de rango superior $${parsed.tp2Price.toFixed(2)} (+${profitTp2.toFixed(2)} USDT)`,
+      description: `Toma de beneficio 2 en zona de rango superior $${(parsed.tp2Price || 0).toFixed(2)} (+${profitTp2.toFixed(2)} USDT)`,
     },
     {
       id: `${strategy.noEstrategia}-ORD-TP3`,
@@ -536,10 +536,10 @@ export function generateExecutionPlan(
       price: parsed.tpFinalPrice,
       percentage: 20,
       quantity: tpFinalQty,
-      estNotional: Number((tpFinalQty * parsed.tpFinalPrice).toFixed(2)),
+      estNotional: Number((tpFinalQty * (parsed.tpFinalPrice || 0)).toFixed(2)),
       estMargin: 0,
       pnlTarget: Number(profitTpFinal.toFixed(2)),
-      description: `Toma de beneficio 3 swing objetivo expansión $${parsed.tpFinalPrice.toFixed(2)} (+${profitTpFinal.toFixed(2)} USDT)`,
+      description: `Toma de beneficio swing en resistencia mayor $${(parsed.tpFinalPrice || 0).toFixed(2)} (+${profitTpFinal.toFixed(2)} USDT)`,
     },
   ];
 
