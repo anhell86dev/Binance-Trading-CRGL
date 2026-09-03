@@ -9,6 +9,7 @@ import {
   Search,
   Shield,
   Sliders,
+  Sparkles,
   Target,
   Zap,
 } from 'lucide-react';
@@ -16,6 +17,11 @@ import { binanceWs } from '../services/binanceWs';
 import { OrderSide, OrderType, ScaledOrderConfig, TrailingStopConfig } from '../types/binance';
 import { AssetSelectorModal } from './AssetSelectorModal';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
+import { LeverageSliderMax5x } from './LeverageSliderMax5x';
+import { IsolatedMarginLock } from './IsolatedMarginLock';
+import { RiskManagementInputs } from './RiskManagementInputs';
+import { LiquidationPreview } from './LiquidationPreview';
+import { strategyAutofillService, AutofillPayload } from '../services/strategyAutofillService';
 
 export const OrderForm: React.FC = () => {
   const [ticker, setTicker] = useState(binanceWs.getTicker());
@@ -24,7 +30,7 @@ export const OrderForm: React.FC = () => {
   const [orderType, setOrderType] = useState<OrderType>('LIMIT');
 
   // STRICT RISK RULE: Leverage 1x to 5x ONLY!
-  const [leverage, setLeverage] = useState<number>(3);
+  const [leverage, setLeverage] = useState<number>(2);
 
   // Asset Selector Modal state
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
@@ -45,20 +51,45 @@ export const OrderForm: React.FC = () => {
 
   // Dynamic TP / SL inputs
   const [enableTPSL, setEnableTPSL] = useState<boolean>(true);
-  const [riskReward, setRiskReward] = useState<number>(2.0); // 1:2
   const [tpPrice, setTpPrice] = useState<string>('');
   const [slPrice, setSlPrice] = useState<string>('');
-  const [slPercent, setSlPercent] = useState<number>(1.5); // 1.5% SL
+  const [loadedStrategyNotice, setLoadedStrategyNotice] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    const unsub = binanceWs.subscribe(() => {
+    const unsubWs = binanceWs.subscribe(() => {
       setTicker(binanceWs.getTicker());
       setBalance(binanceWs.getBalance());
     });
-    return () => unsub();
+
+    // Listen to Strategy Autoejecutar events
+    const unsubAutofill = strategyAutofillService.subscribe((payload: AutofillPayload) => {
+      if (payload.symbol) {
+        binanceWs.setSymbol(payload.symbol);
+      }
+      if (payload.side) setSide(payload.side);
+      if (payload.orderType) setOrderType(payload.orderType as OrderType);
+      if (payload.leverage) setLeverage(Math.min(5, Math.max(1, payload.leverage)));
+      if (payload.price) setPrice(payload.price.toString());
+      if (payload.quantity) setQuantity(payload.quantity.toString());
+      if (payload.slPrice) setSlPrice(payload.slPrice.toString());
+      if (payload.tpPrice) setTpPrice(payload.tpPrice.toString());
+      setEnableTPSL(true);
+
+      if (payload.strategyName) {
+        setLoadedStrategyNotice(
+          `Parámetros cargados de "${payload.strategyName}" (${payload.leverage}x ISOLATED | R:B 1:${payload.riskReward})`
+        );
+        setTimeout(() => setLoadedStrategyNotice(null), 6000);
+      }
+    });
+
+    return () => {
+      unsubWs();
+      unsubAutofill();
+    };
   }, []);
 
   // Format price helper according to coin value
@@ -72,29 +103,13 @@ export const OrderForm: React.FC = () => {
   // Update default price when symbol changes or initially
   useEffect(() => {
     if (ticker.lastPrice) {
-      setPrice(formatCoinPrice(ticker.lastPrice));
+      if (!price || price === '0.00') {
+        setPrice(formatCoinPrice(ticker.lastPrice));
+      }
       setScaledMinPrice(formatCoinPrice(ticker.lastPrice * 0.98));
       setScaledMaxPrice(formatCoinPrice(ticker.lastPrice * 1.02));
     }
   }, [ticker.symbol]);
-
-  // Recalculate dynamic TP / SL targets when price, side, or riskReward changes
-  useEffect(() => {
-    const currentP = parseFloat(price) || ticker.lastPrice;
-    if (!currentP) return;
-
-    if (side === 'BUY') {
-      const sl = currentP * (1 - slPercent / 100);
-      const tp = currentP * (1 + (slPercent * riskReward) / 100);
-      setSlPrice(formatCoinPrice(sl));
-      setTpPrice(formatCoinPrice(tp));
-    } else {
-      const sl = currentP * (1 + slPercent / 100);
-      const tp = currentP * (1 - (slPercent * riskReward) / 100);
-      setSlPrice(formatCoinPrice(sl));
-      setTpPrice(formatCoinPrice(tp));
-    }
-  }, [price, side, slPercent, riskReward, ticker.symbol]);
 
   // Handle Quick Size buttons
   const handleQuickPercent = (pct: number) => {
@@ -103,7 +118,7 @@ export const OrderForm: React.FC = () => {
     const maxMargin = balance.availableBalance * (pct / 100);
     const maxNotional = maxMargin * leverage;
     const qty = maxNotional / currentP;
-    
+
     // Adaptive quantity precision
     if (qty >= 100) {
       setQuantity(qty.toFixed(1));
@@ -114,7 +129,6 @@ export const OrderForm: React.FC = () => {
     }
   };
 
-  // Safe leverage changer: strictly clamped 1x-5x
   const handleLeverageChange = (val: number) => {
     const safeVal = Math.min(5, Math.max(1, val));
     setLeverage(safeVal);
@@ -136,6 +150,8 @@ export const OrderForm: React.FC = () => {
         throw new Error('Ingresa una cantidad válida mayor a 0');
       }
 
+      const safeLeverage = Math.min(5, Math.max(1, leverage));
+
       if (orderType === 'LIMIT') {
         const priceNum = parseFloat(price);
         if (!priceNum || priceNum <= 0) throw new Error('Ingresa un precio límite válido');
@@ -145,14 +161,14 @@ export const OrderForm: React.FC = () => {
           side,
           quantity: qtyNum,
           price: priceNum,
-          leverage,
+          leverage: safeLeverage,
           tpPrice: enableTPSL && tpPrice ? parseFloat(tpPrice) : undefined,
           slPrice: enableTPSL && slPrice ? parseFloat(slPrice) : undefined,
         });
 
         setMessage({
           type: 'success',
-          text: `Orden Limit creada en Binance: ${side} ${qtyNum} ${ticker.symbol} @ $${priceNum} (${leverage}x ISOLATED)`,
+          text: `Orden Limit enviada a Binance Futures: ${side} ${qtyNum} ${ticker.symbol} @ $${priceNum} (${safeLeverage}x ISOLATED)`,
         });
       } else if (orderType === 'SCALED') {
         const minP = parseFloat(scaledMinPrice);
@@ -169,7 +185,7 @@ export const OrderForm: React.FC = () => {
           minPrice: minP,
           maxPrice: maxP,
           distribution: scaledDistribution,
-          leverage,
+          leverage: safeLeverage,
         };
 
         await binanceWs.placeScaledOrders(config);
@@ -184,13 +200,13 @@ export const OrderForm: React.FC = () => {
           quantity: qtyNum,
           callbackRate: trailingCallback,
           activationPrice: trailingActivation ? parseFloat(trailingActivation) : undefined,
-          leverage,
+          leverage: safeLeverage,
         };
 
         await binanceWs.placeTrailingStopOrder(config);
         setMessage({
           type: 'success',
-          text: `Trailing Stop para ${ticker.symbol} activado con ${trailingCallback}% de retroceso`,
+          text: `Trailing Stop para ${ticker.symbol} activado con ${trailingCallback}% de retroceso (${safeLeverage}x ISOLATED)`,
         });
       }
     } catch (err: any) {
@@ -200,20 +216,38 @@ export const OrderForm: React.FC = () => {
     }
   };
 
-  const calcPrice = parseFloat(price) || ticker.lastPrice;
+  const calcPrice = parseFloat(price) || ticker.lastPrice || 0;
   const calcQty = parseFloat(quantity) || 0;
   const notionalValue = calcPrice * calcQty;
-  const initialMargin = notionalValue / leverage;
+  const initialMargin = leverage > 0 ? notionalValue / leverage : 0;
   const baseAsset = ticker.symbol.replace('USDT', '');
 
   return (
-    <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-4 flex flex-col gap-4 shadow-lg">
+    <div id="futures-order-form-card" className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-4 flex flex-col gap-3.5 shadow-lg">
+      {/* Autoejecutar Loaded Notice Banner */}
+      {loadedStrategyNotice && (
+        <div className="bg-amber-500/15 border border-amber-500/40 rounded-lg p-2.5 flex items-center justify-between text-xs text-amber-300 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="font-semibold">{loadedStrategyNotice}</span>
+          </div>
+          <button
+            onClick={() => setLoadedStrategyNotice(null)}
+            className="text-amber-400 hover:text-white text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20"
+          >
+            OK
+          </button>
+        </div>
+      )}
+
       {/* Asset Selector Header - Support Any Binance Asset */}
-      <div className="flex flex-col gap-2 pb-3 border-b border-neutral-800">
+      <div className="flex flex-col gap-2 pb-2.5 border-b border-neutral-800">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-amber-400" />
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Crear Orden</h3>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              Formulario Binance Futures
+            </h3>
           </div>
           <div className="flex items-center gap-1.5 text-xs font-mono">
             <span className="text-neutral-400">TIF:</span>
@@ -231,7 +265,7 @@ export const OrderForm: React.FC = () => {
               id="orderform-change-asset-btn"
               onClick={() => setIsAssetModalOpen(true)}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-amber-500/50 text-white transition-all text-xs font-bold font-mono group"
-              title="Cambiar o buscar cualquier activo listado en Binance"
+              title="Cambiar o buscar cualquier activo listado en Binance Futures"
             >
               <span className="text-amber-400">{ticker.symbol}</span>
               <ChevronDown className="w-3.5 h-3.5 text-neutral-400 group-hover:text-amber-400" />
@@ -255,69 +289,11 @@ export const OrderForm: React.FC = () => {
         </div>
       </div>
 
-      {/* Mandatory Risk Controls: Locked ISOLATED & Max 5x Leverage */}
-      <div className="bg-neutral-950 p-3 rounded-lg border border-neutral-800 flex flex-col gap-2.5">
-        {/* Margin Mode Display (LOCKED TO ISOLATED) */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-xs font-semibold text-neutral-300">Modo de Margen:</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 flex items-center gap-1">
-              <Lock className="w-3 h-3 text-blue-400" />
-              ISOLATED
-            </span>
-            <span
-              className="text-[10px] text-neutral-500 line-through cursor-not-allowed"
-              title="Cross Margin restringido permanentemente para mitigar el riesgo total"
-            >
-              Cross
-            </span>
-          </div>
-        </div>
+      {/* 1. Bloqueo de Margen en Modo Aislado */}
+      <IsolatedMarginLock />
 
-        {/* Leverage Slider (RESTRICTED TO 1x - 5x ONLY) */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-neutral-400 flex items-center gap-1">
-              <Sliders className="w-3.5 h-3.5 text-amber-400" />
-              Apalancamiento (1x - 5x máx):
-            </span>
-            <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
-              {leverage}x
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min="1"
-              max="5"
-              step="1"
-              value={leverage}
-              onChange={e => handleLeverageChange(parseInt(e.target.value))}
-              className="w-full accent-amber-500 h-1.5 bg-neutral-800 rounded-lg cursor-pointer"
-            />
-            <div className="flex gap-1">
-              {[1, 2, 3, 4, 5].map(l => (
-                <button
-                  type="button"
-                  key={l}
-                  onClick={() => handleLeverageChange(l)}
-                  className={`w-6 h-6 rounded text-xs font-mono font-bold transition-colors ${
-                    leverage === l
-                      ? 'bg-amber-500 text-neutral-950 shadow-sm'
-                      : 'bg-neutral-800 text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  {l}x
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* 2. Control de Apalancamiento Restringido (1x-5x Máx) */}
+      <LeverageSliderMax5x value={leverage} onChange={handleLeverageChange} />
 
       {/* Side Selector (Long / Short) */}
       <div className="grid grid-cols-2 gap-2">
@@ -356,7 +332,9 @@ export const OrderForm: React.FC = () => {
           type="button"
           onClick={() => setOrderType('LIMIT')}
           className={`py-1.5 rounded transition-all ${
-            orderType === 'LIMIT' ? 'bg-neutral-800 text-amber-300 font-bold shadow-sm' : 'text-neutral-400 hover:text-neutral-200'
+            orderType === 'LIMIT'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-sm'
+              : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
           Limit
@@ -365,7 +343,9 @@ export const OrderForm: React.FC = () => {
           type="button"
           onClick={() => setOrderType('SCALED')}
           className={`py-1.5 rounded transition-all ${
-            orderType === 'SCALED' ? 'bg-neutral-800 text-amber-300 font-bold shadow-sm' : 'text-neutral-400 hover:text-neutral-200'
+            orderType === 'SCALED'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-sm'
+              : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
           Escalonada
@@ -374,7 +354,9 @@ export const OrderForm: React.FC = () => {
           type="button"
           onClick={() => setOrderType('TRAILING_STOP_MARKET')}
           className={`py-1.5 rounded transition-all ${
-            orderType === 'TRAILING_STOP_MARKET' ? 'bg-neutral-800 text-amber-300 font-bold shadow-sm' : 'text-neutral-400 hover:text-neutral-200'
+            orderType === 'TRAILING_STOP_MARKET'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-sm'
+              : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
           Trailing Stop
@@ -401,8 +383,8 @@ export const OrderForm: React.FC = () => {
                 step="any"
                 required
                 value={price}
-                onChange={e => setPrice(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-500/80"
+                onChange={(e) => setPrice(e.target.value)}
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-hidden focus:border-amber-500/80"
                 placeholder={formatCoinPrice(ticker.lastPrice)}
               />
               <span className="absolute right-3 top-2.5 text-xs text-neutral-500 font-mono">USDT</span>
@@ -426,7 +408,7 @@ export const OrderForm: React.FC = () => {
                   step="any"
                   required
                   value={scaledMinPrice}
-                  onChange={e => setScaledMinPrice(e.target.value)}
+                  onChange={(e) => setScaledMinPrice(e.target.value)}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white"
                   placeholder="Min USDT"
                 />
@@ -438,7 +420,7 @@ export const OrderForm: React.FC = () => {
                   step="any"
                   required
                   value={scaledMaxPrice}
-                  onChange={e => setScaledMaxPrice(e.target.value)}
+                  onChange={(e) => setScaledMaxPrice(e.target.value)}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white"
                   placeholder="Max USDT"
                 />
@@ -453,7 +435,7 @@ export const OrderForm: React.FC = () => {
                   min="2"
                   max="12"
                   value={scaledCount}
-                  onChange={e => setScaledCount(parseInt(e.target.value))}
+                  onChange={(e) => setScaledCount(parseInt(e.target.value))}
                   className="w-full accent-amber-500 h-1 bg-neutral-800 rounded cursor-pointer"
                 />
               </div>
@@ -461,7 +443,7 @@ export const OrderForm: React.FC = () => {
                 <label className="text-[11px] text-neutral-400 block mb-1">Distribución</label>
                 <select
                   value={scaledDistribution}
-                  onChange={e => setScaledDistribution(e.target.value as any)}
+                  onChange={(e) => setScaledDistribution(e.target.value as any)}
                   className="w-full bg-neutral-950 border border-neutral-800 rounded px-2 py-1 text-xs text-neutral-200"
                 >
                   <option value="flat">Equitativa (Plana)</option>
@@ -486,7 +468,7 @@ export const OrderForm: React.FC = () => {
               max="5.0"
               step="0.1"
               value={trailingCallback}
-              onChange={e => setTrailingCallback(parseFloat(e.target.value))}
+              onChange={(e) => setTrailingCallback(parseFloat(e.target.value))}
               className="w-full accent-amber-500 h-1.5 bg-neutral-800 rounded cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-neutral-500 font-mono">
@@ -497,14 +479,12 @@ export const OrderForm: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-[11px] text-neutral-400 block mb-1">
-                Precio de Activación (Opcional)
-              </label>
+              <label className="text-[11px] text-neutral-400 block mb-1">Precio de Activación (Opcional)</label>
               <input
                 type="number"
                 step="any"
                 value={trailingActivation}
-                onChange={e => setTrailingActivation(e.target.value)}
+                onChange={(e) => setTrailingActivation(e.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white"
                 placeholder={`Vacío = Inmediato ($${formatCoinPrice(ticker.lastPrice)})`}
               />
@@ -515,7 +495,9 @@ export const OrderForm: React.FC = () => {
         {/* Quantity Input */}
         <div>
           <div className="flex justify-between items-center text-xs text-neutral-400 mb-1">
-            <span>{orderType === 'SCALED' ? 'Cantidad Total' : 'Cantidad'} ({baseAsset})</span>
+            <span>
+              {orderType === 'SCALED' ? 'Cantidad Total' : 'Cantidad'} ({baseAsset})
+            </span>
             <span className="text-neutral-400 text-[11px]">
               Disp: ${(balance.availableBalance * leverage).toFixed(1)} USDT
             </span>
@@ -526,8 +508,8 @@ export const OrderForm: React.FC = () => {
               step="any"
               required
               value={quantity}
-              onChange={e => setQuantity(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-none focus:border-amber-500/80"
+              onChange={(e) => setQuantity(e.target.value)}
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm font-mono text-white focus:outline-hidden focus:border-amber-500/80"
               placeholder="0.05"
             />
             <span className="absolute right-3 top-2.5 text-xs text-neutral-500 font-mono">
@@ -537,7 +519,7 @@ export const OrderForm: React.FC = () => {
 
           {/* Quick % buttons */}
           <div className="grid grid-cols-4 gap-1.5 mt-2">
-            {[25, 50, 75, 100].map(pct => (
+            {[25, 50, 75, 100].map((pct) => (
               <button
                 type="button"
                 key={pct}
@@ -550,71 +532,26 @@ export const OrderForm: React.FC = () => {
           </div>
         </div>
 
-        {/* Dynamic Take Profit / Stop Loss (TP/SL) Section */}
+        {/* 3. Campos de Salida Automatizada (Stop-Loss y Take-Profit Dinámicos) */}
         {orderType === 'LIMIT' && (
-          <div className="bg-neutral-950/60 p-3 rounded-lg border border-neutral-800 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={enableTPSL}
-                  onChange={e => setEnableTPSL(e.target.checked)}
-                  className="accent-amber-500 rounded"
-                />
-                <span className="text-xs font-semibold text-neutral-300 flex items-center gap-1">
-                  <Target className="w-3.5 h-3.5 text-amber-400" />
-                  TP / SL Dinámico con API
-                </span>
-              </label>
-
-              {/* R:R selector */}
-              {enableTPSL && (
-                <div className="flex items-center gap-1 text-[11px] font-mono">
-                  <span className="text-neutral-400">R:R</span>
-                  {[1.5, 2, 3].map(r => (
-                    <button
-                      type="button"
-                      key={r}
-                      onClick={() => setRiskReward(r)}
-                      className={`px-1.5 py-0.5 rounded ${
-                        riskReward === r ? 'bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40' : 'text-neutral-500'
-                      }`}
-                    >
-                      1:{r}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {enableTPSL && (
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                <div>
-                  <span className="text-[11px] text-emerald-400 block mb-0.5">Take Profit (USDT)</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={tpPrice}
-                    onChange={e => setTpPrice(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-emerald-300"
-                    placeholder="TP USDT"
-                  />
-                </div>
-                <div>
-                  <span className="text-[11px] text-rose-400 block mb-0.5">Stop Loss (USDT)</span>
-                  <input
-                    type="number"
-                    step="any"
-                    value={slPrice}
-                    onChange={e => setSlPrice(e.target.value)}
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-rose-300"
-                    placeholder="SL USDT"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+          <RiskManagementInputs
+            entryPrice={calcPrice}
+            side={side}
+            stopLossPrice={slPrice}
+            takeProfitPrice={tpPrice}
+            onChangeStopLoss={setSlPrice}
+            onChangeTakeProfit={setTpPrice}
+            quantity={calcQty}
+          />
         )}
+
+        {/* 4. Cálculo de Liquidación en Tiempo Real */}
+        <LiquidationPreview
+          entryPrice={calcPrice}
+          side={side}
+          leverage={leverage}
+          marginType="ISOLATED"
+        />
 
         {/* Order Cost & Margin Calculation Overview */}
         <div className="bg-neutral-950 p-2.5 rounded-lg border border-neutral-800 text-xs font-mono flex flex-col gap-1">
@@ -646,7 +583,7 @@ export const OrderForm: React.FC = () => {
           </div>
         )}
 
-        {/* Big Submit Button with Optimistic UI */}
+        {/* Big Submit Button */}
         <button
           type="submit"
           id="submit-order-btn"
@@ -683,3 +620,5 @@ export const OrderForm: React.FC = () => {
     </div>
   );
 };
+
+export const FuturesOrderForm = OrderForm;

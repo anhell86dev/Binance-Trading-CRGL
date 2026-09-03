@@ -13,11 +13,15 @@ export const TacticalWorkspace: React.FC = () => {
   const [symbol, setSymbol] = useState(binanceWs.getCurrentSymbol());
   const [ticker, setTicker] = useState(binanceWs.getTicker());
   const [isPositionsCollapsed, setIsPositionsCollapsed] = useState<boolean>(false);
+  const [positionsCount, setPositionsCount] = useState<number>(() => binanceWs.getPositions().length);
+  const [ordersCount, setOrdersCount] = useState<number>(() => binanceWs.getOpenOrders().length);
 
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
       setSymbol(binanceWs.getCurrentSymbol());
       setTicker(binanceWs.getTicker());
+      setPositionsCount(binanceWs.getPositions().length);
+      setOrdersCount(binanceWs.getOpenOrders().length);
     });
 
     return () => {
@@ -30,16 +34,16 @@ export const TacticalWorkspace: React.FC = () => {
       {/* 1. Header Ticker (Live Price, Mark, 24h High/Low, 24h Change, Range & Derivatives) */}
       <HeaderTicker symbol={symbol} price={ticker.lastPrice} />
 
-      {/* 2. Main Central Area: Tactical Strategy Execution & Order Breakdown */}
+      {/* 2. Main Central Area: Tactical Strategy Execution & Order Breakdown List */}
       <div className="flex-1 min-h-0 relative overflow-hidden flex flex-col">
         <StrategyExecutionEngine />
       </div>
 
-      {/* 3. Bottom Collapsible Positions & Active Orders Area */}
+      {/* 3. Bottom Collapsible Quick Positions & Orders Area */}
       <div
         id="collapsible_active_positions_section"
         className={`shrink-0 border-t border-neutral-800 bg-neutral-900 transition-all duration-300 flex flex-col ${
-          isPositionsCollapsed ? 'h-9' : 'h-[32%] min-h-[200px] max-h-[360px]'
+          isPositionsCollapsed ? 'h-9' : 'h-[32%] min-h-[190px] max-h-[340px]'
         }`}
       >
         <div
@@ -49,11 +53,13 @@ export const TacticalWorkspace: React.FC = () => {
           <div className="flex items-center gap-2">
             <Layers className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-xs font-bold text-neutral-200 uppercase tracking-wider">
-              Posiciones Activas, Órdenes & Diario en Binance Futures
+              Bandeja Rápida: Posiciones Activas & Órdenes
             </span>
-            <span className="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-neutral-900 text-neutral-400 border border-neutral-800">
-              USDⓈ-M
-            </span>
+            {(positionsCount > 0 || ordersCount > 0) && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {positionsCount} pos / {ordersCount} ord
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-xs text-neutral-400">

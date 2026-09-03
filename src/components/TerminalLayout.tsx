@@ -4,12 +4,16 @@ import {
   AlertTriangle,
   Bell,
   BellOff,
+  BookOpen,
   ChevronDown,
   Key,
+  Layers,
+  LayoutDashboard,
   Lock,
   Radio,
   RefreshCw,
   Shield,
+  TrendingUp,
   Volume2,
   VolumeX,
   Zap,
@@ -25,14 +29,18 @@ import { OrderForm } from './OrderForm';
 import { ApiKeyModal } from './ApiKeyModal';
 import { WebSocketConsole } from './WebSocketConsole';
 import { NotificationToasts } from './NotificationToasts';
+import { FuturesHubPage } from './FuturesHubPage';
 
 export default function TerminalLayout() {
+  const [activeGlobalTab, setActiveGlobalTab] = useState<'terminal' | 'futures_hub'>('terminal');
   const [mode, setMode] = useState<NetworkMode>(binanceWs.getMode());
   const [status, setStatus] = useState(binanceWs.getConnectionStatus());
   const [rateLimits, setRateLimits] = useState(binanceWs.getRateLimits());
   const [soundOn, setSoundOn] = useState(notificationService.soundEnabled);
   const [pushGranted, setPushGranted] = useState(notificationService.pushGranted);
   const [latency, setLatency] = useState(24);
+  const [positionsCount, setPositionsCount] = useState(() => binanceWs.getPositions().length);
+  const [ordersCount, setOrdersCount] = useState(() => binanceWs.getOpenOrders().length);
   const [isApiDropdownOpen, setIsApiDropdownOpen] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
@@ -43,6 +51,8 @@ export default function TerminalLayout() {
       setMode(binanceWs.getMode());
       setStatus(binanceWs.getConnectionStatus());
       setRateLimits(binanceWs.getRateLimits());
+      setPositionsCount(binanceWs.getPositions().length);
+      setOrdersCount(binanceWs.getOpenOrders().length);
     });
 
     const interval = setInterval(() => {
@@ -92,39 +102,58 @@ export default function TerminalLayout() {
 
   return (
     <div className="h-screen w-full bg-neutral-950 text-neutral-100 overflow-hidden flex flex-col font-sans select-none selection:bg-amber-500/20 selection:text-amber-300">
-      {/* 1. Barra de Estado Superior Ultra Compacta (h-10) */}
-      <header className="h-10 flex justify-between items-center px-3 sm:px-4 bg-neutral-900 border-b border-neutral-800 shrink-0 z-40">
-        {/* Left: Brand & Status Tag */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="w-6 h-6 rounded bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0">
-            Ⓢ
-          </div>
-
+      {/* 1. Barra de Estado y Navegación Global Superior (h-11) */}
+      <header className="h-11 flex justify-between items-center px-3 sm:px-4 bg-neutral-900 border-b border-neutral-800 shrink-0 z-40">
+        {/* Left: Brand & Main Navigation Tabs */}
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-black tracking-tight text-white text-xs sm:text-sm">
+            <div className="w-6 h-6 rounded bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0">
+              Ⓢ
+            </div>
+            <span className="font-black tracking-tight text-white text-xs sm:text-sm hidden sm:inline">
               Binance Futures
             </span>
-            <span className="hidden sm:inline text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              USDⓈ-M WS-FAPI
-            </span>
-            <span
-              id="header-prod-version-badge"
-              className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>{APP_VERSION} Prod</span>
-            </span>
           </div>
 
-          {/* Strict Risk Protocol Tag */}
-          <div className="hidden lg:flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 text-[10px] font-medium font-mono">
-            <Shield className="w-3 h-3 text-emerald-400" />
-            <span>Riesgo: <strong>1-5x máx</strong> | <strong>ISOLATED</strong></span>
-          </div>
+          {/* Global Primary Navigation Subpage Switcher */}
+          <nav className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs">
+            <button
+              id="global-nav-terminal-btn"
+              onClick={() => setActiveGlobalTab('terminal')}
+              className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                activeGlobalTab === 'terminal'
+                  ? 'bg-neutral-800 text-white font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Zap className={`w-3.5 h-3.5 ${activeGlobalTab === 'terminal' ? 'text-amber-400' : 'text-neutral-500'}`} />
+              <span>Terminal Táctico</span>
+            </button>
+
+            <button
+              id="global-nav-futures-hub-btn"
+              onClick={() => setActiveGlobalTab('futures_hub')}
+              className={`px-3 py-1 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                activeGlobalTab === 'futures_hub'
+                  ? 'bg-neutral-800 text-white font-bold shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Layers className={`w-3.5 h-3.5 ${activeGlobalTab === 'futures_hub' ? 'text-amber-400' : 'text-neutral-500'}`} />
+              <span>Posiciones, Órdenes & Diario</span>
+              {(positionsCount > 0 || ordersCount > 0) && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 ml-0.5">
+                  {positionsCount > 0 ? `${positionsCount} pos` : ''}
+                  {positionsCount > 0 && ordersCount > 0 ? ' • ' : ''}
+                  {ordersCount > 0 ? `${ordersCount} ord` : ''}
+                </span>
+              )}
+            </button>
+          </nav>
         </div>
 
         {/* Center: Realtime WS Live Connection Status */}
-        <div className="flex items-center gap-2 font-mono text-xs">
+        <div className="hidden md:flex items-center gap-2 font-mono text-xs">
           <span
             className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${
               status === 'authenticated' || status === 'connected'
@@ -277,25 +306,32 @@ export default function TerminalLayout() {
         </div>
       </header>
 
-      {/* 2. Grid Asimétrico Principal 3 Columnas: [20%_55%_25%] */}
-      <main className="flex-1 grid grid-cols-1 xl:grid-cols-[20%_55%_25%] gap-2 p-2 overflow-hidden h-[calc(100vh-2.5rem)]">
-        {/* Columna Izquierda: Estrategia (20%) */}
-        <aside className="bg-neutral-900 rounded-lg p-2.5 flex flex-col overflow-y-auto border border-neutral-800/90 custom-scrollbar">
-          <StrategySidebar />
-        </aside>
+      {/* 2. Global Views: Terminal Táctico vs. Subpágina Posiciones, Órdenes & Diario */}
+      {activeGlobalTab === 'terminal' ? (
+        <main className="flex-1 grid grid-cols-1 xl:grid-cols-[20%_55%_25%] gap-2 p-2 overflow-hidden h-[calc(100vh-2.75rem)]">
+          {/* Columna Izquierda: Estrategia (20%) */}
+          <aside className="bg-neutral-900 rounded-lg p-2.5 flex flex-col overflow-y-auto border border-neutral-800/90 custom-scrollbar">
+            <StrategySidebar />
+          </aside>
 
-        {/* Columna Central: Gráfico y Táctica (55%) */}
-        <section className="bg-neutral-900 rounded-lg flex flex-col overflow-hidden border border-neutral-800/90 min-h-0">
-          <TacticalWorkspace />
-        </section>
+          {/* Columna Central: Gráfico y Táctica (55%) */}
+          <section className="bg-neutral-900 rounded-lg flex flex-col overflow-hidden border border-neutral-800/90 min-h-0">
+            <TacticalWorkspace />
+          </section>
 
-        {/* Columna Derecha: Ejecución y Riesgo (25%) */}
-        <aside className="bg-neutral-900 rounded-lg p-2.5 flex flex-col overflow-y-auto border border-neutral-800/90 custom-scrollbar">
-          <RiskProtocolWidget />
-          <div className="my-2 border-t border-neutral-800/80" />
-          <OrderForm />
-        </aside>
-      </main>
+          {/* Columna Derecha: Ejecución y Riesgo (25%) */}
+          <aside className="bg-neutral-900 rounded-lg p-2.5 flex flex-col overflow-y-auto border border-neutral-800/90 custom-scrollbar">
+            <RiskProtocolWidget />
+            <div className="my-2 border-t border-neutral-800/80" />
+            <OrderForm />
+          </aside>
+        </main>
+      ) : (
+        /* Global Dedicated Subpage: Posiciones, Órdenes & Diario Binance Futures */
+        <main className="flex-1 overflow-hidden h-[calc(100vh-2.75rem)] flex flex-col">
+          <FuturesHubPage onNavigateToTerminal={() => setActiveGlobalTab('terminal')} />
+        </main>
+      )}
 
       {/* Modals & Global Overlays */}
       {isApiModalOpen && <ApiKeyModal onClose={() => setIsApiModalOpen(false)} />}
@@ -304,3 +340,4 @@ export default function TerminalLayout() {
     </div>
   );
 }
+

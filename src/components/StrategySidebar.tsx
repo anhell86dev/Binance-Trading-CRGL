@@ -37,6 +37,8 @@ import {
   parsePricesFromStrategy,
 } from '../utils/sheetParser';
 import { BINANCE_POPULAR_PAIRS, normalizeBinanceSymbol } from '../data/binancePairs';
+import { TOP_3_STRATEGIES_CATALOG, strategyAutofillService } from '../services/strategyAutofillService';
+import { ExecuteStrategyButton } from './ExecuteStrategyButton';
 import { AssetSelectorModal } from './AssetSelectorModal';
 import { StrategyDetailModal } from './StrategyDetailModal';
 
@@ -205,57 +207,67 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
       </div>
 
       {/* 2. Podium: Top 3 Mejores Trades del Mercado (Activos) */}
-      <div className="shrink-0 bg-neutral-950 p-2.5 rounded-xl border border-neutral-800/90 flex flex-col gap-1.5">
+      <div className="shrink-0 bg-neutral-950 p-2.5 rounded-xl border border-neutral-800/90 flex flex-col gap-2">
         <div className="flex items-center justify-between text-[11px] font-bold">
           <span className="flex items-center gap-1 text-amber-300">
             <Crown className="w-3.5 h-3.5 text-amber-400" />
-            Top 3 Mejores Trades (Activos)
+            Top 3 R/B (Mín 1:2+)
           </span>
-          <span className="text-[10px] font-mono text-neutral-400">Orden: R/B</span>
+          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+            Apalancamiento Seguro
+          </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-1.5 pt-1 font-mono text-[10px]">
-          {top3Strategies.map((item, idx) => {
-            const isRank1 = idx === 0;
-            const isRank2 = idx === 1;
-            const isRank3 = idx === 2;
-            const isSelected = currentSymbol === normalizeBinanceSymbol(item.par);
+        {/* 3 Top Strategies with Autoejecutar */}
+        <div className="flex flex-col gap-1.5 font-mono text-[10px]">
+          {TOP_3_STRATEGIES_CATALOG.map((strat) => {
+            const isSelected = currentSymbol === strat.symbol;
 
             return (
-              <button
-                key={item.noEstrategia}
-                onClick={() => handleSelectAndLoadStrategy(item)}
-                className={`p-1.5 rounded-lg border text-left flex flex-col justify-between transition-all ${
-                  isRank1
-                    ? 'bg-amber-950/30 border-amber-500/50 hover:border-amber-400 text-amber-200'
-                    : isRank2
-                    ? 'bg-neutral-900 border-neutral-700 hover:border-neutral-500 text-neutral-200'
-                    : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-600 text-neutral-300'
+              <div
+                key={strat.id}
+                className={`p-2 rounded-lg border transition-all flex items-center justify-between gap-2 ${
+                  strat.rank === 1
+                    ? 'bg-amber-950/20 border-amber-500/40 hover:border-amber-400'
+                    : strat.rank === 2
+                    ? 'bg-sky-950/20 border-sky-500/30 hover:border-sky-400'
+                    : 'bg-emerald-950/20 border-emerald-500/30 hover:border-emerald-400'
                 } ${isSelected ? 'ring-1 ring-amber-400 shadow-md' : ''}`}
               >
-                <div className="flex items-center justify-between w-full">
+                <div
+                  className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
+                  onClick={() => binanceWs.setSymbol(strat.symbol)}
+                  title="Cambiar par en vivo en Binance"
+                >
                   <span
-                    className={`font-black text-[9px] px-1 py-0.2 rounded ${
-                      isRank1
-                        ? 'bg-amber-400 text-black'
-                        : isRank2
-                        ? 'bg-neutral-300 text-black'
-                        : 'bg-amber-700 text-white'
+                    className={`w-4 h-4 rounded text-[9px] font-black flex items-center justify-center shrink-0 ${
+                      strat.rank === 1
+                        ? 'bg-amber-400 text-neutral-950'
+                        : strat.rank === 2
+                        ? 'bg-sky-400 text-neutral-950'
+                        : 'bg-emerald-400 text-neutral-950'
                     }`}
                   >
-                    #{idx + 1}
+                    #{strat.rank}
                   </span>
-                  <span className="text-[9px] font-bold text-emerald-400">
-                    1:{item.rr?.ratio != null ? item.rr.ratio.toFixed(2) : '3.50'}
-                  </span>
+
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <strong className="text-white text-xs truncate">{strat.symbol}</strong>
+                      <span className="text-[9px] text-emerald-400 font-bold">
+                        {strat.riskRewardRatio}
+                      </span>
+                    </div>
+                    <span className="text-[9px] text-neutral-400 truncate">
+                      {strat.leverage}x ISOLATED • SL -{strat.slPercent}% / TP +{strat.tpPercent}%
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-1">
-                  <strong className="text-white text-xs block truncate">{item.par}</strong>
-                  <span className="text-[8px] text-neutral-400 block truncate">
-                    {item.noEstrategia}
-                  </span>
+
+                <div className="shrink-0">
+                  <ExecuteStrategyButton strategy={strat} variant="compact" />
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

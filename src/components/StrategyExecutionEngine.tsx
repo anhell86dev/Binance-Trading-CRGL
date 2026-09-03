@@ -575,7 +575,7 @@ export const StrategyExecutionEngine: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Desglose de Órdenes a Enviar a Binance (6 Órdenes Escalonadas) */}
+      {/* 3. Desglose de Órdenes a Enviar a Binance (6 Órdenes Escalonadas) - Formato Lista */}
       <div className="bg-neutral-900/90 rounded-2xl p-4 border border-neutral-800 shadow-xl flex flex-col gap-3">
         <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
           <div className="flex items-center gap-2">
@@ -584,75 +584,132 @@ export const StrategyExecutionEngine: React.FC = () => {
               Desglose de Órdenes a Enviar a Binance (6 Órdenes Escalonadas)
             </h3>
           </div>
-          <span className="text-[11px] font-mono text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
-            Apalancamiento: {clampedLeverage}x ISOLATED
-          </span>
+          <div className="flex items-center gap-2 font-mono text-[11px]">
+            <span className="text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
+              Apalancamiento: <strong className="text-amber-300">{clampedLeverage}x</strong> ISOLATED
+            </span>
+            <span className="hidden sm:inline-block text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
+              6 Órdenes Listadas
+            </span>
+          </div>
         </div>
 
-        {/* Orders Grid / Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-          {executionPlan?.orders.map((ord) => {
+        {/* Orders List View */}
+        <div className="flex flex-col divide-y divide-neutral-800/80 bg-neutral-950/60 rounded-xl border border-neutral-800 overflow-hidden">
+          {executionPlan?.orders.map((ord, idx) => {
             const isEntry = ord.role === 'ENTRY';
             const isSL = ord.role === 'STOP_LOSS';
 
-            const cardBg = isEntry
-              ? 'bg-blue-950/20 border-blue-500/30'
+            const roleBadgeClass = isEntry
+              ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
               : isSL
-              ? 'bg-rose-950/20 border-rose-500/40'
-              : 'bg-emerald-950/20 border-emerald-500/30';
+              ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+              : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
 
-            const pillBg = isEntry
-              ? 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+            const roleIconText = isEntry
+              ? `E${idx + 1}`
               : isSL
-              ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-              : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+              ? 'SL'
+              : `TP${idx - 2}`;
+
+            const orderPrice = ord.price || 0;
+            const distFromLive = currentPrice > 0 ? ((orderPrice - currentPrice) / currentPrice) * 100 : 0;
 
             return (
               <div
                 key={ord.id}
-                className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all ${cardBg}`}
+                className="p-3 hover:bg-neutral-900/60 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-3 font-mono"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white">{ord.label}</span>
-                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold border ${pillBg}`}>
-                    {ord.side} {ord.type}
-                  </span>
+                {/* Left: Badge, Step Identifier, Label & Type */}
+                <div className="flex items-center gap-3 min-w-[220px]">
+                  <div
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs shrink-0 border ${roleBadgeClass}`}
+                  >
+                    {roleIconText}
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white text-xs">{ord.label}</span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${roleBadgeClass}`}
+                      >
+                        {ord.side} {ord.type}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-neutral-400 font-sans mt-0.5 line-clamp-1">
+                      {ord.description}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono py-1 bg-neutral-950/60 rounded-lg p-2 border border-neutral-800/80">
-                  <div>
-                    <span className="text-[9px] text-neutral-500 block uppercase">Precio Objetivo</span>
-                    <strong className="text-white text-sm">${(ord.price || 0).toFixed(2)}</strong>
+                {/* Middle Data Columns: Price, Quantity & %, Notional, Margin / PnL */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs flex-1 max-w-2xl bg-neutral-900/40 md:bg-transparent p-2 md:p-0 rounded-lg">
+                  {/* Precio Objetivo */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-neutral-500 uppercase">Precio Objetivo</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-white font-bold text-sm sm:text-base">
+                        ${orderPrice.toFixed(2)}
+                      </span>
+                      <span
+                        className={`text-[10px] ${
+                          Math.abs(distFromLive) < 0.5
+                            ? 'text-amber-300 font-bold'
+                            : distFromLive > 0
+                            ? 'text-cyan-400'
+                            : 'text-neutral-400'
+                        }`}
+                        title="Distancia respecto al precio de mercado en vivo"
+                      >
+                        ({distFromLive >= 0 ? '+' : ''}{distFromLive.toFixed(1)}%)
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[9px] text-neutral-500 block uppercase">Cantidad / %</span>
-                    <strong className="text-neutral-200 text-sm">
-                      {ord.quantity} ({ord.percentage}%)
-                    </strong>
+
+                  {/* Cantidad & % */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-neutral-500 uppercase">Cantidad</span>
+                    <span className="text-neutral-200 font-bold text-sm">
+                      {ord.quantity} <span className="text-neutral-400 text-xs font-normal">({ord.percentage}%)</span>
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[9px] text-neutral-500 block uppercase">Notional</span>
-                    <span className="text-neutral-300">${(ord.estNotional || 0).toFixed(2)}</span>
+
+                  {/* Notional */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-neutral-500 uppercase">Notional</span>
+                    <span className="text-neutral-300 font-semibold text-sm">
+                      ${(ord.estNotional || 0).toFixed(2)}
+                    </span>
                   </div>
-                  <div>
-                    <span className="text-[9px] text-neutral-500 block uppercase">
-                      {isEntry ? 'Margen Aislado' : isSL ? 'Pérdida Máx' : 'Ganancia Est.'}
+
+                  {/* Margen Requerido o PnL Proyectado */}
+                  <div className="flex flex-col">
+                    <span className="text-[10px] text-neutral-500 uppercase">
+                      {isEntry ? 'Margen Aislado' : isSL ? 'Pérdida SL' : 'Ganancia TP'}
                     </span>
                     <span
-                      className={`font-bold ${
+                      className={`font-bold text-sm ${
                         isEntry ? 'text-amber-300' : isSL ? 'text-rose-400' : 'text-emerald-400'
                       }`}
                     >
                       {isEntry
-                        ? `$${(ord.estMargin || 0).toFixed(2)}`
+                        ? `$${(ord.estMargin || 0).toFixed(2)} USDT`
                         : isSL
-                        ? `-$${(maxLossUsdt || 0).toFixed(2)}`
-                        : `+$${(ord.pnlTarget || 0).toFixed(2)}`}
+                        ? `-$${(maxLossUsdt || 0).toFixed(2)} USDT`
+                        : `+$${(ord.pnlTarget || 0).toFixed(2)} USDT`}
                     </span>
                   </div>
                 </div>
 
-                <p className="text-[11px] text-neutral-400 font-sans line-clamp-1">{ord.description}</p>
+                {/* Right: Status Pill */}
+                <div className="shrink-0 flex md:flex-col items-center md:items-end justify-between md:justify-center gap-1">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-900 text-neutral-300 border border-neutral-700">
+                    LISTA
+                  </span>
+                  <span className="text-[10px] text-neutral-500">
+                    {clampedLeverage}x Isolated
+                  </span>
+                </div>
               </div>
             );
           })}

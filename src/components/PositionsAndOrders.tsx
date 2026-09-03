@@ -28,9 +28,15 @@ import { OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
 import { SheetAlertRow } from '../types/strategy';
 import { StrategyCreator } from './StrategyCreator';
 import { DiarioEstrategias } from './DiarioEstrategias';
+import { OpenPositionsTable } from './OpenPositionsTable';
+import { TradingStrategiesView } from './TradingStrategiesView';
 
-export const PositionsAndOrders: React.FC = () => {
-  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal'>('positions');
+interface PositionsAndOrdersProps {
+  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies';
+}
+
+export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions' }) => {
+  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies'>(defaultTab);
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
   const [history, setHistory] = useState<TradeHistoryItem[]>(binanceWs.getTradeHistory());
@@ -138,6 +144,19 @@ export const PositionsAndOrders: React.FC = () => {
           </button>
 
           <button
+            id="tab-strategies-btn"
+            onClick={() => setTab('strategies')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+              tab === 'strategies'
+                ? 'border-amber-400 text-white bg-neutral-900'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Top 3 R:B & Estrategias</span>
+          </button>
+
+          <button
             id="tab-orders-btn"
             onClick={() => setTab('orders')}
             className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
@@ -180,6 +199,19 @@ export const PositionsAndOrders: React.FC = () => {
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono">
               {alerts.length}
             </span>
+          </button>
+
+          <button
+            id="tab-journal-btn"
+            onClick={() => setTab('strategy_journal')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 ${
+              tab === 'strategy_journal'
+                ? 'border-amber-400 text-white bg-neutral-900'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5 text-amber-400" />
+            <span>Diario Binance Futures</span>
           </button>
         </div>
 
@@ -230,125 +262,15 @@ export const PositionsAndOrders: React.FC = () => {
 
       {/* Tab 1: Posiciones Activas */}
       {tab === 'positions' && (
-        <div className="overflow-x-auto min-h-[220px]">
-          {positions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
-              <Shield className="w-10 h-10 text-neutral-600 mb-3" />
-              <p className="font-semibold text-neutral-200 text-sm">No tienes posiciones activas en Binance</p>
-              <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
-                Las posiciones se muestran en tiempo real al ejecutarse órdenes. Margen estrictamente ISOLATED y apalancamiento seguro 1-5x.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-                <button
-                  onClick={handleManualSync}
-                  disabled={isSyncing}
-                  className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-neutral-700"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  Sincronizar con Binance
-                </button>
-                <button
-                  onClick={() => setTab('alerts')}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  Ver Alertas de Volatilidad
-                </button>
-                {mode === 'simulation' && (
-                  <button
-                    onClick={() => binanceWs.loadSimulationDemoData()}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors"
-                  >
-                    Cargar Posición Demo
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800">
-                <tr>
-                  <th className="py-2.5 px-3">Símbolo</th>
-                  <th className="py-2.5 px-3">Apalancamiento</th>
-                  <th className="py-2.5 px-3">Margen</th>
-                  <th className="py-2.5 px-3">Tamaño</th>
-                  <th className="py-2.5 px-3">Precio Entrada</th>
-                  <th className="py-2.5 px-3">Precio Marca</th>
-                  <th className="py-2.5 px-3">Precio Liq.</th>
-                  <th className="py-2.5 px-3">PnL (ROE %)</th>
-                  <th className="py-2.5 px-3">TP / SL</th>
-                  <th className="py-2.5 px-3 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800/60">
-                {positions.map(pos => {
-                  const isLong = pos.positionAmt > 0;
-                  const isProfit = pos.unRealizedProfit >= 0;
-                  return (
-                    <tr key={pos.symbol} className="hover:bg-neutral-800/30 transition-colors">
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-white text-xs">{pos.symbol}</span>
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              isLong ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'
-                            }`}
-                          >
-                            {isLong ? 'LONG' : 'SHORT'}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 font-bold text-amber-300">
-                        {pos.leverage}x
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-neutral-200">
-                        ${(pos.isolatedMargin || 0).toFixed(2)} USDT
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-neutral-200">
-                        {Math.abs(pos.positionAmt || 0).toFixed(3)} {pos.symbol.replace('USDT', '')}
-                      </td>
-                      <td className="py-3 px-3 text-neutral-300">${(pos.entryPrice || 0).toFixed(2)}</td>
-                      <td className="py-3 px-3 text-amber-400">${(pos.markPrice || 0).toFixed(2)}</td>
-                      <td className="py-3 px-3 text-rose-400 font-bold">${(pos.liquidationPrice || 0).toFixed(2)}</td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1 font-bold">
-                          <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                            {isProfit ? '+' : ''}${(pos.unRealizedProfit || 0).toFixed(2)}
-                          </span>
-                          <span className={`text-[11px] ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            ({isProfit ? '+' : ''}{(pos.roePercent || 0).toFixed(2)}%)
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] text-neutral-400">
-                            TP: {pos.takeProfit ? `$${pos.takeProfit}` : '-'} | SL:{' '}
-                            {pos.stopLoss ? `$${pos.stopLoss}` : '-'}
-                          </span>
-                          <button
-                            onClick={() => openEditModal(pos)}
-                            className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300"
-                            title="Editar TP/SL"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => binanceWs.closePosition(pos.symbol)}
-                          className="px-2.5 py-1 rounded bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-xs font-semibold transition-colors"
-                        >
-                          Cerrar Mercado
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
+        <div className="p-3">
+          <OpenPositionsTable />
+        </div>
+      )}
+
+      {/* Tab: Top 3 R:B & Estrategias */}
+      {tab === 'strategies' && (
+        <div className="p-3 overflow-y-auto">
+          <TradingStrategiesView />
         </div>
       )}
 
@@ -398,57 +320,67 @@ export const PositionsAndOrders: React.FC = () => {
                   <th className="py-2.5 px-3">Lado</th>
                   <th className="py-2.5 px-3">Precio</th>
                   <th className="py-2.5 px-3">Cantidad</th>
-                  <th className="py-2.5 px-3">Apalancamiento / Margen</th>
+                  <th className="py-2.5 px-3">Apalancamiento</th>
+                  <th className="py-2.5 px-3">Margen</th>
                   <th className="py-2.5 px-3 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60">
-                {orders.map(ord => (
-                  <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
-                    <td className="py-3 px-3 text-neutral-400">
-                      <div>{ord.orderId.substring(0, 14)}...</div>
-                      <div className="text-[10px] text-neutral-500">
-                        {new Date(ord.createdAt).toLocaleTimeString()}
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 font-bold text-white">{ord.symbol}</td>
-                    <td className="py-3 px-3">
-                      <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-amber-300 font-semibold text-[10px]">
-                        {ord.type === 'TRAILING_STOP_MARKET'
-                          ? `TRAILING (${ord.callbackRate}%)`
-                          : ord.parentScaledId
-                          ? 'ESCALONADA'
-                          : ord.type}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3">
-                      <span
-                        className={`font-bold ${
-                          ord.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {ord.side === 'BUY' ? 'COMPRA' : 'VENTA'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-3 text-neutral-200">
-                      {ord.price > 0 ? `$${ord.price.toFixed(2)}` : 'Mercado / Trigger'}
-                    </td>
-                    <td className="py-3 px-3 text-neutral-300">{ord.origQty}</td>
-                    <td className="py-3 px-3">
-                      <span className="text-amber-400 font-bold">{ord.leverage}x</span>
-                      <span className="text-[10px] text-blue-400 ml-1">ISOLATED</span>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <button
-                        onClick={() => binanceWs.cancelOrder(ord.orderId)}
-                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-rose-950 hover:text-rose-300 text-neutral-400 text-xs transition-colors"
-                        title="Cancelar Orden"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {orders.map(ord => {
+                  const orderPrice = ord.price > 0 ? ord.price : (ord.stopPrice || 0);
+                  const remainingQty = Math.max(0, ord.origQty - (ord.executedQty || 0));
+                  const lev = Math.max(1, ord.leverage || 2);
+                  const orderMargin = (orderPrice * remainingQty) / lev;
+
+                  return (
+                    <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
+                      <td className="py-3 px-3 text-neutral-400">
+                        <div>{ord.orderId.substring(0, 14)}...</div>
+                        <div className="text-[10px] text-neutral-500">
+                          {new Date(ord.createdAt).toLocaleTimeString()}
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 font-bold text-white">{ord.symbol}</td>
+                      <td className="py-3 px-3">
+                        <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-amber-300 font-semibold text-[10px]">
+                          {ord.type === 'TRAILING_STOP_MARKET'
+                            ? `TRAILING (${ord.callbackRate}%)`
+                            : ord.parentScaledId
+                            ? 'ESCALONADA'
+                            : ord.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`font-bold ${
+                            ord.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {ord.side === 'BUY' ? 'COMPRA' : 'VENTA'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-neutral-200">
+                        {ord.price > 0 ? `$${ord.price.toFixed(2)}` : 'Mercado / Trigger'}
+                      </td>
+                      <td className="py-3 px-3 text-neutral-300">{ord.origQty}</td>
+                      <td className="py-3 px-3 font-bold text-amber-300">
+                        {ord.leverage}x
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-neutral-200">
+                        ${orderMargin.toFixed(2)} USDT
+                      </td>
+                      <td className="py-3 px-3 text-right">
+                        <button
+                          onClick={() => binanceWs.cancelOrder(ord.orderId)}
+                          className="px-2 py-1 rounded bg-neutral-800 hover:bg-rose-950 hover:text-rose-300 text-neutral-400 text-xs transition-colors"
+                          title="Cancelar Orden"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -788,6 +720,13 @@ export const PositionsAndOrders: React.FC = () => {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {/* Tab 5: Diario Binance Futures */}
+      {tab === 'strategy_journal' && (
+        <div className="p-2 sm:p-3 overflow-y-auto">
+          <DiarioEstrategias />
         </div>
       )}
 
