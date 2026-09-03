@@ -13,6 +13,7 @@ import {
   Filter,
   Layers,
   Plus,
+  Radio,
   RefreshCw,
   Search,
   Shield,
@@ -24,10 +25,11 @@ import {
 } from 'lucide-react';
 import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
 import { binanceWs } from '../services/binanceWs';
+import { livePriceService } from '../services/livePriceService';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 import { TopStrategiesRiskRewardList } from './TopStrategiesRiskRewardList';
 import { StrategyDetailModal } from './StrategyDetailModal';
-import { parsePricesFromStrategy, calculateStrategyRewardToRisk } from '../utils/sheetParser';
+import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 
 interface TradingStrategiesViewProps {
@@ -42,6 +44,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
   const [filterType, setFilterType] = useState<'ALL' | 'LONG' | 'SHORT' | 'HIGH_RR'>('ALL');
   const [selectedStrategy, setSelectedStrategy] = useState<GoogleSheetStrategyRow | null>(null);
   const [ticker, setTicker] = useState(() => binanceWs.getTicker());
+  const [, setPriceTick] = useState(0);
 
   useEffect(() => {
     const unsub = strategyService.subscribe(() => {
@@ -54,9 +57,14 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
       setTicker(binanceWs.getTicker());
     });
 
+    const unsubLive = livePriceService.subscribe(() => {
+      setPriceTick((prev) => prev + 1);
+    });
+
     return () => {
       unsub();
       unsubWs();
+      unsubLive();
     };
   }, []);
 
@@ -67,7 +75,8 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
   const handleSelectStrategyForExecution = (strat: GoogleSheetStrategyRow) => {
     const prices = parsePricesFromStrategy(strat);
     const rr = calculateStrategyRewardToRisk(strat);
-    const basePrice = prices.entry1Price || ticker.lastPrice || 789.5;
+    const liveP = livePriceService.getPrice(strat.par);
+    const basePrice = prices.entry1Price || liveP || ticker.lastPrice || 789.5;
     const isLong = !strat.tipoDeOrden?.toLowerCase().includes('short') && !strat.tipoDeOrden?.toLowerCase().includes('venta');
 
     // Transfer safely to Futures Order Form with max 5x leverage & isolated margin, and trigger popup
@@ -94,8 +103,16 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
     }
   };
 
-  const filteredStrategies = useMemo(() => {
+  // Filtrar ÚNICAMENTE las estrategias activas (excluir obsoletas / inactivas)
+  const activeStrategies = useMemo(() => {
     return strategies.filter((st) => {
+      const isObsolete = (st.estado || '').toLowerCase().includes('obsolet') || normalizeStrategyStatus(st.estado) === 'Obsoleto';
+      return !isObsolete;
+    });
+  }, [strategies]);
+
+  const filteredStrategies = useMemo(() => {
+    return activeStrategies.filter((st) => {
       const matchSearch =
         st.par.toLowerCase().includes(searchTerm.toLowerCase()) ||
         st.nombreEstrategia.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -115,14 +132,14 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
       }
       return true;
     });
-  }, [strategies, searchTerm, filterType]);
+  }, [activeStrategies, searchTerm, filterType]);
 
   return (
     <div id="trading-strategies-view" className="flex flex-col gap-6">
-      {/* 1. SECCIÓN DESTACADA: TOP 3 ESTRATEGIAS CON ALTO R:B (>= 1:2) - FORMATO TABLA */}
+      {/* 1. SECCIÓN DESTACADA: TOP 3 ESTRATEGIAS CON ALTO R:B (>= 1:2) - FORMATO TABLA CON PRECIO LIVE */}
       <TopStrategiesRiskRewardList highlightSymbol={ticker.symbol} />
 
-      {/* 2. CATÁLOGO COMPLETO DE ESTRATEGIAS Y DIARIO DE SHEETS - FORMATO TABLA */}
+      {/* 2. CATÁLOGO COMPLETO DE ESTRATEGIAS ACTIVAS - FORMATO TABLA CON PRECIO LIVE Y DIFERENCIA VS ENTRADA 1 */}
       <div className="flex flex-col gap-3.5 bg-neutral-900/70 p-4 rounded-xl border border-neutral-800 shadow-xl">
         {/* Header & Synchronization */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
@@ -132,10 +149,14 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-bold text-white">Catálogo de Estrategias y Registro Técnico</h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-bold border border-neutral-700">
-                  {strategies.length} Registradas
+                <h3 className="text-sm font-bold text-white">Catálogo de Estrategias Activas</h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
+                  {activeStrategies.length} Activas Vigentes
                 </span>
+                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-950 border border-neutral-800 text-[10px] font-mono text-neutral-400">
+                  <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
+                  <span>Monitoreo Live FAPI Activo</span>
+                </div>
                 {lastSyncTime && (
                   <span className="text-[10px] text-neutral-500 font-mono hidden md:inline">
                     Última sincronización: {lastSyncTime}
@@ -143,7 +164,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                 )}
               </div>
               <p className="text-[11px] text-neutral-400 mt-0.5">
-                Tabla sincronizada en tiempo real con Google Sheets con validación de apalancamiento seguro 1x-5x y margen aislado.
+                Solo estrategias operables con cálculo automático en tiempo real de la distancia entre Entrada 1 y Precio Live de Binance Futures.
               </p>
             </div>
           </div>
@@ -193,7 +214,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                   : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
               }`}
             >
-              Todas ({strategies.length})
+              Todas Activas ({activeStrategies.length})
             </button>
             <button
               onClick={() => setFilterType('HIGH_RR')}
@@ -229,29 +250,31 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
           </div>
         </div>
 
-        {/* TABLA PRINCIPAL DE ESTRATEGIAS (Table Layout en lugar de tarjetas) */}
+        {/* TABLA PRINCIPAL DE ESTRATEGIAS ACTIVAS (Con Precio Live y Diferencia vs E1) */}
         <div className="bg-neutral-950 rounded-xl border border-neutral-800 overflow-hidden shadow-inner">
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-neutral-900/90 text-[10px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
-                  <th className="py-3 px-3 font-semibold w-16">ID / Fecha</th>
+                  <th className="py-3 px-3 font-semibold w-14">ID</th>
                   <th className="py-3 px-3 font-semibold">Par</th>
                   <th className="py-3 px-3 font-semibold">Tipo</th>
-                  <th className="py-3 px-3 font-semibold min-w-[200px]">Nombre de Estrategia</th>
-                  <th className="py-3 px-3 font-semibold">Entrada 1</th>
+                  <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
+                  <th className="py-3 px-3 font-semibold">Entrada 1 (E1)</th>
+                  <th className="py-3 px-3 font-semibold">Precio Live</th>
+                  <th className="py-3 px-3 font-semibold min-w-[150px]">Dif. vs Entrada 1</th>
                   <th className="py-3 px-3 font-semibold">Stop Loss</th>
                   <th className="py-3 px-3 font-semibold">Take Profit</th>
                   <th className="py-3 px-3 font-semibold text-center">Ratio R:B</th>
                   <th className="py-3 px-3 font-semibold text-center">Estado</th>
-                  <th className="py-3 px-3 font-semibold text-right min-w-[170px]">Acciones</th>
+                  <th className="py-3 px-3 font-semibold text-right min-w-[160px]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-850 font-mono">
                 {filteredStrategies.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-xs text-neutral-500 font-sans">
-                      No se encontraron estrategias que coincidan con los filtros aplicados.
+                    <td colSpan={12} className="py-12 text-center text-xs text-neutral-500 font-sans">
+                      No se encontraron estrategias activas que coincidan con los filtros aplicados.
                     </td>
                   </tr>
                 ) : (
@@ -261,14 +284,28 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                     const isLong =
                       !strat.tipoDeOrden?.toLowerCase().includes('short') &&
                       !strat.tipoDeOrden?.toLowerCase().includes('venta');
-                    const isObsolete = (strat.estado || '').toLowerCase() === 'obsoleto';
+
+                    // Real-time live price & difference calculation
+                    const liveData = livePriceService.getPriceData(strat.par);
+                    const livePrice = liveData.price;
+                    const entry1Price = prices.entry1Price || 0;
+
+                    let diffDollar = 0;
+                    let diffPercent = 0;
+                    let isCloseToEntry = false;
+
+                    if (entry1Price > 0 && livePrice > 0) {
+                      diffDollar = livePrice - entry1Price;
+                      diffPercent = (diffDollar / entry1Price) * 100;
+                      isCloseToEntry = Math.abs(diffPercent) <= 0.75;
+                    }
+
+                    const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
 
                     return (
                       <tr
                         key={strat.noEstrategia}
-                        className={`transition-colors hover:bg-neutral-900/70 ${
-                          isObsolete ? 'opacity-60 bg-neutral-950/40' : ''
-                        }`}
+                        className="transition-colors hover:bg-neutral-900/70"
                       >
                         {/* ID / Fecha */}
                         <td className="py-3 px-3">
@@ -321,26 +358,90 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                           )}
                         </td>
 
-                        {/* Entrada 1 */}
+                        {/* Entrada 1 (E1) */}
                         <td className="py-3 px-3 font-bold text-white">
-                          {prices.entry1Price ? `$${prices.entry1Price.toFixed(2)}` : '-'}
+                          {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
+                        </td>
+
+                        {/* Precio Live */}
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-amber-300">
+                              ${livePrice.toFixed(decimalPlaces)}
+                            </span>
+                            <span
+                              className={`text-[9px] font-semibold ${
+                                liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                              }`}
+                            >
+                              {liveData.change24hPercent >= 0 ? '+' : ''}
+                              {liveData.change24hPercent.toFixed(1)}%
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Diferencia entre Entrada 1 y Precio Live */}
+                        <td className="py-3 px-3">
+                          {entry1Price > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <div
+                                className={`font-bold text-xs flex items-center gap-1 ${
+                                  isCloseToEntry
+                                    ? 'text-emerald-400'
+                                    : isLong
+                                    ? diffDollar > 0
+                                      ? 'text-sky-300'
+                                      : 'text-emerald-300'
+                                    : diffDollar > 0
+                                    ? 'text-emerald-300'
+                                    : 'text-sky-300'
+                                }`}
+                              >
+                                <span>
+                                  {diffDollar >= 0 ? '+' : ''}${diffDollar.toFixed(decimalPlaces)}
+                                </span>
+                                <span className="text-[10px]">
+                                  ({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(2)}%)
+                                </span>
+                              </div>
+                              <span
+                                className={`text-[9px] font-medium font-sans ${
+                                  isCloseToEntry
+                                    ? 'text-emerald-400 font-bold'
+                                    : 'text-neutral-400'
+                                }`}
+                              >
+                                {isCloseToEntry
+                                  ? '🎯 En zona de entrada'
+                                  : isLong
+                                  ? diffDollar > 0
+                                    ? `A ${diffPercent.toFixed(1)}% arriba de E1`
+                                    : `💎 Descuento: -${Math.abs(diffPercent).toFixed(1)}%`
+                                  : diffDollar > 0
+                                  ? `💎 Mejor precio (+${diffPercent.toFixed(1)}%)`
+                                  : `A -${Math.abs(diffPercent).toFixed(1)}% de E1`}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-neutral-500">-</span>
+                          )}
                         </td>
 
                         {/* Stop Loss */}
                         <td className="py-3 px-3">
                           <div className="text-rose-400 font-bold">
-                            {prices.slPrice ? `$${prices.slPrice.toFixed(2)}` : '-'}
+                            {prices.slPrice ? `$${prices.slPrice.toFixed(decimalPlaces)}` : '-'}
                           </div>
                         </td>
 
                         {/* Take Profit */}
                         <td className="py-3 px-3">
                           <div className="text-emerald-400 font-bold">
-                            {prices.tp1Price ? `$${prices.tp1Price.toFixed(2)}` : '-'}
+                            {prices.tp1Price ? `$${prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
                           </div>
                           {prices.tp2Price && (
                             <div className="text-[10px] text-emerald-500/80">
-                              TP2: ${prices.tp2Price.toFixed(2)}
+                              TP2: ${prices.tp2Price.toFixed(decimalPlaces)}
                             </div>
                           )}
                         </td>
@@ -360,14 +461,8 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
 
                         {/* Estado */}
                         <td className="py-3 px-3 text-center">
-                          <span
-                            className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              isObsolete
-                                ? 'bg-amber-950/40 text-amber-400 border border-amber-800/60'
-                                : 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/60'
-                            }`}
-                          >
-                            {isObsolete ? 'Obsoleto' : strat.estado || 'Activo'}
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/60">
+                            {strat.estado || 'Activa'}
                           </span>
                         </td>
 

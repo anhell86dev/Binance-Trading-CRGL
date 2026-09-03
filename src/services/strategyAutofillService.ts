@@ -9,6 +9,7 @@ export interface TopStrategyConfig {
   symbol: string;
   timeframe: string;
   description: string;
+  entryPrice?: number;
   leverage: number; // Strictly clamped to max 5x
   marginType: 'ISOLATED';
   slPercent: number; // e.g., 1.0%
@@ -36,6 +37,7 @@ export const TOP_3_STRATEGIES_CATALOG: TopStrategyConfig[] = [
     concept: 'Entrada tras rebote en nivel técnico crítico con expansión de precio.',
     symbol: 'BTCUSDT',
     timeframe: '1D / 4H / 1H',
+    entryPrice: 87200.0,
     description: 'Entrada tras rebote en nivel técnico crítico con expansión de precio hacia zona de resistencia con mínimo riesgo.',
     leverage: 2, // Apalancamiento 2x
     marginType: 'ISOLATED', // Margen Aislado
@@ -54,6 +56,7 @@ export const TOP_3_STRATEGIES_CATALOG: TopStrategyConfig[] = [
     concept: 'Entrada inmediata en dirección al rompimiento de una consolidación con volumen institucional.',
     symbol: 'ETHUSDT',
     timeframe: '4H / 1H',
+    entryPrice: 3105.0,
     description: 'Entrada inmediata en dirección al rompimiento de una consolidación con volumen institucional y expansión de volatilidad.',
     leverage: 3, // Apalancamiento 3x
     marginType: 'ISOLATED', // Margen Aislado
@@ -72,6 +75,7 @@ export const TOP_3_STRATEGIES_CATALOG: TopStrategyConfig[] = [
     concept: 'Seguimiento de tendencia con medias móviles rápidas.',
     symbol: 'SOLUSDT',
     timeframe: '1H / 15m',
+    entryPrice: 98.2,
     description: 'Seguimiento de tendencia con medias móviles rápidas (EMA 9 / EMA 21) en temporalidades de 1h con proyección extendida.',
     leverage: 4, // Apalancamiento 4x
     marginType: 'ISOLATED', // Margen Aislado
