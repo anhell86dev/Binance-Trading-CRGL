@@ -7,6 +7,7 @@ import {
 } from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
 import { strategyService } from './strategyService';
+import { googleSheetsApiService } from './googleSheetsApiService';
 
 const ORDERS_TAB_STORAGE_KEY = 'binance_orders_sheet_tab_name_v1';
 const ORDERS_GID_STORAGE_KEY = 'binance_orders_sheet_gid_v1';
@@ -88,7 +89,7 @@ class OrdersSheetService {
   }
 
   /**
-   * Reads and synchronizes orders from the specific tab of the user's configured Google Sheet
+   * Reads and synchronizes orders from the specific tab of the user's configured Google Sheet (API v4 + fallback)
    */
   public async syncOrdersFromGoogleSheet(customUrl?: string, silent: boolean = false): Promise<boolean> {
     if (this.isSyncing) return false;
@@ -99,6 +100,27 @@ class OrdersSheetService {
     const targetUrl = customUrl || strategyService.getEffectiveSheetUrl();
 
     try {
+      // 0. Primary Path: Direct Google Sheets API v4
+      if (googleSheetsApiService.isAuthenticated()) {
+        try {
+          const apiOrders = await googleSheetsApiService.syncOrdersViaApi(targetUrl, this.sheetTabName);
+          if (apiOrders.length > 0) {
+            this.orders = apiOrders;
+            this.lastSyncTime = `${new Date().toLocaleTimeString()} (API Google Directa)`;
+            this.lastSyncError = null;
+            this.saveConfig();
+
+            binanceWs.setOpenOrders(apiOrders, 'google_sheets_api');
+
+            this.isSyncing = false;
+            this.notify();
+            return true;
+          }
+        } catch (apiErr) {
+          console.warn('Direct Google Sheets API orders read failed, trying Web CSV:', apiErr);
+        }
+      }
+
       let csvContent = '';
 
       // 1. Try with explicit tab name or gid
@@ -159,6 +181,36 @@ class OrdersSheetService {
       this.notify();
       return false;
     }
+  }
+
+  /**
+   * DIRECT WRITING: Appends a single order or updates orders in Google Sheets
+   */
+  public async recordOrderToGoogleSheet(order: OpenOrder): Promise<boolean> {
+    const targetUrl = strategyService.getEffectiveSheetUrl();
+
+    // Append to local memory list
+    const existingIdx = this.orders.findIndex((o) => o.orderId === order.orderId);
+    if (existingIdx >= 0) {
+      this.orders[existingIdx] = order;
+    } else {
+      this.orders.unshift(order);
+    }
+    this.saveConfig();
+    this.notify();
+
+    // Write directly via API if connected
+    if (googleSheetsApiService.isAuthenticated()) {
+      try {
+        await googleSheetsApiService.appendOrderViaApi(targetUrl, order, this.sheetTabName);
+        this.lastSyncTime = `${new Date().toLocaleTimeString()} (Orden Escrita en Google API)`;
+        this.notify();
+        return true;
+      } catch (err: any) {
+        console.error('Failed writing order directly via Google Sheets API:', err);
+      }
+    }
+    return false;
   }
 
   // --- CONFIGURATION GETTERS & SETTERS ---

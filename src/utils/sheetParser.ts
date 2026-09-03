@@ -273,6 +273,15 @@ export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] 
  * Transforms a standard Google Sheets sharing link into a direct CSV export endpoint.
  * Supports optional specific sheet tab name (e.g. 'Ordenes') or specific gid.
  */
+export function extractSpreadsheetId(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  if (match) return match[1];
+  if (/^[a-zA-Z0-9-_]{20,}$/.test(trimmed)) return trimmed;
+  return null;
+}
+
 export function convertToGoogleSheetCsvUrl(
   url: string,
   options?: { sheetTabName?: string; gid?: string }
@@ -281,13 +290,11 @@ export function convertToGoogleSheetCsvUrl(
   if (!trimmed) return '';
 
   // Extract sheet ID from standard Google Sheets URL format
-  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (!match) {
+  const sheetId = extractSpreadsheetId(trimmed);
+  if (!sheetId) {
     // If it's already a direct published CSV link or other format, return as-is
     return trimmed;
   }
-
-  const sheetId = match[1];
 
   // If a specific sheet tab name is requested (e.g. 'Ordenes' or 'Estrategias')
   if (options?.sheetTabName && options.sheetTabName.trim().length > 0) {

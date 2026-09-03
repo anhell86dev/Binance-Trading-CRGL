@@ -8,6 +8,7 @@ import {
   strategiesToCsv,
 } from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
+import { googleSheetsApiService } from './googleSheetsApiService';
 
 const STORAGE_KEY = 'binance_futures_strategies_v6';
 const LAST_SYNC_KEY = 'binance_strategies_last_sync_v6';
@@ -91,7 +92,7 @@ class StrategyService {
   }
 
   /**
-   * Extracts and syncs strategies strictly from the configured Google Sheets file
+   * Extracts and syncs strategies strictly from the configured Google Sheets file (Google Sheets API v4 + fallback)
    */
   public async syncFromGoogleSheets(urlToFetch?: string, silent: boolean = false): Promise<boolean> {
     if (this.isSyncing) return false;
@@ -102,7 +103,25 @@ class StrategyService {
     const targetUrl = urlToFetch || this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
 
     try {
-      // 1. Try fetching tab 'Estrategias' specifically
+      // 0. Primary Path: Direct Google Sheets API v4 if authenticated
+      if (googleSheetsApiService.isAuthenticated()) {
+        try {
+          const apiParsed = await googleSheetsApiService.syncStrategiesViaApi(targetUrl);
+          if (apiParsed.length > 0) {
+            this.strategies = apiParsed;
+            this.lastSyncTime = `${new Date().toLocaleTimeString()} (API Google Directa)`;
+            this.syncError = null;
+            this.saveToStorage();
+            this.isSyncing = false;
+            this.notify();
+            return true;
+          }
+        } catch (apiErr: any) {
+          console.warn('Google Sheets API direct sync failed, falling back to Web CSV:', apiErr);
+        }
+      }
+
+      // 1. Fallback Path: Try fetching tab 'Estrategias' specifically via CSV
       let csvContent = await fetchGoogleSheetCsv(targetUrl, { sheetTabName: 'Estrategias' });
 
       // 2. Fallback to primary sheet export if tab 'Estrategias' returned empty

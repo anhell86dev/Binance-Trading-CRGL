@@ -18,9 +18,12 @@ import {
   Link as LinkIcon,
   CheckCircle2,
   Layers,
+  KeyRound,
+  Shield,
 } from 'lucide-react';
 import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
 import { ordersSheetService } from '../services/ordersSheetService';
+import { googleSheetsApiService } from '../services/googleSheetsApiService';
 import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
 import { SAMPLE_GOOGLE_SHEET_CSV, normalizeStrategyStatus, DEFAULT_ORDERS_SHEET_CSV_TEMPLATE } from '../utils/sheetParser';
 
@@ -50,6 +53,10 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
   const [ordersSyncError, setOrdersSyncError] = useState(() => ordersSheetService.getLastSyncError());
   const [ordersLastSync, setOrdersLastSync] = useState(() => ordersSheetService.getLastSyncTime());
 
+  // Google Sheets API OAuth State
+  const [isGoogleAuthorized, setIsGoogleAuthorized] = useState(() => googleSheetsApiService.isAuthenticated());
+  const [isAuthorizingGoogle, setIsAuthorizingGoogle] = useState(false);
+
   // New Strategy Form State
   const [newStrategy, setNewStrategy] = useState<Partial<GoogleSheetStrategyRow>>({
     noEstrategia: '',
@@ -78,9 +85,13 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
       setOrdersSyncError(ordersSheetService.getLastSyncError());
       setOrdersLastSync(ordersSheetService.getLastSyncTime());
     });
+    const unsubGoogle = googleSheetsApiService.subscribe(() => {
+      setIsGoogleAuthorized(googleSheetsApiService.isAuthenticated());
+    });
     return () => {
       unsub();
       unsubOrders();
+      unsubGoogle();
     };
   }, []);
 
@@ -89,6 +100,29 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
   const showNotification = (type: 'success' | 'error', text: string) => {
     setFeedbackMsg({ type, text });
     setTimeout(() => setFeedbackMsg(null), 4000);
+  };
+
+  const handleConnectGoogleSheetsApi = async () => {
+    setIsAuthorizingGoogle(true);
+    try {
+      await googleSheetsApiService.requestAccessToken();
+      showNotification('success', '¡Conexión directa con Google Sheets API v4 autorizada!');
+      setIsSyncing(true);
+      await Promise.all([
+        strategyService.syncFromGoogleSheets(customSheetUrl),
+        ordersSheetService.syncOrdersFromGoogleSheet(customSheetUrl),
+      ]);
+      setIsSyncing(false);
+    } catch (err: any) {
+      showNotification('error', err.message || 'Error al conectar con la API de Google Sheets.');
+    } finally {
+      setIsAuthorizingGoogle(false);
+    }
+  };
+
+  const handleDisconnectGoogle = () => {
+    googleSheetsApiService.setAccessToken(null);
+    showNotification('success', 'Sesión de Google Sheets API desconectada.');
   };
 
   const handleCopyCsv = async () => {
@@ -826,6 +860,55 @@ function doPost(e) {
           {/* TAB 3: READ / IMPORT FROM GOOGLE DOCS */}
           {activeTab === 'READ' && (
             <div className="space-y-5">
+              {/* Direct API OAuth Authorization Card */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/40 via-neutral-900 to-cyan-950/40 border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-white">Conexión Directa Google Sheets API v4</h4>
+                      {isGoogleAuthorized ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          CONECTADO (OAuth)
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          PROXIED (Modo CSV)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-neutral-300 mt-0.5">
+                      {isGoogleAuthorized
+                        ? 'Sincronización bidireccional directa activa en tiempo real (Lectura de estrategias y Registro directo de órdenes).'
+                        : 'Conecta tu cuenta de Google Workspace para sincronización bidireccional sin depender de exportación Web.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="self-end sm:self-center shrink-0">
+                  {isGoogleAuthorized ? (
+                    <button
+                      onClick={handleDisconnectGoogle}
+                      className="px-3.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-xs font-semibold transition-colors"
+                    >
+                      Desconectar Google API
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleConnectGoogleSheetsApi}
+                      disabled={isAuthorizingGoogle}
+                      className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition-all shadow-lg shadow-emerald-950/40 flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <KeyRound className="w-3.5 h-3.5" />
+                      <span>{isAuthorizingGoogle ? 'Conectando...' : 'Conectar Google Sheets API'}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">

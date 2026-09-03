@@ -42,6 +42,7 @@ import {
 } from './crypto';
 import { notificationService } from './notifications';
 import { alertsSheetService } from './alertsSheetService';
+import { ordersSheetService } from './ordersSheetService';
 
 export const BINANCE_ENDPOINTS = {
   production: {
@@ -1150,6 +1151,7 @@ class BinanceWsEngine {
 
     if (this.mode === 'simulation') {
       this.openOrders.push(newOrder);
+      ordersSheetService.recordOrderToGoogleSheet(newOrder);
       this.logFrame('OUT', 'REQUEST', `[Simulación] Orden Limit colocada: ${config.side} ${config.quantity} ${config.symbol} @ ${config.price}`, newOrder);
       notificationService.notify(
         'EXECUTION',
@@ -1166,6 +1168,7 @@ class BinanceWsEngine {
     try {
       await this.sendWsRequest('order.place', params, true);
       this.openOrders.push(newOrder);
+      ordersSheetService.recordOrderToGoogleSheet(newOrder);
       this.recalculateAccountStats();
       this.persistState();
       notificationService.notify(
