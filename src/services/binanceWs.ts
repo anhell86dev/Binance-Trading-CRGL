@@ -29,6 +29,7 @@ import {
   TrailingStopConfig,
   VolatilityAlert,
   WsLogFrame,
+  FuturesMarketMetrics,
 } from '../types/binance';
 import { StrategyExecutionPlan } from '../types/strategy';
 import {
@@ -99,6 +100,32 @@ class BinanceWsEngine {
     timestamp: Date.now(),
   };
 
+  private futuresMetrics: FuturesMarketMetrics = {
+    symbol: 'ZECUSDT',
+    openInterest: 64280.5,
+    openInterestValueUsdt: 50754800,
+    openInterestTime: Date.now(),
+    fundingRate: 0.0001,
+    fundingRatePercent: 0.01,
+    nextFundingTime: Math.ceil(Date.now() / (8 * 3600 * 1000)) * (8 * 3600 * 1000),
+    countdownMs: 0,
+    buyVolumeUsdt: 6812400,
+    sellVolumeUsdt: 5727850,
+    buySellRatio: 1.19,
+    buyVolumePercent: 54.3,
+    sellVolumePercent: 45.7,
+    topPositionLongPercent: 62.4,
+    topPositionShortPercent: 37.6,
+    topPositionLongShortRatio: 1.66,
+    topAccountLongPercent: 58.7,
+    topAccountShortPercent: 41.3,
+    topAccountLongShortRatio: 1.42,
+    globalAccountLongPercent: 63.1,
+    globalAccountShortPercent: 36.9,
+    globalAccountLongShortRatio: 1.71,
+    lastUpdated: Date.now(),
+  };
+
   private candles: KlineCandle[] = [];
   private orderBook: OrderBook = { bids: [], asks: [] };
 
@@ -126,6 +153,7 @@ class BinanceWsEngine {
   private lastDataSyncTime: number = 0;
   private lastDataSyncError: string | null = null;
   private balanceSyncInterval: any = null;
+  private marketMetricsInterval: any = null;
 
   // Listeners
   private stateListeners: Set<Function> = new Set();
@@ -136,6 +164,14 @@ class BinanceWsEngine {
     this.loadPersistedState();
     // Default start in simulation connected to real Binance public streams
     this.connectMarketStream();
+    this.fetchFuturesMarketData(this.currentSymbol);
+    this.fetchRecentKlines(this.currentSymbol);
+
+    // Periodic market metrics refresh (every 10s)
+    if (this.marketMetricsInterval) clearInterval(this.marketMetricsInterval);
+    this.marketMetricsInterval = setInterval(() => {
+      this.fetchFuturesMarketData(this.currentSymbol).catch(() => {});
+    }, 10000);
   }
 
   private initDemoData() {
@@ -182,9 +218,9 @@ class BinanceWsEngine {
   private loadPersistedState() {
     try {
       const savedSymbol = localStorage.getItem('binance_fapi_symbol');
-      if (savedSymbol && !savedSymbol.includes('BTC') && !savedSymbol.includes('ETH')) {
-        this.currentSymbol = savedSymbol;
-        this.ticker.symbol = savedSymbol;
+      if (savedSymbol && savedSymbol.trim().length > 0) {
+        this.currentSymbol = savedSymbol.trim().toUpperCase();
+        this.ticker.symbol = savedSymbol.trim().toUpperCase();
       } else {
         this.currentSymbol = 'ZECUSDT';
         this.ticker.symbol = 'ZECUSDT';
@@ -215,21 +251,6 @@ class BinanceWsEngine {
       if (savedAlerts) {
         this.alerts = JSON.parse(savedAlerts);
       }
-
-      // Ensure active positions or orders with BTC/ETH are sanitized to strategy pair if needed
-      this.positions = this.positions.map(p => {
-        if (p.symbol.includes('BTC') || p.symbol.includes('ETH')) {
-          return { ...p, symbol: 'ZECUSDT' };
-        }
-        return p;
-      });
-
-      this.openOrders = this.openOrders.map(o => {
-        if (o.symbol.includes('BTC') || o.symbol.includes('ETH')) {
-          return { ...o, symbol: 'ZECUSDT' };
-        }
-        return o;
-      });
 
       // If in simulation mode and arrays are empty, load initial demo state
       if (this.mode === 'simulation' && this.positions.length === 0 && this.openOrders.length === 0 && this.tradeHistory.length === 0) {
@@ -297,6 +318,9 @@ class BinanceWsEngine {
   public getCurrentSymbol(): string {
     return this.currentSymbol;
   }
+  public getFuturesMetrics(): FuturesMarketMetrics {
+    return this.futuresMetrics;
+  }
   public getLastBalanceSyncTime(): number {
     return this.lastBalanceSyncTime;
   }
@@ -354,10 +378,223 @@ class BinanceWsEngine {
   // --- CONNECTIVITY & PROTOCOL RULES ---
 
   public setSymbol(newSymbol: string) {
-    if (this.currentSymbol === newSymbol) return;
-    this.currentSymbol = newSymbol;
+    if (!newSymbol) return;
+    const formatted = newSymbol.trim().toUpperCase();
+    if (this.currentSymbol === formatted && this.ticker.symbol === formatted) return;
+    this.currentSymbol = formatted;
+    this.ticker.symbol = formatted;
+    try {
+      localStorage.setItem('binance_fapi_symbol', formatted);
+    } catch {}
     this.connectMarketStream();
+    this.fetchRecentKlines(formatted);
+    this.fetchFuturesMarketData(formatted);
     this.notify();
+  }
+
+  /**
+   * Fetch recent 1m candles for newly selected symbol
+   */
+  public async fetchRecentKlines(symbol: string) {
+    try {
+      const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=60`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          this.candles = data.map((d: any) => ({
+            time: d[0],
+            open: parseFloat(d[1]),
+            high: parseFloat(d[2]),
+            low: parseFloat(d[3]),
+            close: parseFloat(d[4]),
+            volume: parseFloat(d[5]),
+          }));
+          const lastCandle = this.candles[this.candles.length - 1];
+          if (lastCandle) {
+            this.ticker.lastPrice = lastCandle.close;
+            this.ticker.markPrice = lastCandle.close;
+          }
+          this.generateMockOrderBook(this.ticker.lastPrice);
+          this.notify();
+        }
+      }
+    } catch (e) {
+      console.warn('Error fetching klines:', e);
+    }
+  }
+
+  /**
+   * Fetch complete Binance Futures market data:
+   * - 24h Ticker
+   * - Premium Index (Funding Rate, Next Funding Time)
+   * - Open Interest
+   * - Taker Buy/Sell Volume Ratio
+   * - Top Trader Long/Short Position Ratio
+   * - Top Trader Long/Short Account Ratio
+   * - Global Long/Short Account Ratio
+   */
+  public async fetchFuturesMarketData(symbolToFetch?: string) {
+    const symbol = (symbolToFetch || this.currentSymbol).toUpperCase();
+    try {
+      // 1. Fetch 24hr Ticker immediately for fast switch
+      fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data && data.symbol === this.currentSymbol) {
+            const newPrice = parseFloat(data.lastPrice);
+            this.ticker = {
+              symbol: data.symbol,
+              lastPrice: newPrice,
+              markPrice: parseFloat(data.lastPrice),
+              indexPrice: parseFloat(data.lastPrice),
+              high24h: parseFloat(data.highPrice),
+              low24h: parseFloat(data.lowPrice),
+              volume24h: parseFloat(data.quoteVolume) || (parseFloat(data.volume) * newPrice),
+              change24h: parseFloat(data.priceChange),
+              change24hPercent: parseFloat(data.priceChangePercent),
+              bestBid: parseFloat(data.bidPrice) || (newPrice * 0.999),
+              bestAsk: parseFloat(data.askPrice) || (newPrice * 1.001),
+              timestamp: data.closeTime || Date.now(),
+            };
+            this.notify();
+          }
+        })
+        .catch(() => {});
+
+      // 2. Fetch Premium Index (Funding rate & Next Funding Time)
+      const premiumPromise = fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+      // 3. Fetch Open Interest
+      const oiPromise = fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+      // 4. Fetch Taker Long/Short Buy/Sell Volume Ratio (5m)
+      const takerPromise = fetch(`https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${symbol}&period=5m&limit=1`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+      // 5. Fetch Top Trader Long/Short Position Ratio (5m)
+      const topPosPromise = fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=5m&limit=1`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+      // 6. Fetch Top Trader Long/Short Account Ratio (5m)
+      const topAccPromise = fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+      // 7. Fetch Global Long/Short Account Ratio (5m)
+      const globalAccPromise = fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`)
+        .then(res => res.ok ? res.json() : null)
+        .catch(() => null);
+
+      const [premData, oiData, takerData, topPosData, topAccData, globalAccData] = await Promise.all([
+        premiumPromise,
+        oiPromise,
+        takerPromise,
+        topPosPromise,
+        topAccPromise,
+        globalAccPromise,
+      ]);
+
+      const now = Date.now();
+      const currentPrice = this.ticker.lastPrice || 100;
+
+      // Calculate next 8h funding cycle default (00:00, 08:00, 16:00 UTC)
+      const eightHoursMs = 8 * 3600 * 1000;
+      const defaultNextFunding = Math.ceil(now / eightHoursMs) * eightHoursMs;
+      const nextFundingTime = premData?.nextFundingTime ? Number(premData.nextFundingTime) : defaultNextFunding;
+      const countdownMs = Math.max(0, nextFundingTime - now);
+
+      const fundingRate = premData?.lastFundingRate ? parseFloat(premData.lastFundingRate) : 0.0001;
+      const fundingRatePercent = fundingRate * 100;
+
+      // Open Interest
+      const openInterest = oiData?.openInterest ? parseFloat(oiData.openInterest) : (this.ticker.volume24h * 0.35) / currentPrice;
+      const openInterestValueUsdt = openInterest * currentPrice;
+
+      // Taker Buy/Sell
+      let buyVol = 0;
+      let sellVol = 0;
+      let buySellRatio = 1.15;
+      if (Array.isArray(takerData) && takerData[0]) {
+        buyVol = parseFloat(takerData[0].buyVol);
+        sellVol = parseFloat(takerData[0].sellVol);
+        buySellRatio = parseFloat(takerData[0].buySellRatio) || 1.0;
+      } else {
+        const totalVol = this.ticker.volume24h || 1000000;
+        const buyShare = 0.52 + (this.ticker.change24hPercent > 0 ? 0.03 : -0.03);
+        buyVol = totalVol * buyShare;
+        sellVol = totalVol * (1 - buyShare);
+        buySellRatio = buyVol / (sellVol || 1);
+      }
+      const totalTaker = buyVol + sellVol || 1;
+      const buyVolumePercent = Number(((buyVol / totalTaker) * 100).toFixed(2));
+      const sellVolumePercent = Number(((sellVol / totalTaker) * 100).toFixed(2));
+
+      // Top Position Ratio
+      let topPosLong = 60.5;
+      let topPosShort = 39.5;
+      let topPosRatio = 1.53;
+      if (Array.isArray(topPosData) && topPosData[0]) {
+        topPosRatio = parseFloat(topPosData[0].longShortRatio);
+        topPosLong = Number((parseFloat(topPosData[0].longAccount || topPosData[0].longPosition || '0.6') * 100).toFixed(1));
+        topPosShort = Number((100 - topPosLong).toFixed(1));
+      }
+
+      // Top Account Ratio
+      let topAccLong = 57.8;
+      let topAccShort = 42.2;
+      let topAccRatio = 1.37;
+      if (Array.isArray(topAccData) && topAccData[0]) {
+        topAccRatio = parseFloat(topAccData[0].longShortRatio);
+        topAccLong = Number((parseFloat(topAccData[0].longAccount || '0.58') * 100).toFixed(1));
+        topAccShort = Number((100 - topAccLong).toFixed(1));
+      }
+
+      // Global Account Ratio
+      let globAccLong = 61.2;
+      let globAccShort = 38.8;
+      let globAccRatio = 1.58;
+      if (Array.isArray(globalAccData) && globalAccData[0]) {
+        globAccRatio = parseFloat(globalAccData[0].longShortRatio);
+        globAccLong = Number((parseFloat(globalAccData[0].longAccount || '0.61') * 100).toFixed(1));
+        globAccShort = Number((100 - globAccLong).toFixed(1));
+      }
+
+      this.futuresMetrics = {
+        symbol,
+        openInterest,
+        openInterestValueUsdt,
+        openInterestTime: oiData?.time ? Number(oiData.time) : now,
+        fundingRate,
+        fundingRatePercent,
+        nextFundingTime,
+        countdownMs,
+        buyVolumeUsdt: buyVol,
+        sellVolumeUsdt: sellVol,
+        buySellRatio: Number(buySellRatio.toFixed(2)),
+        buyVolumePercent,
+        sellVolumePercent,
+        topPositionLongPercent: topPosLong,
+        topPositionShortPercent: topPosShort,
+        topPositionLongShortRatio: Number(topPosRatio.toFixed(2)),
+        topAccountLongPercent: topAccLong,
+        topAccountShortPercent: topAccShort,
+        topAccountLongShortRatio: Number(topAccRatio.toFixed(2)),
+        globalAccountLongPercent: globAccLong,
+        globalAccountShortPercent: globAccShort,
+        globalAccountLongShortRatio: Number(globAccRatio.toFixed(2)),
+        lastUpdated: now,
+      };
+
+      this.notify();
+    } catch (err) {
+      console.warn('Error fetching futures metrics:', err);
+    }
   }
 
   /**
@@ -374,8 +611,8 @@ class BinanceWsEngine {
     const symbolLower = this.currentSymbol.toLowerCase();
     const streamUrl =
       this.mode === 'testnet'
-        ? `${BINANCE_ENDPOINTS.testnet.stream}/${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms`
-        : `${BINANCE_ENDPOINTS.production.stream}/${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms`;
+        ? `${BINANCE_ENDPOINTS.testnet.stream}/${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms/${symbolLower}@markPrice@1s`
+        : `${BINANCE_ENDPOINTS.production.stream}/${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms/${symbolLower}@markPrice@1s`;
 
     try {
       this.streamWs = new WebSocket(streamUrl);
@@ -420,6 +657,21 @@ class BinanceWsEngine {
       };
 
       this.checkVolatilityAndOrders(oldPrice, newPrice);
+      this.notify();
+    }
+    // Mark Price & Funding Rate stream
+    else if (msg.e === 'markPriceUpdate') {
+      if (msg.p) this.ticker.markPrice = parseFloat(msg.p);
+      if (msg.i) this.ticker.indexPrice = parseFloat(msg.i);
+      if (msg.r !== undefined) {
+        const rate = parseFloat(msg.r);
+        this.futuresMetrics.fundingRate = rate;
+        this.futuresMetrics.fundingRatePercent = rate * 100;
+      }
+      if (msg.T) {
+        this.futuresMetrics.nextFundingTime = msg.T;
+        this.futuresMetrics.countdownMs = Math.max(0, msg.T - Date.now());
+      }
       this.notify();
     }
     // Kline / Candlestick stream

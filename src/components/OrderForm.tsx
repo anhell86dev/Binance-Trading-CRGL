@@ -646,21 +646,30 @@ export const OrderForm: React.FC = () => {
           </div>
         )}
 
-        {/* Big Submit Button */}
+        {/* Big Submit Button with Optimistic UI */}
         <button
           type="submit"
           id="submit-order-btn"
           disabled={isSubmitting}
-          className={`w-full py-3 rounded-lg font-bold text-sm uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
+          className={`w-full py-2.5 rounded-lg font-bold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${
             side === 'BUY'
-              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/40'
-              : 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/40'
-          } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+              ? 'bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white shadow-emerald-950/40'
+              : 'bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white shadow-rose-950/40'
+          } ${isSubmitting ? 'opacity-70 cursor-not-allowed animate-pulse ring-2 ring-amber-400' : ''}`}
         >
-          {side === 'BUY' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-          <span>
-            {side === 'BUY' ? 'Comprar / Long' : 'Vender / Short'} {ticker.symbol} ({leverage}x)
-          </span>
+          {isSubmitting ? (
+            <>
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />
+              <span>Ejecutando {side === 'BUY' ? 'LONG' : 'SHORT'} en Binance...</span>
+            </>
+          ) : (
+            <>
+              {side === 'BUY' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+              <span>
+                {side === 'BUY' ? 'Comprar / Long' : 'Vender / Short'} {ticker.symbol} ({leverage}x Isolated)
+              </span>
+            </>
+          )}
         </button>
       </form>
 

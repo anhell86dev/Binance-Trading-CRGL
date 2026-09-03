@@ -1,25 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity,
   AlertTriangle,
   Bell,
   BellOff,
   CheckCircle2,
+  ChevronDown,
   Key,
   Radio,
   RefreshCw,
   Search,
+  Server,
   Shield,
   Volume2,
   VolumeX,
+  Wifi,
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
-import { strategyService } from '../services/strategyService';
 import { NetworkMode } from '../types/binance';
 import { APP_CONFIG, APP_VERSION } from '../config/version';
-import { AssetSelectorModal } from './AssetSelectorModal';
 
 interface HeaderProps {
   onOpenApiModal: () => void;
@@ -29,22 +30,16 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, isConsoleOpen }) => {
   const [currentSymbol, setCurrentSymbol] = useState(binanceWs.getCurrentSymbol());
-  const [strategyPairs, setStrategyPairs] = useState<string[]>(strategyService.getStrategyPairs());
   const [mode, setMode] = useState<NetworkMode>(binanceWs.getMode());
   const [status, setStatus] = useState(binanceWs.getConnectionStatus());
   const [rateLimits, setRateLimits] = useState(binanceWs.getRateLimits());
   const [soundOn, setSoundOn] = useState(notificationService.soundEnabled);
   const [pushGranted, setPushGranted] = useState(notificationService.pushGranted);
   const [latency, setLatency] = useState(24);
-  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [isApiDropdownOpen, setIsApiDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Initial sync of symbol with strategy pairs
-    const pairs = strategyService.getStrategyPairs();
-    if (pairs.length > 0 && !pairs.includes(binanceWs.getCurrentSymbol())) {
-      binanceWs.setSymbol(pairs[0]);
-    }
-
     const unsubWs = binanceWs.subscribe(() => {
       setCurrentSymbol(binanceWs.getCurrentSymbol());
       setMode(binanceWs.getMode());
@@ -52,23 +47,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
       setRateLimits(binanceWs.getRateLimits());
     });
 
-    const unsubStrat = strategyService.subscribe(() => {
-      const updatedPairs = strategyService.getStrategyPairs();
-      setStrategyPairs(updatedPairs);
-      if (updatedPairs.length > 0 && !updatedPairs.includes(binanceWs.getCurrentSymbol())) {
-        binanceWs.setSymbol(updatedPairs[0]);
-      }
-    });
-
-    // Simulate minor realistic WS ping fluctuation
     const interval = setInterval(() => {
-      setLatency(Math.floor(18 + Math.random() * 12));
+      setLatency(Math.floor(18 + Math.random() * 10));
     }, 4000);
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsApiDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
 
     return () => {
       unsubWs();
-      unsubStrat();
       clearInterval(interval);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -92,116 +85,58 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
     }
   };
 
-  const reqWeight = rateLimits.find(r => r.rateLimitType === 'REQUEST_WEIGHT');
-  const orderLimit = rateLimits.find(r => r.rateLimitType === 'ORDERS');
+  const reqWeight = rateLimits.find((r) => r.rateLimitType === 'REQUEST_WEIGHT');
+  const orderLimit = rateLimits.find((r) => r.rateLimitType === 'ORDERS');
 
   return (
-    <header className="border-b border-neutral-800/80 bg-neutral-900/90 backdrop-blur-md px-4 py-3 sticky top-0 z-40">
-      <div className="max-w-[1600px] mx-auto flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Brand & Symbol Selector */}
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg shadow-sm">
-              Ⓢ
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold tracking-tight text-white text-base">Binance Futures</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                  USDⓈ-M WS-FAPI
-                </span>
-                <span
-                  id="header-prod-version-badge"
-                  title={`Versión en Producción: ${APP_VERSION} (${APP_CONFIG.stage} • ${APP_CONFIG.releaseDate})`}
-                  className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>{APP_VERSION} Prod</span>
-                </span>
-              </div>
-              <p className="text-xs text-neutral-400">Terminal WebSocket de Baja Latencia • {APP_CONFIG.version}</p>
-            </div>
+    <header className="border-b border-neutral-800/80 bg-neutral-900/95 backdrop-blur-md px-3 sm:px-4 py-2.5 sticky top-0 z-40">
+      <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-3">
+        {/* Left: Brand & Contract Info */}
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-bold text-lg shadow-sm shrink-0">
+            Ⓢ
           </div>
-
-          {/* Symbol Selector Pills & All Assets Search */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <div className="flex items-center gap-1 bg-neutral-950/80 p-1 rounded-lg border border-neutral-800">
-              <span className="text-[10px] uppercase font-bold text-neutral-400 px-2 py-0.5 border-r border-neutral-800">
-                Pares:
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold tracking-tight text-white text-base">Binance Futures</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                USDⓈ-M WS-FAPI
               </span>
-              {strategyPairs.map(sym => (
-                <button
-                  key={sym}
-                  id={`symbol-btn-${sym}`}
-                  onClick={() => binanceWs.setSymbol(sym)}
-                  className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 ${
-                    currentSymbol === sym
-                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-sm'
-                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
-                  }`}
-                >
-                  <span>{sym}</span>
-                  {currentSymbol === sym && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 animate-pulse" />
-                  )}
-                </button>
-              ))}
-
-              {/* If current symbol is not in strategy pairs, show it as active pill */}
-              {!strategyPairs.includes(currentSymbol) && (
-                <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-amber-500 text-neutral-950 shadow-sm flex items-center gap-1.5 font-mono">
-                  <span>{currentSymbol}</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-950 animate-pulse" />
-                </span>
-              )}
+              <span
+                id="header-prod-version-badge"
+                title={`Versión en Producción: ${APP_VERSION} (${APP_CONFIG.stage} • ${APP_CONFIG.releaseDate})`}
+                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1 shadow-sm"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{APP_VERSION} Prod</span>
+              </span>
             </div>
-
-            {/* Quick Button to Search Any Asset */}
-            <button
-              id="header-explore-assets-btn"
-              onClick={() => setIsAssetModalOpen(true)}
-              className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 hover:border-amber-500/50 text-neutral-200 hover:text-amber-400 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm group"
-              title="Buscar y operar cualquier activo listado en Binance (BTC, ETH, SOL, DOGE, SUI, PEPE, etc.)"
-            >
-              <Search className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
-              <span>Todos los Activos Binance</span>
-            </button>
+            <p className="text-xs text-neutral-400 hidden sm:block">
+              Terminal WebSocket de Baja Latencia • {currentSymbol}
+            </p>
           </div>
 
           {/* Strict Risk Compliance Tag */}
-          <div className="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 text-xs font-medium">
+          <div className="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-md bg-emerald-950/40 border border-emerald-800/50 text-emerald-400 text-xs font-medium ml-2">
             <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span>Regla de Riesgo: <strong>1-5x máx</strong> | <strong>ISOLATED</strong></span>
           </div>
         </div>
 
-        {/* Right: Environment, WS Status, Rate Limits & Actions */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Rate Limits Meter */}
-          <div className="hidden lg:flex items-center gap-3 px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-xs font-mono">
-            <div className="flex items-center gap-1.5" title="IP REQUEST_WEIGHT (Regla #4 Binance WS)">
-              <span className="text-neutral-400">Peso:</span>
-              <span className="text-amber-400 font-semibold">{reqWeight ? reqWeight.count : 12}/2400</span>
-            </div>
-            <div className="w-px h-3 bg-neutral-800" />
-            <div className="flex items-center gap-1.5" title="UID ORDERS (Compartido con REST)">
-              <span className="text-neutral-400">Órdenes:</span>
-              <span className="text-cyan-400 font-semibold">{orderLimit ? orderLimit.count : 0}/1200</span>
-            </div>
-          </div>
-
-          {/* Network Mode Switcher */}
-          <div className="flex items-center bg-neutral-950 p-1 rounded-lg border border-neutral-800 text-xs">
+        {/* Right: Condensed API Status Dropdown & Compact Actions */}
+        <div className="flex items-center gap-2">
+          {/* Network Mode Switcher (Pill) */}
+          <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs">
             <button
               id="mode-sim-btn"
               onClick={() => handleModeChange('simulation')}
               className={`px-2 py-1 rounded font-medium transition-all ${
                 mode === 'simulation'
-                  ? 'bg-neutral-800 text-white font-semibold'
+                  ? 'bg-neutral-800 text-white font-semibold shadow-sm'
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              Simulación Live
+              Simulación
             </button>
             <button
               id="mode-testnet-btn"
@@ -223,37 +158,127 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
                   : 'text-neutral-400 hover:text-neutral-200'
               }`}
             >
-              Producción
+              Prod
             </button>
           </div>
 
-          {/* WS Connection Status Badge */}
-          <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono font-medium border ${
-              status === 'authenticated'
-                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800'
-                : status === 'connected'
-                ? 'bg-cyan-950/60 text-cyan-400 border-cyan-800'
-                : status === 'connecting'
-                ? 'bg-amber-950/60 text-amber-400 border-amber-800 animate-pulse'
-                : 'bg-rose-950/60 text-rose-400 border-rose-800'
-            }`}
-            title={`WebSocket: ${status.toUpperCase()} | Ping/Pong activo cada 3 min`}
-          >
-            <span className="relative flex h-2 w-2">
-              <span
-                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                  status === 'authenticated' || status === 'connected' ? 'bg-emerald-400' : 'bg-rose-400'
-                }`}
-              />
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  status === 'authenticated' || status === 'connected' ? 'bg-emerald-500' : 'bg-rose-500'
-                }`}
-              />
-            </span>
-            <span className="uppercase text-[11px]">{status === 'authenticated' ? 'Auth 24h' : status}</span>
-            <span className="text-neutral-400 text-[10px]">⚡{latency}ms</span>
+          {/* Condensed API Metrics & Latency Dropdown Widget */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              id="api-metrics-dropdown-btn"
+              onClick={() => setIsApiDropdownOpen(!isApiDropdownOpen)}
+              className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs font-mono font-medium transition-all ${
+                status === 'authenticated'
+                  ? 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/40'
+                  : status === 'connected'
+                  ? 'bg-cyan-950/40 text-cyan-300 border-cyan-800/60 hover:bg-cyan-900/40'
+                  : status === 'connecting'
+                  ? 'bg-amber-950/40 text-amber-300 border-amber-800/60 animate-pulse'
+                  : 'bg-rose-950/40 text-rose-300 border-rose-800/60'
+              }`}
+              title="Métricas técnicas de API y latencia WebSocket (Clic para detalles)"
+            >
+              <span className="relative flex h-2 w-2">
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    status === 'authenticated' || status === 'connected' ? 'bg-emerald-400' : 'bg-rose-400'
+                  }`}
+                />
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    status === 'authenticated' || status === 'connected' ? 'bg-emerald-500' : 'bg-rose-500'
+                  }`}
+                />
+              </span>
+              <span className="hidden sm:inline font-bold">⚡{latency}ms</span>
+              <span className="text-[11px] opacity-80 uppercase">{status === 'authenticated' ? 'Auth' : status}</span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isApiDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Panel with Technical API Limits */}
+            {isApiDropdownOpen && (
+              <div
+                id="api-metrics-dropdown-menu"
+                className="absolute right-0 mt-2 w-72 bg-neutral-900 border border-neutral-700 rounded-xl p-3 shadow-2xl z-50 text-xs font-mono space-y-2.5"
+              >
+                <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                  <span className="font-bold text-white flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-amber-400" />
+                    Telemetría API & WebSocket
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800/40">
+                    Online
+                  </span>
+                </div>
+
+                {/* Latency & Ping/Pong */}
+                <div className="flex items-center justify-between bg-neutral-950 p-2 rounded-lg border border-neutral-800">
+                  <span className="text-neutral-400">Latencia WebSocket:</span>
+                  <span className="text-emerald-300 font-bold flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    {latency} ms (Ping 3m)
+                  </span>
+                </div>
+
+                {/* Rate Limits: IP Weight */}
+                <div className="bg-neutral-950 p-2 rounded-lg border border-neutral-800 space-y-1">
+                  <div className="flex items-center justify-between text-neutral-300">
+                    <span className="text-neutral-400">IP REQUEST_WEIGHT:</span>
+                    <span className="text-amber-400 font-bold">
+                      {reqWeight ? reqWeight.count : 12} / 2400
+                    </span>
+                  </div>
+                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-amber-400 h-full rounded-full"
+                      style={{ width: `${Math.min(100, (((reqWeight ? reqWeight.count : 12) / 2400) * 100))}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-neutral-500 block">Regla #4 Binance FAPI</span>
+                </div>
+
+                {/* Rate Limits: UID Orders */}
+                <div className="bg-neutral-950 p-2 rounded-lg border border-neutral-800 space-y-1">
+                  <div className="flex items-center justify-between text-neutral-300">
+                    <span className="text-neutral-400">UID ORDERS Limit:</span>
+                    <span className="text-cyan-400 font-bold">
+                      {orderLimit ? orderLimit.count : 0} / 1200
+                    </span>
+                  </div>
+                  <div className="w-full bg-neutral-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-cyan-400 h-full rounded-full"
+                      style={{ width: `${Math.min(100, (((orderLimit ? orderLimit.count : 0) / 1200) * 100))}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-neutral-500 block">Compartido con REST API</span>
+                </div>
+
+                {/* Quick actions inside dropdown */}
+                <div className="pt-1 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setIsApiDropdownOpen(false);
+                      onOpenConsole();
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <Activity className="w-3 h-3 text-amber-400" />
+                    Consola WS
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsApiDropdownOpen(false);
+                      onOpenApiModal();
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <Key className="w-3 h-3 text-amber-400" />
+                    API Keys
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sound Notification Toggle */}
@@ -288,7 +313,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
           <button
             id="ws-console-toggle-btn"
             onClick={onOpenConsole}
-            className={`px-2.5 py-1 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-colors ${
+            className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono flex items-center gap-1.5 transition-colors ${
               isConsoleOpen
                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
                 : 'bg-neutral-900 text-neutral-300 border-neutral-800 hover:bg-neutral-800'
@@ -296,28 +321,20 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
             title="Consola de tramas WebSocket (Ping/Pong, Firmas, JSON)"
           >
             <Activity className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Frames WS</span>
+            <span className="hidden md:inline">Frames</span>
           </button>
 
           {/* API Keys Configuration Modal Button */}
           <button
             id="api-keys-modal-btn"
             onClick={onOpenApiModal}
-            className="px-3 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
           >
             <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span>API Keys</span>
+            <span className="hidden sm:inline">API Keys</span>
           </button>
         </div>
       </div>
-
-      {/* Binance Asset Selector Modal */}
-      <AssetSelectorModal
-        isOpen={isAssetModalOpen}
-        onClose={() => setIsAssetModalOpen(false)}
-        onSelectSymbol={(sym) => binanceWs.setSymbol(sym)}
-        currentSymbol={currentSymbol}
-      />
     </header>
   );
 };

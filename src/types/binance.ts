@@ -217,3 +217,42 @@ export interface WsLogFrame {
   summary: string;
   data: any;
 }
+
+export interface FuturesMarketMetrics {
+  symbol: string;
+  // Interés Abierto
+  openInterest: number;
+  openInterestValueUsdt: number;
+  openInterestTime: number;
+
+  // Tasa de Financiación
+  fundingRate: number;
+  fundingRatePercent: number;
+  nextFundingTime: number;
+  countdownMs: number;
+
+  // Volumen de Compra y Venta
+  buyVolumeUsdt: number;
+  sellVolumeUsdt: number;
+  buySellRatio: number;
+  buyVolumePercent: number;
+  sellVolumePercent: number;
+
+  // Posiciones de Long/Short (Top Traders Positions)
+  topPositionLongPercent: number;
+  topPositionShortPercent: number;
+  topPositionLongShortRatio: number;
+
+  // Cuentas de Long/Short (Top Traders Accounts)
+  topAccountLongPercent: number;
+  topAccountShortPercent: number;
+  topAccountLongShortRatio: number;
+
+  // Cuentas Globales Long/Short (Global Accounts Ratio)
+  globalAccountLongPercent: number;
+  globalAccountShortPercent: number;
+  globalAccountLongShortRatio: number;
+
+  lastUpdated: number;
+}
+
