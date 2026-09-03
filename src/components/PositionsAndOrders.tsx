@@ -142,7 +142,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
   return (
     <div
       className="w-full flex-1 bg-neutral-900/80 border border-neutral-800/80 rounded-xl overflow-hidden flex flex-col"
-      style={{ minHeight: '460px' }}
+      style={{ minHeight: '800px' }}
     >
       {/* Tabs Bar */}
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/60 px-3 pt-2">

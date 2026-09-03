@@ -88,7 +88,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
   // VISTA EXPANDIDA (Prioridad Operativa a Pantalla Completa para la Bandeja)
   if (isTrayExpanded) {
     return (
-      <div id="wallet-view-expanded" className="w-full max-w-[1920px] mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-4 min-h-screen pb-32">
+      <div id="wallet-view-expanded" className="w-full max-w-none px-3 sm:px-6 lg:px-8 mx-auto flex flex-col gap-4 min-h-screen pb-32">
         {/* Ribbon de Resumen Compacto en Vista Expandida */}
         <div className="bg-neutral-900/95 p-3 sm:p-4 rounded-xl border border-neutral-800 flex flex-wrap items-center justify-between gap-3 shadow-md sticky top-0 z-20 backdrop-blur-md">
           <div className="flex items-center gap-3">
@@ -151,8 +151,11 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
 
         {/* Bandeja Rápida en Pantalla Completa con Scroll Completo */}
-        <div className="flex-1 w-full bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-xl min-h-[650px]">
-          <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between">
+        <div
+          className="flex-1 w-full bg-neutral-900/95 rounded-2xl border-2 border-neutral-800 overflow-hidden flex flex-col shadow-2xl"
+          style={{ minHeight: '950px' }}
+        >
+          <div className="px-4 py-3.5 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Layers className="w-4 h-4 text-amber-400" />
               <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
@@ -186,9 +189,9 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
     );
   }
 
-  // VISTA NORMAL (Ancha, con la tarjeta de posiciones visible inmediatamente arriba)
+  // VISTA NORMAL (Ancha y espaciosa, con la tarjeta de posiciones visible inmediatamente arriba)
   return (
-    <div id="wallet-view-container" className="w-full max-w-[1920px] mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-5 min-h-screen pb-32">
+    <div id="wallet-view-container" className="w-full max-w-none px-3 sm:px-6 lg:px-8 mx-auto flex flex-col gap-6 min-h-screen pb-32">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-900/80 p-4 rounded-xl border border-neutral-800">
         <div className="flex items-center gap-3">
@@ -326,11 +329,14 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
       </div>
 
-      {/* TARJETA PRINCIPAL: BANDEJA DE POSICIONES ACTIVAS & ÓRDENES (Visible inmediatamente) */}
-      <div id="wallet-tray-section" className="w-full bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-xl">
-        <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+      {/* TARJETA PRINCIPAL: BANDEJA DE POSICIONES ACTIVAS & ÓRDENES (Doble de amplia y visible) */}
+      <div
+        id="wallet-tray-section"
+        className="w-full bg-neutral-900/95 rounded-2xl border-2 border-neutral-800 hover:border-amber-500/40 overflow-hidden flex flex-col shadow-2xl ring-1 ring-amber-500/10 transition-colors"
+      >
+        <div className="px-4 py-3.5 bg-neutral-950 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-xs">
               <Layers className="w-4 h-4" />
             </div>
             <div>
@@ -351,42 +357,42 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Presets de Altura de Bandeja */}
+            {/* Presets de Altura de Bandeja - Doble de tamaño */}
             <div className="flex items-center bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px] font-mono">
               <span className="px-2 text-neutral-400 hidden sm:inline">Altura:</span>
               <button
                 type="button"
                 onClick={() => setTrayHeightMode('STANDARD')}
-                className={`px-2 py-1 rounded transition-colors ${
+                className={`px-2.5 py-1 rounded transition-colors ${
                   trayHeightMode === 'STANDARD'
                     ? 'bg-neutral-800 text-white font-bold'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Altura estándar (450px)"
+                title="Altura estándar (850px)"
               >
                 Normal
               </button>
               <button
                 type="button"
                 onClick={() => setTrayHeightMode('EXPANDED')}
-                className={`px-2 py-1 rounded transition-colors ${
+                className={`px-2.5 py-1 rounded transition-colors ${
                   trayHeightMode === 'EXPANDED'
                     ? 'bg-amber-400 text-neutral-950 font-bold'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Bandeja amplia (620px)"
+                title="Bandeja amplia (1200px - 2x)"
               >
-                Amplia
+                Amplia (2x)
               </button>
               <button
                 type="button"
                 onClick={() => setTrayHeightMode('XL')}
-                className={`px-2 py-1 rounded transition-colors ${
+                className={`px-2.5 py-1 rounded transition-colors ${
                   trayHeightMode === 'XL'
                     ? 'bg-amber-400 text-neutral-950 font-bold'
                     : 'text-neutral-400 hover:text-white'
                 }`}
-                title="Bandeja extra grande (850px)"
+                title="Bandeja extra grande (1600px)"
               >
                 XL
               </button>
@@ -414,16 +420,16 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
           </div>
         </div>
 
-        {/* Contenedor con altura configurada y scroll suave garantizado - Estilo inline para asegurar visibilidad total */}
+        {/* Contenedor con altura configurada al doble para máxima visibilidad */}
         <div
           className="w-full p-2 sm:p-4 flex-1 flex flex-col overflow-y-auto transition-all duration-200"
           style={{
             minHeight:
               trayHeightMode === 'STANDARD'
-                ? '500px'
+                ? '850px'
                 : trayHeightMode === 'EXPANDED'
-                ? '680px'
-                : '920px',
+                ? '1200px'
+                : '1600px',
           }}
         >
           <PositionsAndOrders defaultTab="positions" onOpenOrderModal={onOpenOrderModal} />

@@ -117,22 +117,22 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       </div>
 
       {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
-      <div className="overflow-x-auto w-full" style={{ minHeight: '220px' }}>
-        <table className="w-full text-left text-xs font-mono">
+      <div className="overflow-x-auto w-full" style={{ minHeight: '520px' }}>
+        <table className="w-full text-left text-xs font-mono min-w-[1280px]">
           <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
             <tr>
-              <th className="py-2.5 px-3">Par</th>
-              <th className="py-2.5 px-3">Estrategia Ligada</th>
-              <th className="py-2.5 px-3">Gestión de Riesgo</th>
-              <th className="py-2.5 px-3">Apalancamiento</th>
-              <th className="py-2.5 px-3">Margen</th>
-              <th className="py-2.5 px-3">Tamaño</th>
-              <th className="py-2.5 px-3">Precio Entrada</th>
-              <th className="py-2.5 px-3">Precio Marcado</th>
-              <th className="py-2.5 px-3">Precio Liq.</th>
-              <th className="py-2.5 px-3">PnL No Realizado</th>
-              <th className="py-2.5 px-3">TP / SL</th>
-              <th className="py-2.5 px-3 text-right">Acción</th>
+              <th className="py-3 px-4">Par</th>
+              <th className="py-3 px-4">Estrategia Ligada</th>
+              <th className="py-3 px-4">Gestión de Riesgo</th>
+              <th className="py-3 px-4">Apalancamiento</th>
+              <th className="py-3 px-4">Margen</th>
+              <th className="py-3 px-4">Tamaño</th>
+              <th className="py-3 px-4">Precio Entrada</th>
+              <th className="py-3 px-4">Precio Marcado</th>
+              <th className="py-3 px-4">Precio Liq.</th>
+              <th className="py-3 px-4">PnL No Realizado</th>
+              <th className="py-3 px-4">TP / SL</th>
+              <th className="py-3 px-4 text-right">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800/60">
