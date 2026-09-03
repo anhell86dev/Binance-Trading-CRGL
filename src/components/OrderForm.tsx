@@ -4,13 +4,16 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   ChevronDown,
+  ExternalLink,
   Layers,
   Lock,
+  Maximize2,
   Search,
   Shield,
   Sliders,
   Sparkles,
   Target,
+  X,
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
@@ -23,7 +26,13 @@ import { RiskManagementInputs } from './RiskManagementInputs';
 import { LiquidationPreview } from './LiquidationPreview';
 import { strategyAutofillService, AutofillPayload } from '../services/strategyAutofillService';
 
-export const OrderForm: React.FC = () => {
+export interface OrderFormProps {
+  isModal?: boolean;
+  onClose?: () => void;
+  onPopOut?: () => void;
+}
+
+export const OrderForm: React.FC<OrderFormProps> = ({ isModal = false, onClose, onPopOut }) => {
   const [ticker, setTicker] = useState(binanceWs.getTicker());
   const [balance, setBalance] = useState(binanceWs.getBalance());
   const [side, setSide] = useState<OrderSide>('BUY');
@@ -248,12 +257,39 @@ export const OrderForm: React.FC = () => {
             <h3 className="text-sm font-bold text-white uppercase tracking-wider">
               Formulario Binance Futures
             </h3>
+            {isModal && (
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                Popup
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-1.5 text-xs font-mono">
-            <span className="text-neutral-400">TIF:</span>
-            <span className="px-1.5 py-0.5 rounded bg-neutral-800 font-bold text-amber-400 border border-neutral-700">
-              GTC
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs font-mono">
+              <span className="text-neutral-400">TIF:</span>
+              <span className="px-1.5 py-0.5 rounded bg-neutral-800 font-bold text-amber-400 border border-neutral-700">
+                GTC
+              </span>
+            </div>
+            {onPopOut && !isModal && (
+              <button
+                type="button"
+                onClick={onPopOut}
+                className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-amber-400 border border-neutral-700 transition-colors"
+                title="Abrir en ventana emergente (Popup)"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {isModal && onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1 rounded bg-neutral-800 hover:bg-rose-900/50 text-neutral-400 hover:text-rose-300 border border-neutral-700 transition-colors"
+                title="Cerrar ventana emergente"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 

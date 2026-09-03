@@ -1131,6 +1131,92 @@ class BinanceWsEngine {
   }
 
   /**
+   * Place Market Order
+   */
+  public async placeMarketOrder(config: {
+    symbol: string;
+    side: OrderSide;
+    quantity: number;
+    leverage: number;
+    tpPrice?: number;
+    slPrice?: number;
+  }): Promise<OpenOrder> {
+    const clampedLeverage = this.clampLeverage(config.leverage);
+    const orderId = `MKT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const currentPrice = this.ticker.lastPrice || 100;
+
+    const params = {
+      symbol: config.symbol,
+      side: config.side,
+      type: 'MARKET',
+      quantity: formatDecimal(config.quantity, 3),
+      marginType: 'ISOLATED',
+      leverage: clampedLeverage,
+    };
+
+    const newOrder: OpenOrder = {
+      orderId,
+      clientOrderId: orderId,
+      symbol: config.symbol,
+      side: config.side,
+      type: 'MARKET',
+      price: currentPrice,
+      origQty: config.quantity,
+      executedQty: config.quantity,
+      status: 'FILLED',
+      timeInForce: 'GTC',
+      leverage: clampedLeverage,
+      marginType: 'ISOLATED',
+      tpPrice: config.tpPrice,
+      slPrice: config.slPrice,
+      createdAt: Date.now(),
+    };
+
+    if (this.mode === 'simulation') {
+      this.executeOrderFill(newOrder, currentPrice);
+      this.logFrame('OUT', 'REQUEST', `[Simulación] Orden Market ejecutada: ${config.side} ${config.quantity} ${config.symbol}`, newOrder);
+      notificationService.notify(
+        'EXECUTION',
+        'Orden Market Ejecutada',
+        `${config.side} ${config.quantity} ${config.symbol} @ $${currentPrice.toFixed(2)} (${clampedLeverage}x ISOLATED)`,
+        'normal'
+      );
+      this.recalculateAccountStats();
+      this.persistState();
+      this.notify();
+      return newOrder;
+    }
+
+    try {
+      await this.sendWsRequest('order.place', params, true);
+      this.executeOrderFill(newOrder, currentPrice);
+      this.recalculateAccountStats();
+      this.persistState();
+      notificationService.notify(
+        'EXECUTION',
+        'Orden Market Ejecutada en Binance',
+        `${config.side} ${config.quantity} ${config.symbol}`,
+        'normal'
+      );
+      this.notify();
+      return newOrder;
+    } catch (err: any) {
+      notificationService.notify('SYSTEM', 'Error al ejecutar orden Market en Binance', err.message, 'urgent');
+      throw err;
+    }
+  }
+
+  /**
+   * Close all active positions
+   */
+  public async closeAllPositions(): Promise<void> {
+    const activeSymbols = this.positions.map(p => p.symbol);
+    for (const sym of activeSymbols) {
+      await this.closePosition(sym);
+    }
+  }
+
+  /**
    * Place Scaled Orders (Orden Escalonada)
    * Divides total quantity across N price levels between minPrice and maxPrice
    */
@@ -1873,6 +1959,16 @@ class BinanceWsEngine {
         : 0;
       this.balance.marginRatio = Number(ratio.toFixed(2));
     }
+  }
+
+  public setSimulatedBalance(newBalance: Partial<AccountBalance>) {
+    this.balance = {
+      ...this.balance,
+      ...newBalance,
+    };
+    this.recalculateAccountStats();
+    this.persistState();
+    this.notify();
   }
 
   // --- ADVANCED PERFORMANCE METRICS COMPUTATION ---
