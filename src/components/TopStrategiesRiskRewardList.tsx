@@ -288,26 +288,26 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                   </div>
 
                   {/* Key Stats Grid: 1. Precio Live (con cambio abajo) & 2. Entrada 1 (con % vs E1 abajo) */}
-                  <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-2 rounded-lg border border-neutral-800/80 font-mono">
+                  <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-2.5 rounded-lg border border-neutral-800/80 font-mono">
                     {/* Precio Live con cambio abajo y dirección */}
                     <div className="flex flex-col">
-                      <span className="text-[9px] text-amber-400/90 font-medium flex items-center gap-1">
-                        <Radio className="w-2 h-2 text-amber-400 animate-pulse" />
+                      <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 uppercase tracking-wider">
+                        <Radio className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
                         Precio Live
                       </span>
-                      <span className="text-xs font-bold text-white mt-0.5">
+                      <span className="text-base sm:text-lg font-black text-amber-300 tracking-tight mt-0.5">
                         ${item.livePrice.toFixed(decimalPlaces)}
                       </span>
                       {/* CAMBIO PASADO ABAJO DEL PRECIO */}
                       <span
-                        className={`text-[9px] font-bold flex items-center gap-0.5 mt-0.5 ${
+                        className={`text-[11px] font-bold flex items-center gap-0.5 mt-0.5 ${
                           item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'
                         }`}
                       >
                         {item.isPricePositive ? (
-                          <ArrowUpRight className="w-2.5 h-2.5" />
+                          <ArrowUpRight className="w-3 h-3" />
                         ) : (
-                          <ArrowDownRight className="w-2.5 h-2.5" />
+                          <ArrowDownRight className="w-3 h-3" />
                         )}
                         <span>
                           {item.isPricePositive ? '+' : ''}
@@ -317,21 +317,21 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                     </div>
 
                     {/* Entrada 1 con % vs E1 pasado abajo de Entrada 1 */}
-                    <div className="flex flex-col border-l border-neutral-850 pl-2">
-                      <span className="text-[9px] text-sky-400/90 font-medium">
+                    <div className="flex flex-col border-l border-neutral-800 pl-2.5">
+                      <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
                         Entrada 1 (E1)
                       </span>
-                      <span className="text-xs font-bold text-sky-300 mt-0.5">
+                      <span className="text-base sm:text-lg font-black text-white tracking-tight mt-0.5">
                         ${item.entry1Price.toFixed(decimalPlaces)}
                       </span>
                       {/* % VS E1 PASADO ABAJO DE PRECIO ENTRADA DE E1 */}
                       <span
-                        className={`text-[9px] font-bold mt-0.5 ${
+                        className={`text-[11px] font-bold mt-0.5 ${
                           isCloseToEntry
                             ? 'text-emerald-400'
                             : isClosest
                             ? 'text-amber-300'
-                            : 'text-neutral-300'
+                            : 'text-sky-300'
                         }`}
                       >
                         {item.diffPct >= 0 ? '+' : ''}
@@ -340,15 +340,15 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                     </div>
                   </div>
 
-                  {/* SL / TP1 Compact Line */}
-                  <div className="flex items-center justify-between text-[9px] font-mono px-1 text-neutral-400">
+                  {/* SL / TP1 Compact Line con números ampliados */}
+                  <div className="flex items-center justify-between text-xs font-mono px-1 text-neutral-400">
                     <span className="text-rose-400 font-bold">
                       SL: ${item.prices.slPrice ? item.prices.slPrice.toFixed(decimalPlaces) : '-'}
                     </span>
                     <span className="text-emerald-400 font-bold">
                       TP1: ${item.prices.tp1Price ? item.prices.tp1Price.toFixed(decimalPlaces) : '-'}
                     </span>
-                    <span className="text-neutral-500">2x Isolate</span>
+                    <span className="text-neutral-500 text-[10px]">2x Isolate</span>
                   </div>
 
                   {/* Directional Mini Track (Compact 4px rail with directional arrow) */}
@@ -454,53 +454,53 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                       </td>
 
                       {/* 1. PRECIO LIVE: CAMBIO ABAJO DEL PRECIO */}
-                      <td className="py-2 px-2.5 bg-amber-500/5 border-x border-amber-500/20">
+                      <td className="py-2.5 px-3 bg-amber-500/5 border-x border-amber-500/20 font-mono">
                         <div className="flex flex-col">
-                          <span className="font-bold text-amber-300">
+                          <span className="font-black text-amber-300 text-sm sm:text-base tracking-tight">
                             ${item.livePrice.toFixed(decimalPlaces)}
                           </span>
                           <span
-                            className={`text-[9px] font-bold flex items-center gap-0.5 ${
+                            className={`text-[11px] font-bold flex items-center gap-0.5 ${
                               item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'
                             }`}
                           >
-                            {item.isPricePositive ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
+                            {item.isPricePositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                             <span>{item.isPricePositive ? '+' : ''}{(item.liveData.change24hPercent || 0).toFixed(2)}% (24h)</span>
                           </span>
                         </div>
                       </td>
 
                       {/* 2. ENTRADA 1: % VS E1 ABAJO DEL PRECIO */}
-                      <td className="py-2 px-2.5">
+                      <td className="py-2.5 px-3 font-mono">
                         <div className="flex flex-col">
-                          <span className="font-bold text-white">${item.entry1Price.toFixed(decimalPlaces)}</span>
-                          <span className="text-[9px] font-bold text-sky-300">
+                          <span className="font-black text-white text-sm sm:text-base tracking-tight">${item.entry1Price.toFixed(decimalPlaces)}</span>
+                          <span className="text-[11px] font-bold text-sky-300">
                             {item.diffPct >= 0 ? '+' : ''}{item.diffPct.toFixed(2)}% vs E1
                           </span>
                         </div>
                       </td>
 
-                      <td className="py-2 px-2.5 text-rose-400 font-bold">
+                      <td className="py-2.5 px-3 text-rose-400 font-bold font-mono text-sm">
                         ${item.prices.slPrice ? item.prices.slPrice.toFixed(decimalPlaces) : '-'}
                       </td>
 
-                      <td className="py-2 px-2.5 text-emerald-400 font-bold">
+                      <td className="py-2.5 px-3 text-emerald-400 font-bold font-mono text-sm">
                         ${item.prices.tp1Price ? item.prices.tp1Price.toFixed(decimalPlaces) : '-'}
                       </td>
 
-                      <td className="py-2 px-2.5 text-center">
-                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
+                      <td className="py-2.5 px-3 text-center">
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold text-xs font-mono">
                           1:{item.ratio.toFixed(1)}
                         </span>
                       </td>
 
-                      <td className="py-2 px-2.5 text-right">
+                      <td className="py-2.5 px-3 text-right">
                         <button
                           type="button"
                           onClick={() => handleExecute(item)}
-                          className="px-2 py-1 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-[10px] inline-flex items-center gap-1 shadow-xs"
+                          className="px-2.5 py-1.5 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs inline-flex items-center gap-1 shadow-xs transition-all active:scale-95"
                         >
-                          <Zap className="w-2.5 h-2.5 fill-neutral-950" />
+                          <Zap className="w-3 h-3 fill-neutral-950" />
                           <span>Cargar</span>
                         </button>
                       </td>

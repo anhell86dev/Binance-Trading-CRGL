@@ -79,6 +79,60 @@ export const DerivativesMetricsInfoModal: React.FC<DerivativesMetricsInfoModalPr
 
         {/* Scrollable Content */}
         <div className="p-5 overflow-y-auto space-y-4 custom-scrollbar text-sm text-neutral-200">
+          {/* SECCIÓN SEMÁFORO DE MERCADO: ¿OPERAR O NO OPERAR? */}
+          <div className="bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 border border-neutral-700 rounded-xl p-4 flex flex-col gap-3 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-white font-bold text-sm">
+                <div className="flex items-center gap-1 bg-neutral-950 px-2 py-1 rounded-md border border-neutral-800">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
+                </div>
+                <span>Semáforo Operativo: ¿Operar o No Operar?</span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                Sistema de Decisión
+              </span>
+            </div>
+            <p className="text-xs leading-relaxed text-neutral-300">
+              El semáforo sintetiza en tiempo real los 4 pilares de Binance Futures (<strong>Interés Abierto</strong>, <strong>Funding Rate</strong>, <strong>Taker C/V</strong> y <strong>Top Traders L/S</strong>) para dictaminar si el mercado tiene confluencia de continuación alcista o riesgo de caída.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              <div className="bg-emerald-950/40 border border-emerald-500/40 rounded-lg p-2.5 flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,1)]" />
+                  <span>VERDE: Continuación Alcista</span>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-300 uppercase">Apto Operar Long</span>
+                <p className="text-[11px] text-neutral-300">
+                  OI en expansión con precio al alza + Taker comprador dominante + Ballenas en Long. Alta probabilidad de seguimiento alcista.
+                </p>
+              </div>
+
+              <div className="bg-amber-950/40 border border-amber-500/40 rounded-lg p-2.5 flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,1)]" />
+                  <span>AMARILLO: Zona Neutral</span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-300 uppercase">Esperar Confirmación</span>
+                <p className="text-[11px] text-neutral-300">
+                  Fuerzas equilibradas o señales cruzadas (ej: Taker compra pero las ballenas están en short). No apresurar entradas sin gatillo claro.
+                </p>
+              </div>
+
+              <div className="bg-rose-950/40 border border-rose-500/40 rounded-lg p-2.5 flex flex-col gap-1">
+                <div className="flex items-center gap-1.5 text-rose-400 font-bold">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,1)]" />
+                  <span>ROJO: Posible Caída</span>
+                </div>
+                <span className="text-[10px] font-bold text-rose-300 uppercase">No Operar en Long</span>
+                <p className="text-[11px] text-neutral-300">
+                  Fuerte presión bajista: Taker vendedor agresivo, ballenas en short o sobrecalentamiento de funding con riesgo inminente de corrección.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* 1. Open Interest (OI) */}
           <div className="bg-neutral-950/80 border border-amber-500/30 rounded-xl p-4 flex flex-col gap-2.5">
             <div className="flex items-center justify-between">

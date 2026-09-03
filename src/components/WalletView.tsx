@@ -189,9 +189,9 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
     );
   }
 
-  // VISTA NORMAL (Ancha y espaciosa, con la tarjeta de posiciones visible inmediatamente arriba)
+  // VISTA NORMAL (Ancha y espaciosa, con la bandeja operativa hasta abajo ocupando toda la página)
   return (
-    <div id="wallet-view-container" className="w-full max-w-none px-3 sm:px-6 lg:px-8 mx-auto flex flex-col gap-6 min-h-screen pb-32">
+    <div id="wallet-view-container" className="w-full max-w-none px-3 sm:px-6 lg:px-8 mx-auto flex flex-col gap-5 min-h-screen pb-6 flex-1">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-900/80 p-4 rounded-xl border border-neutral-800">
         <div className="flex items-center gap-3">
@@ -266,73 +266,142 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
       </div>
 
-      {/* Balance Big Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Balance Total */}
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm">
-          <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span>Saldo Total Margen</span>
-            <DollarSign className="w-4 h-4 text-amber-400" />
+      {/* 1. SECCIÓN SUPERIOR: Saldo Margen, Garantía, PnL y Protección + Riesgo & Margen Isolated A SU ALTURA */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+        {/* Bloque de 4 Tarjetas: PnL abajo de Saldo Margen, y Protección Riesgo abajo de Garantía */}
+        <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Columna Izquierda: Saldo Total Margen (arriba) y PnL No Realizado (abajo) */}
+          <div className="flex flex-col gap-4">
+            {/* Card 1: Saldo Total Margen */}
+            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
+              <div className="flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold">Saldo Total Margen</span>
+                <DollarSign className="w-4 h-4 text-amber-400" />
+              </div>
+              <div className="text-xl sm:text-2xl font-black font-mono text-white tracking-tight">
+                ${(balance.totalWalletBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                <span className="text-xs text-neutral-400 font-sans font-normal">USDT</span>
+              </div>
+              <div className="text-[11px] text-neutral-400 flex items-center gap-1">
+                <span>Disponible:</span>
+                <span className="font-mono text-neutral-200 font-bold">
+                  ${(balance.availableBalance || 0).toFixed(2)} USDT
+                </span>
+              </div>
+            </div>
+
+            {/* Card 2: PnL No Realizado Total (ABAJO de Saldo Margen) */}
+            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
+              <div className="flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold">PnL No Realizado Total</span>
+                <TrendingUp className={`w-4 h-4 ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} />
+              </div>
+              <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {totalUnrealizedPnl >= 0 ? '+' : ''}${totalUnrealizedPnl.toFixed(2)}{' '}
+                <span className="text-xs text-neutral-400 font-sans font-normal">USDT</span>
+              </div>
+              <div className="text-[11px] text-neutral-400">
+                {totalUnrealizedPnl >= 0 ? 'Rendimiento positivo' : 'Exposición controlada'}
+              </div>
+            </div>
           </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-white">
-            ${(balance.totalWalletBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-neutral-400 font-sans">USDT</span>
-          </div>
-          <div className="text-[11px] text-neutral-400 flex items-center gap-1">
-            <span>Disponible:</span>
-            <span className="font-mono text-neutral-200 font-bold">
-              ${(balance.availableBalance || 0).toFixed(2)} USDT
-            </span>
+
+          {/* Columna Derecha: Garantía en Margen Aislado (arriba) y Protección de Riesgo (abajo) */}
+          <div className="flex flex-col gap-4">
+            {/* Card 3: Garantía en Margen Aislado */}
+            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
+              <div className="flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold">Garantía en Margen Aislado</span>
+                <Lock className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="text-xl sm:text-2xl font-black font-mono text-blue-300 tracking-tight">
+                ${totalIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                <span className="text-xs text-neutral-400 font-sans font-normal">USDT</span>
+              </div>
+              <div className="text-[11px] text-neutral-400 flex items-center gap-1">
+                <span>En {positions.length} posiciones activas</span>
+              </div>
+            </div>
+
+            {/* Card 4: Protección de Riesgo (ABAJO de Garantía) */}
+            <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm flex-1">
+              <div className="flex items-center justify-between text-neutral-400 text-xs">
+                <span className="font-semibold">Protección de Riesgo</span>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              </div>
+              <div className="text-xl sm:text-2xl font-black font-mono text-emerald-300 tracking-tight">
+                1x - 5x <span className="text-xs text-neutral-400 font-sans font-normal">Máx</span>
+              </div>
+              <div className="text-[11px] text-emerald-400/90 font-medium flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                Sin riesgo de contagio cruzado
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Card 2: Margen Aislado en Posiciones */}
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm">
-          <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span>Garantía en Margen Aislado</span>
-            <Lock className="w-4 h-4 text-blue-400" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-blue-300">
-            ${totalIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs text-neutral-400 font-sans">USDT</span>
-          </div>
-          <div className="text-[11px] text-neutral-400 flex items-center gap-1">
-            <span>En {positions.length} posiciones activas</span>
-          </div>
-        </div>
+        {/* Bloque Riesgo y Margen Isolated: SUBIDO a la altura de Saldo Margen */}
+        <div className="lg:col-span-5 flex flex-col">
+          <div className="bg-neutral-900/80 rounded-xl border border-neutral-800 p-3.5 flex flex-col gap-3 shadow-lg h-full">
+            <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                  Riesgo y Margen Isolated
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30">
+                100% Aislado
+              </span>
+            </div>
 
-        {/* Card 3: PnL No Realizado */}
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm">
-          <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span>PnL No Realizado Total</span>
-            <TrendingUp className={`w-4 h-4 ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`} />
-          </div>
-          <div className={`text-xl sm:text-2xl font-bold font-mono ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {totalUnrealizedPnl >= 0 ? '+' : ''}${totalUnrealizedPnl.toFixed(2)} <span className="text-xs text-neutral-400 font-sans">USDT</span>
-          </div>
-          <div className="text-[11px] text-neutral-400">
-            {totalUnrealizedPnl >= 0 ? 'Rendimiento positivo' : 'Exposición controlada'}
-          </div>
-        </div>
-
-        {/* Card 4: Seguridad & Límite de Apalancamiento */}
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-2 shadow-sm">
-          <div className="flex items-center justify-between text-neutral-400 text-xs">
-            <span>Protección de Riesgo</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-xl sm:text-2xl font-bold font-mono text-emerald-300">
-            1x - 5x <span className="text-xs text-neutral-400 font-sans">Máx</span>
-          </div>
-          <div className="text-[11px] text-emerald-400/90 font-medium flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" />
-            Sin riesgo de contagio cruzado
+            {/* Live Risk & Isolated Margin Widget a la altura de Saldo */}
+            <div className="flex-1">
+              <RiskProtocolWidget />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* TARJETA PRINCIPAL: BANDEJA DE POSICIONES ACTIVAS & ÓRDENES (Doble de amplia y visible) */}
+      {/* 2. UTILIZACIÓN DEL MARGEN DE LA CUENTA: OCUPA TODA LA HORIZONTAL */}
+      <div className="w-full bg-neutral-900/80 p-4 rounded-xl border border-neutral-800 flex flex-col gap-3 shadow-sm">
+        <div className="flex items-center justify-between text-xs flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-white text-sm">Utilización del Margen de la Cuenta</span>
+            <span className="text-xs font-mono text-neutral-400">
+              ({totalIsolatedMargin.toFixed(2)} / {(balance.totalWalletBalance || 0).toFixed(2)} USDT)
+            </span>
+          </div>
+          <span className="font-mono font-bold text-sm text-amber-400">
+            {marginUsagePercent.toFixed(1)}% Usado
+          </span>
+        </div>
+
+        {/* Visual Progress Bar de Ancho Completo */}
+        <div className="w-full h-4 rounded-full bg-neutral-950 overflow-hidden border border-neutral-800 flex">
+          <div
+            className={`h-full transition-all duration-500 rounded-full ${
+              marginUsagePercent > 70
+                ? 'bg-rose-500'
+                : marginUsagePercent > 40
+                ? 'bg-amber-500'
+                : 'bg-emerald-500'
+            }`}
+            style={{ width: `${Math.min(100, marginUsagePercent)}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] text-neutral-400 font-mono">
+          <span>0% (Todo libre)</span>
+          <span className="text-emerald-400 font-medium font-sans">Zona Segura (&lt; 50%)</span>
+          <span className="text-rose-400 font-medium font-sans">Límite Prudente (80%)</span>
+        </div>
+      </div>
+
+      {/* 3. BANDEJA OPERATIVA DE POSICIONES & ÓRDENES: HASTA ABAJO Y OCUPANDO TODA LA PÁGINA HASTA ABAJO */}
       <div
         id="wallet-tray-section"
-        className="w-full bg-neutral-900/95 rounded-2xl border-2 border-neutral-800 hover:border-amber-500/40 overflow-hidden flex flex-col shadow-2xl ring-1 ring-amber-500/10 transition-colors"
+        className="w-full flex-1 bg-neutral-900/95 rounded-2xl border-2 border-neutral-800 hover:border-amber-500/40 overflow-hidden flex flex-col shadow-2xl ring-1 ring-amber-500/10 transition-colors"
       >
         <div className="px-4 py-3.5 bg-neutral-950 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -357,7 +426,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Presets de Altura de Bandeja - Doble de tamaño */}
+            {/* Presets de Altura de Bandeja */}
             <div className="flex items-center bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px] font-mono">
               <span className="px-2 text-neutral-400 hidden sm:inline">Altura:</span>
               <button
@@ -420,7 +489,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
           </div>
         </div>
 
-        {/* Contenedor con altura configurada al doble para máxima visibilidad */}
+        {/* Contenedor que ocupa toda la página hacia abajo */}
         <div
           className="w-full p-2 sm:p-4 flex-1 flex flex-col overflow-y-auto transition-all duration-200"
           style={{
@@ -433,108 +502,6 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
           }}
         >
           <PositionsAndOrders defaultTab="positions" onOpenOrderModal={onOpenOrderModal} />
-        </div>
-      </div>
-
-      {/* SECCIÓN DUAL DE ANÁLISIS: 1. Widget de Riesgo & Margen Isolated + 2. Control de Garantía y Utilización */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Columna Izquierda (lg:col-span-5): Protocolo de Riesgo & Margen Isolated en Tiempo Real */}
-        <div className="lg:col-span-5 flex flex-col">
-          <div className="bg-neutral-900/80 rounded-xl border border-neutral-800 p-3.5 flex flex-col gap-3 shadow-lg h-full">
-            <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-amber-400" />
-                <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                  Riesgo y Margen Isolated
-                </h3>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold border border-amber-500/30">
-                100% Aislado
-              </span>
-            </div>
-
-            {/* Embedded Live Risk & Isolated Margin Widget */}
-            <div className="flex-1">
-              <RiskProtocolWidget />
-            </div>
-          </div>
-        </div>
-
-        {/* Columna Derecha (lg:col-span-7): Diagnóstico de Seguridad, Utilización de Margen y Acciones */}
-        <div className="lg:col-span-7 flex flex-col gap-4">
-          {/* Barra de Utilización de Margen */}
-          <div className="bg-neutral-900/80 p-4 rounded-xl border border-neutral-800 flex flex-col gap-3 shadow-sm">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-white">Utilización del Margen de la Cuenta</span>
-                <span className="text-[10px] font-mono text-neutral-400">
-                  ({totalIsolatedMargin.toFixed(2)} / {(balance.totalWalletBalance || 0).toFixed(2)} USDT)
-                </span>
-              </div>
-              <span className="font-mono font-bold text-amber-400">
-                {marginUsagePercent.toFixed(1)}% Usado
-              </span>
-            </div>
-
-            {/* Visual Progress Bar */}
-            <div className="w-full h-3.5 rounded-full bg-neutral-950 overflow-hidden border border-neutral-800 flex">
-              <div
-                className={`h-full transition-all duration-500 rounded-full ${
-                  marginUsagePercent > 70
-                    ? 'bg-rose-500'
-                    : marginUsagePercent > 40
-                    ? 'bg-amber-500'
-                    : 'bg-emerald-500'
-                }`}
-                style={{ width: `${Math.min(100, marginUsagePercent)}%` }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] text-neutral-400">
-              <span>0% (Todo libre)</span>
-              <span className="text-emerald-400 font-medium">Zona Segura (&lt; 50%)</span>
-              <span className="text-rose-400 font-medium">Límite Prudente (80%)</span>
-            </div>
-          </div>
-
-          {/* Tarjeta de Seguridad y Garantía Aislada */}
-          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col justify-between gap-3.5 shadow-sm flex-1">
-            <div className="flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                  Garantía Aislada e Inmunidad de Cartera
-                </h4>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  En modo <strong>ISOLATED</strong>, el capital en riesgo de cada posición está completamente segregado. Incluso ante una liquidación abrupta en un contrato, las demás posiciones y el saldo disponible de tu billetera permanecen <strong>100% protegidos</strong> sin afectación cruzada.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-2 border-t border-neutral-800 text-xs font-mono">
-              <div className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 flex flex-col">
-                <span className="text-[10px] text-neutral-500 font-sans">Apalancamiento Permitido</span>
-                <span className="font-bold text-emerald-300 mt-0.5">1x a 5x Máx</span>
-              </div>
-              <div className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 flex flex-col">
-                <span className="text-[10px] text-neutral-500 font-sans">Margen Cruzado</span>
-                <span className="font-bold text-rose-400 mt-0.5">Deshabilitado (Bloqueado)</span>
-              </div>
-              <div className="p-2 rounded-lg bg-neutral-950 border border-neutral-800 flex flex-col col-span-2 sm:col-span-1">
-                <span className="text-[10px] text-neutral-500 font-sans">Formulario de Órdenes</span>
-                <button
-                  type="button"
-                  onClick={onOpenOrderModal || onGoToTrading}
-                  className="font-bold text-amber-400 hover:text-amber-300 mt-0.5 text-left flex items-center gap-1"
-                >
-                  <Zap className="w-3 h-3" />
-                  Abrir Popup
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

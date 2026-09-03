@@ -20,6 +20,7 @@ import { binanceWs } from '../services/binanceWs';
 import { FuturesMarketMetrics, TickerData } from '../types/binance';
 import { AssetSelectorModal } from './AssetSelectorModal';
 import { DerivativesMetricsInfoModal } from './DerivativesMetricsInfoModal';
+import { FuturesTrafficLightCard } from './FuturesTrafficLightCard';
 import { notificationService } from '../services/notifications';
 
 const formatPrice = (p: number) => {
@@ -278,139 +279,13 @@ export const AssetInfoCard: React.FC = () => {
         </div>
       </div>
 
-      {/* Derivatives & Futures Market Metrics Header with Explanation Guide Trigger */}
-      <div className="flex items-center justify-between pt-1">
-        <div className="flex items-center gap-2">
-          <BarChart2 className="w-4 h-4 text-amber-400" />
-          <h4 className="text-xs font-bold text-neutral-200 uppercase tracking-wider">
-            Métricas de Derivados (Binance Futures)
-          </h4>
-        </div>
-        <button
-          type="button"
-          onClick={() => setIsDerivativesInfoModalOpen(true)}
-          className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
-        >
-          <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-          <span>¿Qué significan estos números?</span>
-        </button>
-      </div>
-
-      {/* 4 Cards Grid of Derivatives Metrics with Clear Meanings */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-        {/* 1. Interés Abierto (Open Interest) */}
-        <div
-          onClick={() => setIsDerivativesInfoModalOpen(true)}
-          className="bg-neutral-950/70 hover:bg-neutral-950 border border-neutral-800/80 hover:border-amber-500/50 rounded-lg p-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-all"
-        >
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
-              <Coins className="w-3.5 h-3.5 text-amber-400" />
-              Interés Abierto (OI)
-            </span>
-            <span className="text-[9px] font-mono text-neutral-400 bg-neutral-900 px-1 py-0.2 rounded border border-neutral-800">
-              Contratos
-            </span>
-          </div>
-          <div>
-            <div className="text-base font-extrabold font-mono text-amber-300 tracking-tight">
-              ${formatVolume(metrics.openInterestValueUsdt)} <span className="text-xs font-normal text-neutral-400">USDT</span>
-            </div>
-            <div className="text-[11px] text-neutral-400 font-sans mt-0.5">
-              Capital activo total en juego sin liquidar
-            </div>
-          </div>
-        </div>
-
-        {/* 2. Tasa de Financiación (Funding Rate) */}
-        <div
-          onClick={() => setIsDerivativesInfoModalOpen(true)}
-          className="bg-neutral-950/70 hover:bg-neutral-950 border border-neutral-800/80 hover:border-blue-500/50 rounded-lg p-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-all"
-        >
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-blue-400" />
-              Tasa Financiación
-            </span>
-            <span className="text-[9px] font-mono text-amber-400 bg-neutral-900 px-1 py-0.2 rounded border border-neutral-800">
-              {countdownText}
-            </span>
-          </div>
-          <div>
-            <div
-              className={`text-base font-extrabold font-mono tracking-tight ${
-                metrics.fundingRate >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}
-            >
-              {metrics.fundingRate >= 0 ? '+' : ''}
-              {(metrics.fundingRatePercent || metrics.fundingRate * 100).toFixed(4)}%
-            </div>
-            <div className="text-[11px] text-neutral-400 font-sans mt-0.5">
-              {metrics.fundingRate >= 0
-                ? 'Longs pagan a Shorts (mercado alcista)'
-                : 'Shorts pagan a Longs (mercado bajista)'}
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Volumen de Compra vs Venta (Taker Buy/Sell) */}
-        <div
-          onClick={() => setIsDerivativesInfoModalOpen(true)}
-          className="bg-neutral-950/70 hover:bg-neutral-950 border border-neutral-800/80 hover:border-purple-500/50 rounded-lg p-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-all"
-        >
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
-              <BarChart2 className="w-3.5 h-3.5 text-purple-400" />
-              Taker Compra / Venta
-            </span>
-            <span className="text-[9px] font-mono text-neutral-300 bg-neutral-900 px-1 py-0.2 rounded border border-neutral-800">
-              {metrics.buySellRatio}x
-            </span>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-emerald-400 font-semibold">{metrics.buyVolumePercent}% Compras</span>
-              <span className="text-rose-400 font-semibold">{metrics.sellVolumePercent}% Ventas</span>
-            </div>
-            <div className="w-full bg-neutral-900 rounded-full h-1.5 flex overflow-hidden border border-neutral-800">
-              <div className="bg-emerald-500 h-full" style={{ width: `${metrics.buyVolumePercent}%` }} />
-              <div className="bg-rose-500 h-full" style={{ width: `${metrics.sellVolumePercent}%` }} />
-            </div>
-            <div className="text-[10px] text-neutral-400 font-sans">
-              Presión de órdenes ejecutadas a mercado
-            </div>
-          </div>
-        </div>
-
-        {/* 4. Top Trader Long/Short Positions */}
-        <div
-          onClick={() => setIsDerivativesInfoModalOpen(true)}
-          className="bg-neutral-950/70 hover:bg-neutral-950 border border-neutral-800/80 hover:border-cyan-500/50 rounded-lg p-3 flex flex-col justify-between gap-1.5 cursor-pointer transition-all"
-        >
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
-              <PieChart className="w-3.5 h-3.5 text-cyan-400" />
-              Top Long / Short
-            </span>
-            <span className="text-[9px] font-mono text-cyan-300 bg-cyan-950/40 px-1 py-0.2 rounded border border-cyan-800/40">
-              {metrics.topPositionLongShortRatio}:1
-            </span>
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center justify-between text-[11px] font-mono">
-              <span className="text-emerald-400 font-semibold">{metrics.topPositionLongPercent}% Long</span>
-              <span className="text-rose-400 font-semibold">{metrics.topPositionShortPercent}% Short</span>
-            </div>
-            <div className="w-full bg-neutral-900 rounded-full h-1.5 flex overflow-hidden border border-neutral-800">
-              <div className="bg-emerald-500 h-full" style={{ width: `${metrics.topPositionLongPercent}%` }} />
-              <div className="bg-rose-500 h-full" style={{ width: `${metrics.topPositionShortPercent}%` }} />
-            </div>
-            <div className="text-[10px] text-neutral-400 font-sans">
-              Posicionamiento del 20% de cuentas mayores
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Semáforo Operativo y Métricas de Derivados con Leyendas Explícitas */}
+      <FuturesTrafficLightCard
+        metrics={metrics}
+        ticker={ticker}
+        countdownText={countdownText}
+        onOpenExplainer={() => setIsDerivativesInfoModalOpen(true)}
+      />
 
       {/* Modals */}
       <AssetSelectorModal

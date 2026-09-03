@@ -12,6 +12,7 @@ import {
   FileSpreadsheet,
   Filter,
   Layers,
+  LayoutGrid,
   Plus,
   Radio,
   RefreshCw,
@@ -19,6 +20,7 @@ import {
   Shield,
   SlidersHorizontal,
   Sparkles,
+  Table,
   Target,
   TrendingUp,
   Zap,
@@ -43,6 +45,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => strategyService.getLastSyncTime());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'LONG' | 'SHORT' | 'HIGH_RR'>('ALL');
+  const [catalogViewMode, setCatalogViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
   const [selectedStrategy, setSelectedStrategy] = useState<GoogleSheetStrategyRow | null>(null);
   const [ticker, setTicker] = useState(() => binanceWs.getTicker());
   const [, setPriceTick] = useState(0);
@@ -218,9 +221,9 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
           </div>
         </div>
 
-        {/* Filter & Search Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
-          <div className="relative w-full sm:w-80">
+        {/* Filter & Search Bar + View Toggle (Tabla vs Tarjetas) */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 pt-1">
+          <div className="relative w-full lg:w-80">
             <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -231,371 +234,639 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
             />
           </div>
 
-          <div className="flex items-center gap-1.5 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0 font-mono">
-            <button
-              onClick={() => setFilterType('ALL')}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                filterType === 'ALL'
-                  ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
-                  : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
-              }`}
-            >
-              Todas Activas ({activeStrategies.length})
-            </button>
-            <button
-              onClick={() => setFilterType('HIGH_RR')}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
-                filterType === 'HIGH_RR'
-                  ? 'bg-emerald-500 text-neutral-950 font-bold shadow-xs'
-                  : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
-              }`}
-            >
-              <Target className="w-3 h-3 text-emerald-400" />
-              <span>Alto R:B (&gt;= 1:2)</span>
-            </button>
-            <button
-              onClick={() => setFilterType('LONG')}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                filterType === 'LONG'
-                  ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                  : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
-              }`}
-            >
-              Long
-            </button>
-            <button
-              onClick={() => setFilterType('SHORT')}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                filterType === 'SHORT'
-                  ? 'bg-rose-600 text-white font-bold shadow-xs'
-                  : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
-              }`}
-            >
-              Short
-            </button>
+          <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5">
+            {/* Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 font-mono">
+              <button
+                type="button"
+                onClick={() => setFilterType('ALL')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  filterType === 'ALL'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                    : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                }`}
+              >
+                Todas Activas ({activeStrategies.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType('HIGH_RR')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 ${
+                  filterType === 'HIGH_RR'
+                    ? 'bg-emerald-500 text-neutral-950 font-bold shadow-xs'
+                    : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                }`}
+              >
+                <Target className="w-3 h-3 text-emerald-400" />
+                <span>Alto R:B (&gt;= 1:2)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType('LONG')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  filterType === 'LONG'
+                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                    : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                }`}
+              >
+                Long
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterType('SHORT')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  filterType === 'SHORT'
+                    ? 'bg-rose-600 text-white font-bold shadow-xs'
+                    : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                }`}
+              >
+                Short
+              </button>
+            </div>
+
+            {/* Selector de Modo de Visualización: Tabla vs Tarjetas */}
+            <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs font-mono shrink-0 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setCatalogViewMode('TABLE')}
+                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 font-bold ${
+                  catalogViewMode === 'TABLE'
+                    ? 'bg-amber-400 text-neutral-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Ver catálogo en formato tabla con números ampliados"
+              >
+                <Table className="w-3.5 h-3.5" />
+                <span>Tabla</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setCatalogViewMode('CARDS')}
+                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 font-bold ${
+                  catalogViewMode === 'CARDS'
+                    ? 'bg-amber-400 text-neutral-950 shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Ver catálogo en formato tarjetas visuales grandes"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Tarjetas</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* TABLA PRINCIPAL DE ESTRATEGIAS ACTIVAS (Con Precio Live Primero, Entrada 1 Después) */}
-        <div className="bg-neutral-950 rounded-xl border border-neutral-800 overflow-hidden shadow-inner">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-neutral-900/90 text-[10px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
-                  <th className="py-3 px-3 font-semibold w-14">ID</th>
-                  <th className="py-3 px-3 font-semibold">Par</th>
-                  <th className="py-3 px-3 font-semibold">Tipo</th>
-                  <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
-                  <th className="py-3 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
-                    Precio Live
-                  </th>
-                  <th className="py-3 px-3 font-semibold">Entrada 1 (E1)</th>
-                  <th className="py-3 px-3 font-semibold min-w-[150px]">Dif. vs Entrada 1</th>
-                  <th className="py-3 px-3 font-semibold">Stop Loss</th>
-                  <th className="py-3 px-3 font-semibold">Take Profit</th>
-                  <th className="py-3 px-3 font-semibold text-center">Ratio R:B</th>
-                  <th className="py-3 px-3 font-semibold text-center">Estado</th>
-                  <th className="py-3 px-3 font-semibold text-right min-w-[160px]">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-850 font-mono">
-                {filteredStrategies.length === 0 ? (
-                  <tr>
-                    <td colSpan={12} className="py-12 text-center text-xs text-neutral-500 font-sans">
-                      No se encontraron estrategias activas que coincidan con los filtros aplicados.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredStrategies.map((strat) => {
-                    const prices = parsePricesFromStrategy(strat);
-                    const rr = calculateStrategyRewardToRisk(strat);
-                    const isLong =
-                      !strat.tipoDeOrden?.toLowerCase().includes('short') &&
-                      !strat.tipoDeOrden?.toLowerCase().includes('venta');
+        {/* VISTA 1: MODO TARJETAS (GRIDS CON NÚMEROS GRANDES Y VISIBLES) */}
+        {catalogViewMode === 'CARDS' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
+            {filteredStrategies.length === 0 ? (
+              <div className="col-span-full py-16 text-center text-sm text-neutral-400 font-sans bg-neutral-950/80 rounded-xl border border-neutral-800">
+                No se encontraron estrategias activas que coincidan con los filtros aplicados.
+              </div>
+            ) : (
+              filteredStrategies.map((strat) => {
+                const prices = parsePricesFromStrategy(strat);
+                const rr = calculateStrategyRewardToRisk(strat);
+                const isLong =
+                  !strat.tipoDeOrden?.toLowerCase().includes('short') &&
+                  !strat.tipoDeOrden?.toLowerCase().includes('venta');
 
-                    // Real-time live price & difference calculation
-                    const liveData = livePriceService.getPriceData(strat.par);
-                    const livePrice = liveData.price;
-                    const entry1Price = prices.entry1Price || 0;
+                const liveData = livePriceService.getPriceData(strat.par);
+                const livePrice = liveData.price;
+                const entry1Price = prices.entry1Price || 0;
 
-                    let diffDollar = 0;
-                    let diffPercent = 0;
-                    let isCloseToEntry = false;
-                    let absDiffPercent = 9999;
+                let diffDollar = 0;
+                let diffPercent = 0;
+                let isCloseToEntry = false;
+                let absDiffPercent = 9999;
 
-                    if (entry1Price > 0 && livePrice > 0) {
-                      diffDollar = livePrice - entry1Price;
-                      diffPercent = (diffDollar / entry1Price) * 100;
-                      absDiffPercent = Math.abs(diffPercent);
-                      isCloseToEntry = absDiffPercent <= 0.75;
-                    }
+                if (entry1Price > 0 && livePrice > 0) {
+                  diffDollar = livePrice - entry1Price;
+                  diffPercent = ((livePrice - entry1Price) / entry1Price) * 100;
+                  absDiffPercent = Math.abs(diffPercent);
+                  isCloseToEntry = absDiffPercent <= 0.75;
+                }
 
-                    const isClosestGlobal = strat.noEstrategia === closestToEntryStrategyId;
-                    const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
+                const isClosestGlobal = strat.noEstrategia === closestToEntryStrategyId;
+                const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
 
-                    return (
-                      <Fragment key={strat.noEstrategia}>
-                        <tr
-                          className={`transition-all ${
-                            isClosestGlobal
-                              ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
-                              : 'hover:bg-neutral-900/70'
+                return (
+                  <div
+                    key={strat.noEstrategia}
+                    className={`rounded-xl border p-4 flex flex-col justify-between gap-3.5 transition-all relative shadow-lg ${
+                      isClosestGlobal
+                        ? 'bg-amber-950/20 border-amber-500/60 ring-2 ring-amber-500/40 shadow-amber-950/30'
+                        : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
+                    }`}
+                  >
+                    {/* Top Bar: Par, Tipo, ID y R:B */}
+                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-neutral-800">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-300">
+                          #{strat.noEstrategia}
+                        </span>
+                        <span className="text-base font-bold font-mono text-white tracking-tight">
+                          {strat.par}
+                        </span>
+                        <span
+                          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${
+                            isLong
+                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                              : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                           }`}
                         >
-                        {/* ID / Fecha */}
-                        <td className="py-3 px-3">
-                          <div className="font-bold text-white text-[11px]">{strat.noEstrategia}</div>
-                          {strat.fecha && (
-                            <div className="text-[9px] text-neutral-500 font-sans">{strat.fecha}</div>
+                          {isLong ? (
+                            <>
+                              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+                              LONG
+                            </>
+                          ) : (
+                            <>
+                              <ArrowDownRight className="w-3 h-3 text-rose-400" />
+                              SHORT
+                            </>
                           )}
-                        </td>
+                        </span>
+                      </div>
 
-                        {/* Par */}
-                        <td className="py-3 px-3">
-                          <div className="flex items-center gap-1.5 font-bold text-white text-xs">
-                            <span>{strat.par}</span>
-                            <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-900 text-neutral-400 border border-neutral-800">
-                              PERP
-                            </span>
-                          </div>
-                        </td>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs border ${
+                            rr.ratio >= 2.0
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                              : 'bg-neutral-900 text-neutral-300 border-neutral-800'
+                          }`}
+                          title="Ratio Recompensa / Riesgo"
+                        >
+                          1:{rr.ratio > 0 ? rr.ratio.toFixed(1) : '-'}
+                        </span>
+                      </div>
+                    </div>
 
-                        {/* Tipo / Dirección */}
-                        <td className="py-3 px-3">
+                    {/* Nombre de Estrategia y Tags */}
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-bold text-white text-sm line-clamp-1" title={strat.nombreEstrategia}>
+                          {strat.nombreEstrategia}
+                        </h4>
+                        {isClosestGlobal && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-neutral-950 shrink-0 shadow-xs animate-pulse">
+                            <Target className="w-3 h-3" />
+                            MÁS PRÓXIMA
+                          </span>
+                        )}
+                      </div>
+                      {strat.comentariosBacktesting && (
+                        <p className="text-xs text-neutral-400 line-clamp-2">
+                          {strat.comentariosBacktesting}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* SECCIÓN DE NÚMEROS GRANDES (Precio Live y Entrada 1) */}
+                    <div className="grid grid-cols-2 gap-2.5 font-mono">
+                      {/* Precio Live - NÚMERO BIEN GRANDE */}
+                      <div className="flex flex-col bg-amber-500/10 p-3 rounded-lg border border-amber-500/30">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1">
+                          <Radio className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
+                          Precio Live
+                        </span>
+                        <span className="text-xl sm:text-2xl font-black text-amber-300 tracking-tight mt-1">
+                          ${livePrice.toFixed(decimalPlaces)}
+                        </span>
+                        <span
+                          className={`text-xs font-bold flex items-center gap-0.5 mt-1 ${
+                            liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {liveData.change24hPercent >= 0 ? (
+                            <ArrowUpRight className="w-3 h-3" />
+                          ) : (
+                            <ArrowDownRight className="w-3 h-3" />
+                          )}
+                          <span>
+                            {liveData.change24hPercent >= 0 ? '+' : ''}
+                            {liveData.change24hPercent.toFixed(2)}% (24h)
+                          </span>
+                        </span>
+                      </div>
+
+                      {/* Entrada 1 (E1) - NÚMERO BIEN GRANDE */}
+                      <div className="flex flex-col bg-neutral-900 p-3 rounded-lg border border-neutral-800">
+                        <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+                          Entrada 1 (E1)
+                        </span>
+                        <span className="text-xl sm:text-2xl font-black text-white tracking-tight mt-1">
+                          {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
+                        </span>
+                        {entry1Price > 0 && (
                           <span
-                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              isLong
-                                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                                : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                            className={`text-xs font-bold mt-1 ${
+                              isCloseToEntry
+                                ? 'text-emerald-400'
+                                : isClosestGlobal
+                                ? 'text-amber-300'
+                                : 'text-sky-300'
                             }`}
                           >
-                            {isLong ? (
-                              <>
-                                <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-                                LONG
-                              </>
-                            ) : (
-                              <>
-                                <ArrowDownRight className="w-3 h-3 text-rose-400" />
-                                SHORT
-                              </>
-                            )}
+                            {diffPercent >= 0 ? '+' : ''}
+                            {diffPercent.toFixed(2)}% vs E1
                           </span>
-                        </td>
+                        )}
+                      </div>
+                    </div>
 
-                        {/* Nombre de Estrategia */}
-                        <td className="py-3 px-3 font-sans">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-white text-xs">{strat.nombreEstrategia}</span>
-                            {isClosestGlobal && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-400 text-neutral-950 ring-1 ring-amber-400/60 shadow-xs animate-pulse">
-                                <Target className="w-2.5 h-2.5" />
-                                MÁS PRÓXIMA A E1
-                              </span>
+                    {/* SL, TP1 y Diferencia vs E1 - NÚMEROS CLAROS Y GRANDES */}
+                    <div className="grid grid-cols-2 gap-2 bg-neutral-900/80 p-2.5 rounded-lg border border-neutral-800 text-xs font-mono">
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-neutral-400 font-semibold uppercase">Stop Loss</span>
+                        <span className="text-base font-bold text-rose-400 font-mono mt-0.5">
+                          {prices.slPrice ? `$${prices.slPrice.toFixed(decimalPlaces)}` : '-'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-neutral-400 font-semibold uppercase">Take Profit (TP1)</span>
+                        <span className="text-base font-bold text-emerald-400 font-mono mt-0.5">
+                          {prices.tp1Price ? `$${prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
+                        </span>
+                        {prices.tp2Price && (
+                          <span className="text-[11px] font-bold text-emerald-300/90 font-mono">
+                            TP2: ${prices.tp2Price.toFixed(decimalPlaces)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Proximidad Status Pill */}
+                    {entry1Price > 0 && (
+                      <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-900 rounded-md border border-neutral-800 text-xs font-mono">
+                        <span className="text-neutral-400 text-[11px]">Distancia a E1:</span>
+                        <span
+                          className={`font-bold ${
+                            isClosestGlobal
+                              ? 'text-amber-300 font-black'
+                              : isCloseToEntry
+                              ? 'text-emerald-400'
+                              : 'text-neutral-200'
+                          }`}
+                        >
+                          {diffDollar >= 0 ? '+' : ''}${diffDollar.toFixed(decimalPlaces)} ({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(2)}%)
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Barra Visual Interactiva de Precios */}
+                    <div className="w-full">
+                      <StrategyPriceBar strategy={strat} livePrice={livePrice} compact={false} />
+                    </div>
+
+                    {/* Botones de Acción */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-neutral-800">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStrategy(strat)}
+                        className="flex-1 py-2 px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors border border-neutral-700"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>Detalles</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleSelectStrategyForExecution(strat)}
+                        className="flex-1 py-2 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
+                      >
+                        <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                        <span>Cargar Orden</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        ) : (
+          /* VISTA 2: FORMATO TABLA PRINCIPAL CON NÚMEROS AMPLIADOS */
+          <div className="bg-neutral-950 rounded-xl border border-neutral-800 overflow-hidden shadow-inner">
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-neutral-900/90 text-[11px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
+                    <th className="py-3 px-3 font-semibold w-14">ID</th>
+                    <th className="py-3 px-3 font-semibold">Par</th>
+                    <th className="py-3 px-3 font-semibold">Tipo</th>
+                    <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
+                    <th className="py-3 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
+                      Precio Live
+                    </th>
+                    <th className="py-3 px-3 font-semibold">Entrada 1 (E1)</th>
+                    <th className="py-3 px-3 font-semibold min-w-[150px]">Dif. vs Entrada 1</th>
+                    <th className="py-3 px-3 font-semibold">Stop Loss</th>
+                    <th className="py-3 px-3 font-semibold">Take Profit</th>
+                    <th className="py-3 px-3 font-semibold text-center">Ratio R:B</th>
+                    <th className="py-3 px-3 font-semibold text-center">Estado</th>
+                    <th className="py-3 px-3 font-semibold text-right min-w-[160px]">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-850 font-mono">
+                  {filteredStrategies.length === 0 ? (
+                    <tr>
+                      <td colSpan={12} className="py-12 text-center text-xs text-neutral-500 font-sans">
+                        No se encontraron estrategias activas que coincidan con los filtros aplicados.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredStrategies.map((strat) => {
+                      const prices = parsePricesFromStrategy(strat);
+                      const rr = calculateStrategyRewardToRisk(strat);
+                      const isLong =
+                        !strat.tipoDeOrden?.toLowerCase().includes('short') &&
+                        !strat.tipoDeOrden?.toLowerCase().includes('venta');
+
+                      // Real-time live price & difference calculation
+                      const liveData = livePriceService.getPriceData(strat.par);
+                      const livePrice = liveData.price;
+                      const entry1Price = prices.entry1Price || 0;
+
+                      let diffDollar = 0;
+                      let diffPercent = 0;
+                      let isCloseToEntry = false;
+                      let absDiffPercent = 9999;
+
+                      if (entry1Price > 0 && livePrice > 0) {
+                        diffDollar = livePrice - entry1Price;
+                        diffPercent = (diffDollar / entry1Price) * 100;
+                        absDiffPercent = Math.abs(diffPercent);
+                        isCloseToEntry = absDiffPercent <= 0.75;
+                      }
+
+                      const isClosestGlobal = strat.noEstrategia === closestToEntryStrategyId;
+                      const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
+
+                      return (
+                        <Fragment key={strat.noEstrategia}>
+                          <tr
+                            className={`transition-all ${
+                              isClosestGlobal
+                                ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
+                                : 'hover:bg-neutral-900/70'
+                            }`}
+                          >
+                          {/* ID / Fecha */}
+                          <td className="py-3.5 px-3">
+                            <div className="font-bold text-white text-xs font-mono">{strat.noEstrategia}</div>
+                            {strat.fecha && (
+                              <div className="text-[10px] text-neutral-500 font-sans">{strat.fecha}</div>
                             )}
-                          </div>
-                          {strat.comentariosBacktesting && (
-                            <div className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">
-                              {strat.comentariosBacktesting}
-                            </div>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* 1. PRECIO LIVE: CAMBIO ABAJO DEL PRECIO */}
-                        <td className="py-3 px-3 bg-amber-500/5 border-x border-amber-500/20">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-amber-300 text-xs">
-                              ${livePrice.toFixed(decimalPlaces)}
-                            </span>
-                            {/* Cambio 24h pasado ABAJO del precio */}
+                          {/* Par */}
+                          <td className="py-3.5 px-3">
+                            <div className="flex items-center gap-1.5 font-bold text-white text-sm font-mono">
+                              <span>{strat.par}</span>
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-900 text-neutral-400 border border-neutral-800">
+                                PERP
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Tipo / Dirección */}
+                          <td className="py-3.5 px-3">
                             <span
-                              className={`text-[9px] font-bold flex items-center gap-0.5 mt-0.5 ${
-                                liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${
+                                isLong
+                                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                                  : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                               }`}
                             >
-                              {liveData.change24hPercent >= 0 ? (
-                                <ArrowUpRight className="w-2.5 h-2.5 shrink-0" />
+                              {isLong ? (
+                                <>
+                                  <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
+                                  LONG
+                                </>
                               ) : (
-                                <ArrowDownRight className="w-2.5 h-2.5 shrink-0" />
+                                <>
+                                  <ArrowDownRight className="w-3.5 h-3.5 text-rose-400" />
+                                  SHORT
+                                </>
                               )}
-                              <span>
-                                {liveData.change24hPercent >= 0 ? '+' : ''}
-                                {liveData.change24hPercent.toFixed(2)}% (24h)
-                              </span>
                             </span>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* 2. ENTRADA 1 (E1): % VS E1 PASADO ABAJO DE PRECIO ENTRADA DE E1 */}
-                        <td className="py-3 px-3">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-white text-xs">
-                              {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
-                            </span>
-                            {entry1Price > 0 && (
+                          {/* Nombre de Estrategia */}
+                          <td className="py-3.5 px-3 font-sans">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-white text-xs sm:text-sm">{strat.nombreEstrategia}</span>
+                              {isClosestGlobal && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-neutral-950 ring-1 ring-amber-400/60 shadow-xs animate-pulse">
+                                  <Target className="w-3 h-3" />
+                                  MÁS PRÓXIMA A E1
+                                </span>
+                              )}
+                            </div>
+                            {strat.comentariosBacktesting && (
+                              <div className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5">
+                                {strat.comentariosBacktesting}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 1. PRECIO LIVE: NÚMERO GRANDE CON CAMBIO ABAJO */}
+                          <td className="py-3.5 px-3 bg-amber-500/5 border-x border-amber-500/20">
+                            <div className="flex flex-col">
+                              <span className="font-black text-amber-300 text-base font-mono tracking-tight">
+                                ${livePrice.toFixed(decimalPlaces)}
+                              </span>
+                              {/* Cambio 24h pasado ABAJO del precio */}
                               <span
-                                className={`text-[10px] font-mono font-bold mt-0.5 inline-flex items-center gap-1 ${
-                                  isCloseToEntry
-                                    ? 'text-emerald-400'
-                                    : isClosestGlobal
-                                    ? 'text-amber-300'
-                                    : isLong
-                                    ? diffPercent > 0
-                                      ? 'text-amber-400/90'
-                                      : 'text-emerald-400'
-                                    : diffPercent > 0
-                                    ? 'text-emerald-400'
-                                    : 'text-amber-400/90'
+                                className={`text-[11px] font-bold flex items-center gap-0.5 mt-0.5 ${
+                                  liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
                                 }`}
                               >
-                                {diffPercent >= 0 ? '+' : ''}
-                                {diffPercent.toFixed(2)}% vs E1
+                                {liveData.change24hPercent >= 0 ? (
+                                  <ArrowUpRight className="w-3 h-3 shrink-0" />
+                                ) : (
+                                  <ArrowDownRight className="w-3 h-3 shrink-0" />
+                                )}
+                                <span>
+                                  {liveData.change24hPercent >= 0 ? '+' : ''}
+                                  {liveData.change24hPercent.toFixed(2)}% (24h)
+                                </span>
                               </span>
-                            )}
-                          </div>
-                        </td>
+                            </div>
+                          </td>
 
-                        {/* 3. DIFERENCIA VS ENTRADA 1 */}
-                        <td className="py-3 px-3">
-                          {entry1Price > 0 ? (
-                            <div className="flex flex-col gap-0.5">
-                              <div
-                                className={`font-bold text-xs flex items-center gap-1 ${
-                                  isClosestGlobal
-                                    ? 'text-amber-300'
+                          {/* 2. ENTRADA 1 (E1): NÚMERO GRANDE CON % VS E1 ABAJO */}
+                          <td className="py-3.5 px-3">
+                            <div className="flex flex-col">
+                              <span className="font-black text-white text-base font-mono tracking-tight">
+                                {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
+                              </span>
+                              {entry1Price > 0 && (
+                                <span
+                                  className={`text-[11px] font-mono font-bold mt-0.5 inline-flex items-center gap-1 ${
+                                    isCloseToEntry
+                                      ? 'text-emerald-400'
+                                      : isClosestGlobal
+                                      ? 'text-amber-300'
+                                      : isLong
+                                      ? diffPercent > 0
+                                        ? 'text-amber-400/90'
+                                        : 'text-emerald-400'
+                                      : diffPercent > 0
+                                      ? 'text-emerald-400'
+                                      : 'text-amber-400/90'
+                                  }`}
+                                >
+                                  {diffPercent >= 0 ? '+' : ''}
+                                  {diffPercent.toFixed(2)}% vs E1
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 3. DIFERENCIA VS ENTRADA 1 */}
+                          <td className="py-3.5 px-3">
+                            {entry1Price > 0 ? (
+                              <div className="flex flex-col gap-0.5">
+                                <div
+                                  className={`font-bold text-sm font-mono flex items-center gap-1 ${
+                                    isClosestGlobal
+                                      ? 'text-amber-300'
+                                      : isCloseToEntry
+                                      ? 'text-emerald-400'
+                                      : isLong
+                                      ? diffDollar > 0
+                                        ? 'text-sky-300'
+                                        : 'text-emerald-300'
+                                      : diffDollar > 0
+                                      ? 'text-emerald-300'
+                                      : 'text-sky-300'
+                                  }`}
+                                >
+                                  <span>
+                                    {diffDollar >= 0 ? '+' : ''}${diffDollar.toFixed(decimalPlaces)}
+                                  </span>
+                                  <span className="text-xs">
+                                    ({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(2)}%)
+                                  </span>
+                                </div>
+                                <span
+                                  className={`text-[10px] font-medium font-sans ${
+                                    isClosestGlobal
+                                      ? 'text-amber-300 font-bold'
+                                      : isCloseToEntry
+                                      ? 'text-emerald-400 font-bold'
+                                      : 'text-neutral-400'
+                                  }`}
+                                >
+                                  {isClosestGlobal
+                                    ? `⭐ Más cercana (${absDiffPercent.toFixed(2)}% dist)`
                                     : isCloseToEntry
-                                    ? 'text-emerald-400'
+                                    ? '🎯 En zona de entrada'
                                     : isLong
                                     ? diffDollar > 0
-                                      ? 'text-sky-300'
-                                      : 'text-emerald-300'
+                                      ? `A ${diffPercent.toFixed(1)}% arriba de E1`
+                                      : `💎 Descuento: -${Math.abs(diffPercent).toFixed(1)}%`
                                     : diffDollar > 0
-                                    ? 'text-emerald-300'
-                                    : 'text-sky-300'
-                                }`}
-                              >
-                                <span>
-                                  {diffDollar >= 0 ? '+' : ''}${diffDollar.toFixed(decimalPlaces)}
-                                </span>
-                                <span className="text-[10px]">
-                                  ({diffPercent >= 0 ? '+' : ''}{diffPercent.toFixed(2)}%)
+                                    ? `💎 Mejor precio (+${diffPercent.toFixed(1)}%)`
+                                    : `A -${Math.abs(diffPercent).toFixed(1)}% de E1`}
                                 </span>
                               </div>
-                              <span
-                                className={`text-[9px] font-medium font-sans ${
-                                  isClosestGlobal
-                                    ? 'text-amber-300 font-bold'
-                                    : isCloseToEntry
-                                    ? 'text-emerald-400 font-bold'
-                                    : 'text-neutral-400'
-                                }`}
+                            ) : (
+                              <span className="text-neutral-500 font-mono text-sm">-</span>
+                            )}
+                          </td>
+
+                          {/* Stop Loss - NÚMERO GRANDE */}
+                          <td className="py-3.5 px-3">
+                            <div className="text-rose-400 font-bold text-sm sm:text-base font-mono">
+                              {prices.slPrice ? `$${prices.slPrice.toFixed(decimalPlaces)}` : '-'}
+                            </div>
+                          </td>
+
+                          {/* Take Profit - NÚMERO GRANDE */}
+                          <td className="py-3.5 px-3">
+                            <div className="text-emerald-400 font-bold text-sm sm:text-base font-mono">
+                              {prices.tp1Price ? `$${prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
+                            </div>
+                            {prices.tp2Price && (
+                              <div className="text-xs text-emerald-400/90 font-mono font-semibold">
+                                TP2: ${prices.tp2Price.toFixed(decimalPlaces)}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Ratio R:B */}
+                          <td className="py-3.5 px-3 text-center">
+                            <span
+                              className={`inline-block px-2.5 py-1 rounded-md font-bold text-xs sm:text-sm font-mono border ${
+                                rr.ratio >= 2.0
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                                  : 'bg-neutral-900 text-neutral-300 border-neutral-800'
+                              }`}
+                            >
+                              1:{rr.ratio > 0 ? rr.ratio.toFixed(1) : '-'}
+                            </span>
+                          </td>
+
+                          {/* Estado */}
+                          <td className="py-3.5 px-3 text-center">
+                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/60">
+                              {strat.estado || 'Activa'}
+                            </span>
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="py-3.5 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedStrategy(strat)}
+                                className="px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1 transition-colors border border-neutral-800"
+                                title="Ver detalles completos de la estrategia"
                               >
-                                {isClosestGlobal
-                                  ? `⭐ Más cercana (${absDiffPercent.toFixed(2)}% dist)`
-                                  : isCloseToEntry
-                                  ? '🎯 En zona de entrada'
-                                  : isLong
-                                  ? diffDollar > 0
-                                    ? `A ${diffPercent.toFixed(1)}% arriba de E1`
-                                    : `💎 Descuento: -${Math.abs(diffPercent).toFixed(1)}%`
-                                  : diffDollar > 0
-                                  ? `💎 Mejor precio (+${diffPercent.toFixed(1)}%)`
-                                  : `A -${Math.abs(diffPercent).toFixed(1)}% de E1`}
-                              </span>
+                                <Eye className="w-3.5 h-3.5 text-neutral-400" />
+                                <span className="hidden sm:inline">Detalles</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSelectStrategyForExecution(strat)}
+                                className="px-3 py-1.5 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-black flex items-center gap-1 transition-all shadow-xs"
+                                title="Cargar orden y abrir formulario popup de Binance Futures"
+                              >
+                                <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                                <span>Cargar</span>
+                              </button>
                             </div>
-                          ) : (
-                            <span className="text-neutral-500">-</span>
-                          )}
-                        </td>
+                          </td>
+                        </tr>
 
-                        {/* Stop Loss */}
-                        <td className="py-3 px-3">
-                          <div className="text-rose-400 font-bold">
-                            {prices.slPrice ? `$${prices.slPrice.toFixed(decimalPlaces)}` : '-'}
-                          </div>
-                        </td>
-
-                        {/* Take Profit */}
-                        <td className="py-3 px-3">
-                          <div className="text-emerald-400 font-bold">
-                            {prices.tp1Price ? `$${prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
-                          </div>
-                          {prices.tp2Price && (
-                            <div className="text-[10px] text-emerald-500/80">
-                              TP2: ${prices.tp2Price.toFixed(decimalPlaces)}
-                            </div>
-                          )}
-                        </td>
-
-                        {/* Ratio R:B */}
-                        <td className="py-3 px-3 text-center">
-                          <span
-                            className={`inline-block px-2 py-0.5 rounded-md font-bold text-xs border ${
-                              rr.ratio >= 2.0
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                                : 'bg-neutral-900 text-neutral-300 border-neutral-800'
-                            }`}
-                          >
-                            1:{rr.ratio > 0 ? rr.ratio.toFixed(1) : '-'}
-                          </span>
-                        </td>
-
-                        {/* Estado */}
-                        <td className="py-3 px-3 text-center">
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/60">
-                            {strat.estado || 'Activa'}
-                          </span>
-                        </td>
-
-                        {/* Acciones */}
-                        <td className="py-3 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedStrategy(strat)}
-                              className="px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white text-xs font-medium flex items-center gap-1 transition-colors border border-neutral-800"
-                              title="Ver detalles completos de la estrategia"
-                            >
-                              <Eye className="w-3 h-3 text-neutral-400" />
-                              <span className="hidden sm:inline">Detalles</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleSelectStrategyForExecution(strat)}
-                              className="px-2.5 py-1 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
-                              title="Cargar orden y abrir formulario popup de Binance Futures"
-                            >
-                              <Zap className="w-3 h-3 fill-neutral-950" />
-                              <span>Cargar</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* BARRA DE PRECIO DINÁMICA DEBAJO DE LA ESTRATEGIA (PRECIO LIVE VS ENTRADAS / SL & TP) */}
-                      <tr
-                        key={`bar-${strat.noEstrategia}`}
-                        className={`border-b border-neutral-800/80 ${
-                          isClosestGlobal ? 'bg-amber-500/10' : 'bg-neutral-950/40'
-                        }`}
-                      >
-                        <td colSpan={12} className="px-3 py-2">
-                          <StrategyPriceBar
-                            strategy={strat}
-                            livePrice={livePrice}
-                            compact={false}
-                          />
-                        </td>
-                      </tr>
-                    </Fragment>
-                  );
-                })
-              )}
-              </tbody>
-            </table>
+                        {/* BARRA DE PRECIO DINÁMICA DEBAJO DE LA ESTRATEGIA (PRECIO LIVE VS ENTRADAS / SL & TP) */}
+                        <tr
+                          key={`bar-${strat.noEstrategia}`}
+                          className={`border-b border-neutral-800/80 ${
+                            isClosestGlobal ? 'bg-amber-500/10' : 'bg-neutral-950/40'
+                          }`}
+                        >
+                          <td colSpan={12} className="px-3 py-2">
+                            <StrategyPriceBar
+                              strategy={strat}
+                              livePrice={livePrice}
+                              compact={false}
+                            />
+                          </td>
+                        </tr>
+                      </Fragment>
+                    );
+                  })
+                )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Detail Modal */}
