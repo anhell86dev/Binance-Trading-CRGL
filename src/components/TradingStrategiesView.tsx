@@ -111,6 +111,26 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
     });
   }, [strategies]);
 
+  // Encontrar la estrategia activa global que está MÁS PRÓXIMA a su Entrada 1
+  const closestToEntryStrategyId = useMemo(() => {
+    if (activeStrategies.length === 0) return null;
+    let minDiff = Infinity;
+    let closestId: string | null = null;
+    activeStrategies.forEach((st) => {
+      const prices = parsePricesFromStrategy(st);
+      const liveP = livePriceService.getPrice(st.par);
+      const e1 = prices.entry1Price || 0;
+      if (e1 > 0 && liveP > 0) {
+        const diffPct = Math.abs((liveP - e1) / e1) * 100;
+        if (diffPct < minDiff) {
+          minDiff = diffPct;
+          closestId = st.noEstrategia;
+        }
+      }
+    });
+    return closestId;
+  }, [activeStrategies]);
+
   const filteredStrategies = useMemo(() => {
     return activeStrategies.filter((st) => {
       const matchSearch =
@@ -136,10 +156,15 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
 
   return (
     <div id="trading-strategies-view" className="flex flex-col gap-6">
-      {/* 1. SECCIÓN DESTACADA: TOP 3 ESTRATEGIAS CON ALTO R:B (>= 1:2) - FORMATO TABLA CON PRECIO LIVE */}
-      <TopStrategiesRiskRewardList highlightSymbol={ticker.symbol} />
+      {/* 1. SECCIÓN DESTACADA: TOP 3 ESTRATEGIAS CALCULADAS SOBRE EL CATÁLOGO ACTIVO CON PRECIO LIVE PRIMERO */}
+      <TopStrategiesRiskRewardList
+        activeStrategies={activeStrategies}
+        onStrategySelected={handleSelectStrategyForExecution}
+        onOpenDetails={setSelectedStrategy}
+        highlightSymbol={ticker.symbol}
+      />
 
-      {/* 2. CATÁLOGO COMPLETO DE ESTRATEGIAS ACTIVAS - FORMATO TABLA CON PRECIO LIVE Y DIFERENCIA VS ENTRADA 1 */}
+      {/* 2. CATÁLOGO COMPLETO DE ESTRATEGIAS ACTIVAS - FORMATO TABLA CON PRECIO LIVE PRIMERO Y ENTRADA 1 DESPUÉS */}
       <div className="flex flex-col gap-3.5 bg-neutral-900/70 p-4 rounded-xl border border-neutral-800 shadow-xl">
         {/* Header & Synchronization */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
@@ -164,7 +189,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                 )}
               </div>
               <p className="text-[11px] text-neutral-400 mt-0.5">
-                Solo estrategias operables con cálculo automático en tiempo real de la distancia entre Entrada 1 y Precio Live de Binance Futures.
+                Estrategias operables ordenadas con Precio Live primero, Entrada 1 y cálculo automático de proximidad.
               </p>
             </div>
           </div>
@@ -250,7 +275,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
           </div>
         </div>
 
-        {/* TABLA PRINCIPAL DE ESTRATEGIAS ACTIVAS (Con Precio Live y Diferencia vs E1) */}
+        {/* TABLA PRINCIPAL DE ESTRATEGIAS ACTIVAS (Con Precio Live Primero, Entrada 1 Después) */}
         <div className="bg-neutral-950 rounded-xl border border-neutral-800 overflow-hidden shadow-inner">
           <div className="overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse text-xs">
@@ -260,8 +285,10 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                   <th className="py-3 px-3 font-semibold">Par</th>
                   <th className="py-3 px-3 font-semibold">Tipo</th>
                   <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
+                  <th className="py-3 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
+                    Precio Live
+                  </th>
                   <th className="py-3 px-3 font-semibold">Entrada 1 (E1)</th>
-                  <th className="py-3 px-3 font-semibold">Precio Live</th>
                   <th className="py-3 px-3 font-semibold min-w-[150px]">Dif. vs Entrada 1</th>
                   <th className="py-3 px-3 font-semibold">Stop Loss</th>
                   <th className="py-3 px-3 font-semibold">Take Profit</th>
@@ -293,19 +320,26 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                     let diffDollar = 0;
                     let diffPercent = 0;
                     let isCloseToEntry = false;
+                    let absDiffPercent = 9999;
 
                     if (entry1Price > 0 && livePrice > 0) {
                       diffDollar = livePrice - entry1Price;
                       diffPercent = (diffDollar / entry1Price) * 100;
-                      isCloseToEntry = Math.abs(diffPercent) <= 0.75;
+                      absDiffPercent = Math.abs(diffPercent);
+                      isCloseToEntry = absDiffPercent <= 0.75;
                     }
 
+                    const isClosestGlobal = strat.noEstrategia === closestToEntryStrategyId;
                     const decimalPlaces = entry1Price < 10 || livePrice < 10 ? 4 : 2;
 
                     return (
                       <tr
                         key={strat.noEstrategia}
-                        className="transition-colors hover:bg-neutral-900/70"
+                        className={`transition-all ${
+                          isClosestGlobal
+                            ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
+                            : 'hover:bg-neutral-900/70'
+                        }`}
                       >
                         {/* ID / Fecha */}
                         <td className="py-3 px-3">
@@ -350,7 +384,15 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
 
                         {/* Nombre de Estrategia */}
                         <td className="py-3 px-3 font-sans">
-                          <div className="font-bold text-white text-xs">{strat.nombreEstrategia}</div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-white text-xs">{strat.nombreEstrategia}</span>
+                            {isClosestGlobal && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-400 text-neutral-950 ring-1 ring-amber-400/60 shadow-xs animate-pulse">
+                                <Target className="w-2.5 h-2.5" />
+                                MÁS PRÓXIMA A E1
+                              </span>
+                            )}
+                          </div>
                           {strat.comentariosBacktesting && (
                             <div className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">
                               {strat.comentariosBacktesting}
@@ -358,15 +400,10 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                           )}
                         </td>
 
-                        {/* Entrada 1 (E1) */}
-                        <td className="py-3 px-3 font-bold text-white">
-                          {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
-                        </td>
-
-                        {/* Precio Live */}
-                        <td className="py-3 px-3">
+                        {/* 1. PRECIO LIVE (PRIMERO) */}
+                        <td className="py-3 px-3 bg-amber-500/5 border-x border-amber-500/20">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-amber-300">
+                            <span className="font-bold text-amber-300 text-xs">
                               ${livePrice.toFixed(decimalPlaces)}
                             </span>
                             <span
@@ -380,13 +417,20 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                           </div>
                         </td>
 
-                        {/* Diferencia entre Entrada 1 y Precio Live */}
+                        {/* 2. ENTRADA 1 (E1) (DESPUÉS) */}
+                        <td className="py-3 px-3 font-bold text-white">
+                          {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
+                        </td>
+
+                        {/* 3. DIFERENCIA VS ENTRADA 1 */}
                         <td className="py-3 px-3">
                           {entry1Price > 0 ? (
                             <div className="flex flex-col gap-0.5">
                               <div
                                 className={`font-bold text-xs flex items-center gap-1 ${
-                                  isCloseToEntry
+                                  isClosestGlobal
+                                    ? 'text-amber-300'
+                                    : isCloseToEntry
                                     ? 'text-emerald-400'
                                     : isLong
                                     ? diffDollar > 0
@@ -406,12 +450,16 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                               </div>
                               <span
                                 className={`text-[9px] font-medium font-sans ${
-                                  isCloseToEntry
+                                  isClosestGlobal
+                                    ? 'text-amber-300 font-bold'
+                                    : isCloseToEntry
                                     ? 'text-emerald-400 font-bold'
                                     : 'text-neutral-400'
                                 }`}
                               >
-                                {isCloseToEntry
+                                {isClosestGlobal
+                                  ? `⭐ Más cercana (${absDiffPercent.toFixed(2)}% dist)`
+                                  : isCloseToEntry
                                   ? '🎯 En zona de entrada'
                                   : isLong
                                   ? diffDollar > 0
