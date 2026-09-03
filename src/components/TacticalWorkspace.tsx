@@ -1,25 +1,33 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import {
   Activity,
   BarChart2,
+  BookOpen,
   ChevronDown,
   ChevronUp,
   Clock,
+  Eye,
   Layers,
   Maximize2,
   Minimize2,
   Sparkles,
+  TrendingUp,
+  Zap,
 } from 'lucide-react';
 import { HeaderTicker } from './HeaderTicker';
 import { PositionsAndOrders } from './PositionsAndOrders';
 import { TradingViewWidget } from './TradingViewWidget';
+import { StrategyChartRenderer } from './StrategyChartRenderer';
+import { StrategyDetailModal } from './StrategyDetailModal';
 import { binanceWs } from '../services/binanceWs';
+import { strategyService } from '../services/strategyService';
+import { GoogleSheetStrategyRow } from '../types/strategy';
+import { normalizeBinanceSymbol } from '../data/binancePairs';
 
 // Chart Skeleton Loader for Suspense
 const ChartSkeletonLoader: React.FC = () => {
   return (
     <div className="w-full h-full min-h-[360px] bg-neutral-950 flex flex-col justify-between p-4 relative overflow-hidden animate-pulse border border-neutral-800/80 rounded-lg">
-      {/* Top Header Placeholder */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-20 h-5 bg-neutral-800 rounded" />
@@ -29,7 +37,6 @@ const ChartSkeletonLoader: React.FC = () => {
         <div className="w-28 h-5 bg-neutral-800 rounded" />
       </div>
 
-      {/* Simulated Candlesticks Pulse Grid */}
       <div className="flex items-end justify-around h-48 w-full px-4 gap-2 opacity-30">
         {[40, 65, 30, 85, 45, 90, 60, 75, 50, 95, 70, 80, 55, 60].map((h, i) => (
           <div key={i} className="flex flex-col items-center gap-1 w-full max-w-[14px]">
@@ -43,7 +50,6 @@ const ChartSkeletonLoader: React.FC = () => {
         ))}
       </div>
 
-      {/* Bottom Time Axis Placeholder */}
       <div className="flex items-center justify-between border-t border-neutral-900 pt-2 text-[10px] text-neutral-600 font-mono">
         <span>00:00</span>
         <span>04:00</span>
@@ -53,7 +59,7 @@ const ChartSkeletonLoader: React.FC = () => {
         <span>20:00</span>
         <span className="flex items-center gap-1 text-amber-400/80">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-          Cargando TradingView 4H...
+          Cargando Gráfico Táctico Binance...
         </span>
       </div>
     </div>
@@ -65,15 +71,34 @@ export const TacticalWorkspace: React.FC = () => {
   const [ticker, setTicker] = useState(binanceWs.getTicker());
   const [timeframe, setTimeframe] = useState<string>('240'); // 4H default
   const [isPositionsCollapsed, setIsPositionsCollapsed] = useState<boolean>(false);
-  const [chartHeight, setChartHeight] = useState<string>('520px');
+  const [chartMode, setChartMode] = useState<'TACTICAL_STRATEGY' | 'TRADINGVIEW'>('TACTICAL_STRATEGY');
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState<boolean>(false);
+  const [activeStrategy, setActiveStrategy] = useState<GoogleSheetStrategyRow | undefined>(() =>
+    strategyService.getActiveStrategy()
+  );
 
   useEffect(() => {
-    const unsub = binanceWs.subscribe(() => {
+    const unsubWs = binanceWs.subscribe(() => {
       setSymbol(binanceWs.getCurrentSymbol());
       setTicker(binanceWs.getTicker());
     });
-    return () => unsub();
+
+    const unsubStrat = strategyService.subscribe(() => {
+      setActiveStrategy(strategyService.getActiveStrategy());
+    });
+
+    return () => {
+      unsubWs();
+      unsubStrat();
+    };
   }, []);
+
+  // Ensure active strategy matches current symbol if available
+  const currentPairStrategy = activeStrategy && normalizeBinanceSymbol(activeStrategy.par) === normalizeBinanceSymbol(symbol)
+    ? activeStrategy
+    : strategyService.getStrategies().find(
+        (s) => normalizeBinanceSymbol(s.par) === normalizeBinanceSymbol(symbol)
+      );
 
   return (
     <div id="tactical_workspace_container" className="flex flex-col h-full overflow-hidden bg-neutral-900 rounded-xl border border-neutral-800">
@@ -81,7 +106,8 @@ export const TacticalWorkspace: React.FC = () => {
       <HeaderTicker symbol={symbol} price={ticker.lastPrice} />
 
       {/* 2. Chart Controls Toolbar */}
-      <div className="px-3 py-1.5 bg-neutral-950/90 border-b border-neutral-800/80 flex items-center justify-between text-xs font-mono">
+      <div className="px-3 py-1.5 bg-neutral-950/90 border-b border-neutral-800/80 flex items-center justify-between text-xs font-mono flex-wrap gap-2">
+        {/* Left: Timeframe pills */}
         <div className="flex items-center gap-1">
           <span className="text-neutral-400 text-[10px] font-sans mr-1">Temporalidad:</span>
           {[
@@ -104,11 +130,58 @@ export const TacticalWorkspace: React.FC = () => {
           ))}
         </div>
 
+        {/* Center: Active Strategy Indicator & "Mostrar Estrategia" Action */}
+        <div className="flex items-center gap-1.5">
+          {currentPairStrategy ? (
+            <button
+              id="show-strategy-modal-top-btn"
+              onClick={() => setIsDetailModalOpen(true)}
+              className="px-2.5 py-0.5 rounded text-[11px] font-bold text-amber-300 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/40 flex items-center gap-1.5 transition-all shadow-xs"
+              title="Ver detalle completo de Entradas, SL, TP, Reglas de Ejecución y Disciplina"
+            >
+              <BookOpen className="w-3 h-3 text-amber-400" />
+              <span className="truncate max-w-[130px] sm:max-w-[180px]">
+                {currentPairStrategy.noEstrategia}: {currentPairStrategy.nombreEstrategia.slice(0, 16)}...
+              </span>
+              <span className="text-[10px] bg-amber-400 text-black px-1 rounded font-mono font-bold">
+                Ver
+              </span>
+            </button>
+          ) : (
+            <span className="text-[10px] text-neutral-500 font-sans">
+              Sin estrategia activa para {symbol}
+            </span>
+          )}
+        </div>
+
+        {/* Right: Chart Engine Switcher & Positions Collapse */}
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            TradingView Advanced Chart
-          </span>
+          <div className="flex items-center bg-neutral-900 p-0.5 rounded border border-neutral-800 text-[10px]">
+            <button
+              onClick={() => setChartMode('TACTICAL_STRATEGY')}
+              className={`px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1 ${
+                chartMode === 'TACTICAL_STRATEGY'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+              title="Gráfico con líneas de Entrada 1, Entrada 2, Stop Loss y Take Profits en tiempo real"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Gráfico Táctico</span>
+            </button>
+
+            <button
+              onClick={() => setChartMode('TRADINGVIEW')}
+              className={`px-2 py-0.5 rounded font-medium transition-all ${
+                chartMode === 'TRADINGVIEW'
+                  ? 'bg-neutral-800 text-white font-bold'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+              title="TradingView Widget estándar"
+            >
+              TradingView
+            </button>
+          </div>
 
           <button
             onClick={() => setIsPositionsCollapsed(!isPositionsCollapsed)}
@@ -121,15 +194,24 @@ export const TacticalWorkspace: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. Main Chart Canvas with Suspense & Skeleton Loader */}
+      {/* 3. Main Chart Canvas with Strategy Price Lines & Binance WebSocket */}
       <div className="flex-1 min-h-[300px] bg-neutral-950 relative overflow-hidden flex flex-col">
         <Suspense fallback={<ChartSkeletonLoader />}>
           <div className="w-full h-full flex-1">
-            <TradingViewWidget
-              symbol={symbol}
-              interval={timeframe}
-              height="100%"
-            />
+            {chartMode === 'TACTICAL_STRATEGY' ? (
+              <StrategyChartRenderer
+                symbol={symbol}
+                interval={timeframe}
+                height="100%"
+                strategy={currentPairStrategy}
+              />
+            ) : (
+              <TradingViewWidget
+                symbol={symbol}
+                interval={timeframe}
+                height="100%"
+              />
+            )}
           </div>
         </Suspense>
       </div>
@@ -175,6 +257,19 @@ export const TacticalWorkspace: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Strategy Details Modal */}
+      {isDetailModalOpen && currentPairStrategy && (
+        <StrategyDetailModal
+          strategy={currentPairStrategy}
+          isOpen={isDetailModalOpen}
+          onClose={() => setIsDetailModalOpen(false)}
+          onPlotOnChart={() => {
+            setChartMode('TACTICAL_STRATEGY');
+          }}
+        />
+      )}
     </div>
   );
 };
+
