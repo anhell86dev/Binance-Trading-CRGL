@@ -268,12 +268,13 @@ export const PositionsAndOrders: React.FC = () => {
             <table className="w-full text-left text-xs font-mono">
               <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800">
                 <tr>
-                  <th className="py-2.5 px-3">Símbolo / Límite</th>
+                  <th className="py-2.5 px-3">Símbolo</th>
+                  <th className="py-2.5 px-3">Apalancamiento</th>
+                  <th className="py-2.5 px-3">Margen</th>
                   <th className="py-2.5 px-3">Tamaño</th>
                   <th className="py-2.5 px-3">Precio Entrada</th>
                   <th className="py-2.5 px-3">Precio Marca</th>
                   <th className="py-2.5 px-3">Precio Liq.</th>
-                  <th className="py-2.5 px-3">Margen Isolated</th>
                   <th className="py-2.5 px-3">PnL (ROE %)</th>
                   <th className="py-2.5 px-3">TP / SL</th>
                   <th className="py-2.5 px-3 text-right">Acción</th>
@@ -293,12 +294,15 @@ export const PositionsAndOrders: React.FC = () => {
                               isLong ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'
                             }`}
                           >
-                            {isLong ? 'LONG' : 'SHORT'} {pos.leverage}x
-                          </span>
-                          <span className="text-[10px] text-blue-400 bg-blue-950/50 px-1 rounded border border-blue-900">
-                            ISOLATED
+                            {isLong ? 'LONG' : 'SHORT'}
                           </span>
                         </div>
+                      </td>
+                      <td className="py-3 px-3 font-bold text-amber-300">
+                        {pos.leverage}x
+                      </td>
+                      <td className="py-3 px-3 font-semibold text-neutral-200">
+                        ${(pos.isolatedMargin || 0).toFixed(2)} USDT
                       </td>
                       <td className="py-3 px-3 font-semibold text-neutral-200">
                         {Math.abs(pos.positionAmt || 0).toFixed(3)} {pos.symbol.replace('USDT', '')}
@@ -306,7 +310,6 @@ export const PositionsAndOrders: React.FC = () => {
                       <td className="py-3 px-3 text-neutral-300">${(pos.entryPrice || 0).toFixed(2)}</td>
                       <td className="py-3 px-3 text-amber-400">${(pos.markPrice || 0).toFixed(2)}</td>
                       <td className="py-3 px-3 text-rose-400 font-bold">${(pos.liquidationPrice || 0).toFixed(2)}</td>
-                      <td className="py-3 px-3 text-neutral-300">${(pos.isolatedMargin || 0).toFixed(2)} USDT</td>
                       <td className="py-3 px-3">
                         <div className="flex items-center gap-1 font-bold">
                           <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
