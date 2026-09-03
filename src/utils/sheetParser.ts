@@ -12,9 +12,12 @@ ZEC-20260902-RETROCESO,2026-09-02,Acumulación en Retroceso y Testeo de SMA-15,Z
 TAO-20260902-REBOTE,2026-09-02,Rebote en Soporte Dinámico Confluente (SMA-30 / SMA-90),TAOUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte $211.30–$212.87 (SMA-30/SMA-90), SMA-50 ($205.67), Resistencia $227.82, SMA-7 ($232.80), SMA-200 ($235.80)","DCA: E1 (50%) @ $215.50, E2 (30%) @ $213.00, E3 (20%) @ $211.50 (Promedio: $213.95)",TP1 (50%) @ $227.50; TP2 (30%) @ $232.50; TP Final (20%) @ $235.50,SL Global @ $204.50 (bajo SMA-50 $205.67). ROE Máx 5X: -22.08%. Margen Aislado,Rango defensivo. Mover SL a Breakeven tras TP1.,Activa
 AAVE-20260902-BREAKOUT-RETEST,2026-09-02,Ruptura y Retesteo en SMA-7 y Apertura Semanal,AAVEUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"SMA-7 ($124.61), Apertura $122.10, SMA-15 ($117.72), Resistencia $131.89, Extensión $140.00","DCA: E1 (50%) @ $124.50, E2 (30%) @ $123.00, E3 (20%) @ $122.10 (Promedio: $123.57)",TP1 (50%) @ $131.50; TP2 (30%) @ $139.50; TP Final (20%) @ $148.00,SL Global @ $116.50 (bajo SMA-15 $117.72). ROE Máx 5X: -28.61%. Margen Aislado,Ruptura alcista. Entrada en retroceso. Mover SL a Breakeven tras TP1.,Activa
 SOL-20260902-REBOTE,2026-09-02,Rebote en Soporte y Acumulación Escalonada,SOLUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte $97.10–$97.51 (SMA-15), Soporte $98.53, SMA-7 ($103.07), Resistencia $103.62","DCA: E1 (50%) @ $98.50, E2 (30%) @ $97.60, E3 (20%) @ $97.10 (Promedio: $97.95)",TP1 (50%) @ $103.00; TP2 (30%) @ $104.00; TP Final (20%) @ $109.50,SL Global @ $94.80 (bajo $95.00). ROE Máx 5X: -16.08%. Margen Aislado,Superada por análisis del 03/09.,Obsoleto
-XRP-20260902-RANGO,2026-09-02,Trading de Rango y Rebote en Soporte Clave (SMA-200),XRPUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte $1.31, SMA-200 ($1.27), SMA-30 ($1.19), Resistencia $1.35, SMA-7 ($1.38), Techo $1.39-$1.40","DCA: E1 (50%) @ $1.3150, E2 (30%) @ $1.2900, E3 (20%) @ $1.2750 (Promedio: $1.3000)",TP1 (50%) @ $1.3500; TP2 (30%) @ $1.3800; TP Final (20%) @ $1.3950,SL Global @ $1.2580 (bajo SMA-200 $1.2700). ROE Máx 5X: -16.15%. Margen Aislado,Rango neutral $1.27-$1.39. Mover SL a Breakeven tras TP1.,Activa
-SOL-20260903-RANGO,2026-09-03,Trading de Rango y Defensa en SMA-15 ($97.10–$97.51),SOLUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte intradía $97.51, SMA-15 ($97.10), Resistencia $101.07, SMA-7 ($103.07), Techo $104.29","DCA: E1 (50%) @ $98.20, E2 (30%) @ $97.50, E3 (20%) @ $97.15 (Promedio: $97.78)",TP1 (50%) @ $101.00; TP2 (30%) @ $103.00; TP Final (20%) @ $104.20,SL Global @ $95.80 (bajo $96.00 y SMA-15). ROE Máx 5X: -10.10%. Margen Aislado,Rango de alta probabilidad. Volumen bajo promedio. Mover SL a Breakeven tras TP1.,Activa
-ZEC-20260903-RANGO,2026-09-03,Trading de Rango y Rebote en Soporte Intradía (SMA-7 / Mínimo),ZECUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte intradía $789.12, SMA-7 ($813.98), SMA-15 ($760.45), Resistencia 1 $839.76, Resistencia 2 $851.31, Techo $865.79","DCA: E1 (50%) @ $805.00, E2 (30%) @ $792.00, E3 (20%) @ $775.00 (Promedio: $795.10)",TP1 (50%) @ $838.00; TP2 (30%) @ $850.00; TP Final (20%) @ $865.00,SL Global @ $758.00 (bajo SMA-15 $760.45). ROE Máx 5X: -23.33%. Margen Aislado,Rango $760-$865. Retroceso controlado. Mover SL a Breakeven tras TP1.,Activa`;
+XRP-20260902-RANGO,2026-09-02,Trading de Rango y Rebote en Soporte Clave (SMA-200),XRPUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte $1.31, SMA-200 ($1.27), SMA-30 ($1.19), Resistencia $1.35, SMA-7 ($1.38), Techo $1.39-$1.40","DCA: E1 (50%) @ $1.3150, E2 (30%) @ $1.2900, E3 (20%) @ $1.2750 (Promedio: $1.3000)",TP1 (50%) @ $1.3500; TP2 (30%) @ $1.3800; TP Final (20%) @ $1.3950,SL Global @ $1.2580 (bajo SMA-200 $1.2700). ROE Máx 5X: -16.15%. Margen Aislado,Rango neutral $1.27-$1.39. Mover SL a Breakeven tras TP1.,Obsoleto
+SOL-20260903-RANGO,2026-09-03,Trading de Rango y Defensa en SMA-15 ($97.10–$97.51),SOLUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte intradía $97.51, SMA-15 ($97.10), Resistencia $101.07, SMA-7 ($103.07), Techo $104.29","DCA: E1 (50%) @ $98.20, E2 (30%) @ $97.50, E3 (20%) @ $97.15 (Promedio: $97.78)",TP1 (50%) @ $101.00; TP2 (30%) @ $103.00; TP Final (20%) @ $104.20,SL Global @ $95.80 (bajo $96.00 y SMA-15). ROE Máx 5X: -10.10%. Margen Aislado,Rango de alta probabilidad. Volumen bajo promedio. Mover SL a Breakeven tras TP1.,Obsoleto
+ZEC-20260903-RANGO,2026-09-03,Trading de Rango y Rebote en Soporte Intradía (SMA-7 / Mínimo),ZECUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"Soporte intradía $789.12, SMA-7 ($813.98), SMA-15 ($760.45), Resistencia 1 $839.76, Resistencia 2 $851.31, Techo $865.79","DCA: E1 (50%) @ $805.00, E2 (30%) @ $792.00, E3 (20%) @ $775.00 (Promedio: $795.10)",TP1 (50%) @ $838.00; TP2 (30%) @ $850.00; TP Final (20%) @ $865.00,SL Global @ $758.00 (bajo SMA-15 $760.45). ROE Máx 5X: -23.33%. Margen Aislado,Rango $760-$865. Retroceso controlado. Mover SL a Breakeven tras TP1.,Obsoleto
+XRP-20260903-RANGO,2026-09-03,Trading de Rango y Retest en Soporte ($1.31–$1.35),XRPUSDT,1D / 4H / 1H,Limit (DCA Escalonado) + Stop-Market + Take-Profit,"Soporte apertura/mínimo $1.34-$1.35, Soporte previo $1.31, SMA-200 ($1.27), SMA-30 ($1.20), Resistencia 1 ($1.37 / SMA-7), Resistencia 2 ($1.39 / SMA-15). Volumen -10.12%.","DCA en 3 escalones: E1 (50%) @ $1.3450, E2 (30%) @ $1.3250, E3 (20%) @ $1.3120. Precio promedio ponderado: $1.3324.",TP1 (50%) @ $1.3700; TP2 (30%) @ $1.3850; TP Final (20%) @ $1.3950.,"Stop-Loss Global @ $1.2980 (bajo soporte $1.3100). Distancia precio: -2.58%, ROE Máx 5X: -12.90%. Margen Aislado.",Rango neutral $1.31-$1.39. Consolidación tras repunte mensual respaldada por disciplina de escrow. Mover SL a Breakeven tras TP1. Cancelar DCA no ejecutado tras TP1.,Activa
+ZEC-20260903-RANGO-V2,2026-09-03,Trading de Rango y Compra en Eje SMA-7 ($814–$840),ZECUSDT,1D / 4H / 1H,Limit (DCA Escalonado) + Stop-Market + Take-Profit,"Eje decisión $830.22, SMA-7 ($820.16), Mínimo del día $814.37, Mínimo previo $789.12, SMA-15 ($781.54), Resistencia $835-$840.","DCA en 3 escalones: E1 (50%) @ $820.00, E2 (30%) @ $812.00, E3 (20%) @ $795.00. Precio promedio ponderado: $812.60.",TP1 (50%) @ $835.00; TP2 (30%) @ $840.00; TP Final (20%) @ $855.00.,"Stop-Loss Global @ $778.00 (bajo SMA-15 $781.54). Distancia precio: -4.26%, ROE Máx 5X: -21.29%. Margen Aislado.",Rango neutral $789-$840. Consolidación tras repunte anual. Mover SL a Breakeven tras TP1. Cancelar DCA no ejecutado tras TP1.,Activa
+SOL-20260903-RANGO-V2,2026-09-03,Trading de Rango y Consolidación Barrera $100 ($98.67–$102.99),SOLUSDT,1D / 4H / 1H,Limit (DCA Escalonado) + Stop-Market + Take-Profit,"Umbral psicológico $100.13, Mínimo intradía $99.83, SMA-15 ($98.67), Mínimo previo $97.51, Resistencia 1 ($101.20), SMA-7 ($102.99). Compresión rango ($1.36).","DCA en 3 escalones: E1 (50%) @ $100.00, E2 (30%) @ $99.20, E3 (20%) @ $98.70. Precio promedio ponderado: $99.50.",TP1 (50%) @ $101.20; TP2 (30%) @ $102.50; TP Final (20%) @ $103.50.,"Stop-Loss Global @ $97.30 (bajo soporte previo $97.51). Distancia precio: -2.21%, ROE Máx 5X: -11.05%. Margen Aislado.",Rango neutral de alta probabilidad ($98.67-$102.99). Compresión de volatilidad. Mover SL a Breakeven tras TP1. Cancelar DCA no ejecutado tras TP1.,Activa`;
 
 
 /**
@@ -338,8 +341,8 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
     entry3Price = parseFloat(dcaE3Match[2].replace(/,/g, ''));
   }
 
-  // Check explicit Promedio
-  const avgMatch = entryText.match(/Promedio:\s*\$?([\d,.]+)/i);
+  // Check explicit Promedio (e.g. "Promedio: $775.50" or "Precio promedio ponderado: $1.3324.")
+  const avgMatch = entryText.match(/(?:precio\s+)?promedio(?:\s+ponderado)?\s*:\s*\$?([\d,.]+)/i);
   if (avgMatch) {
     avgEntryPrice = parseFloat(avgMatch[1].replace(/,/g, ''));
   }
@@ -375,17 +378,17 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
     }
   }
 
-  // 2. Stop Loss (e.g. "SL Global @ $748.00" or "Stop Loss estricto bajo SMA-15 a $759.00")
+  // 2. Stop Loss (e.g. "SL Global @ $748.00" or "Stop-Loss Global @ $1.2980" or "Stop Loss estricto bajo SMA-15 a $759.00")
   const slText = strategy.gestionDeRiesgoStopLoss || '';
-  const slGlobalMatch = slText.match(/SL\s*Global\s*(?:@|en|a)?\s*\$?([\d,.]+)/i);
+  const slGlobalMatch = slText.match(/(?:SL|Stop[- ]?Loss)\s*Global\s*(?:@|en|a)?\s*\$?([\d,.]+)/i);
   if (slGlobalMatch) {
     slPrice = parseFloat(slGlobalMatch[1].replace(/,/g, ''));
   } else {
-    const specificSlMatch = slText.match(/Stop Loss[^\n\r]*(?:en|a|@)\s*\$?([\d,.]+)/i);
+    const specificSlMatch = slText.match(/Stop[- ]?Loss[^\n\r]*(?:en|a|@)\s*\$?([\d,.]+)/i);
     if (specificSlMatch) {
       slPrice = parseFloat(specificSlMatch[1].replace(/,/g, ''));
     } else {
-      const generalSlMatch = slText.match(/(?:Stop Loss|SL)[^\n\r]*?\$([\d,.]+)/i);
+      const generalSlMatch = slText.match(/(?:Stop[- ]?Loss|SL)[^\n\r]*?\$([\d,.]+)/i);
       if (generalSlMatch) {
         slPrice = parseFloat(generalSlMatch[1].replace(/,/g, ''));
       }
@@ -659,4 +662,35 @@ export function generateExecutionPlan(
     maxProfitUsdt,
     riskRewardRatio,
   };
+}
+
+/**
+ * Serializes strategies back into the canonical CSV format expected by Google Sheets / Google Docs
+ */
+export function strategiesToCsv(strategies: GoogleSheetStrategyRow[]): string {
+  const header = 'No. Estrategia,Fecha,Nombre de Estrategia,Par,Temporalidad,Tipo de Orden,Indicadores Clave,Reglas de Entrada,Reglas de Salida / TP,Gestión de Riesgo & Stop Loss,Comentarios / Backtesting,Estado';
+  const rows = strategies.map(s => {
+    const escape = (val: string = '') => {
+      const v = String(val ?? '');
+      if (v.includes(',') || v.includes('"') || v.includes('\n') || v.includes('\r')) {
+        return `"${v.replace(/"/g, '""')}"`;
+      }
+      return v;
+    };
+    return [
+      escape(s.noEstrategia),
+      escape(s.fecha),
+      escape(s.nombreEstrategia),
+      escape(s.par),
+      escape(s.temporalidad),
+      escape(s.tipoDeOrden),
+      escape(s.indicadoresClave),
+      escape(s.reglasDeEntrada),
+      escape(s.reglasDeSalidaTP),
+      escape(s.gestionDeRiesgoStopLoss),
+      escape(s.comentariosBacktesting),
+      escape(s.estado),
+    ].join(',');
+  });
+  return [header, ...rows].join('\n');
 }

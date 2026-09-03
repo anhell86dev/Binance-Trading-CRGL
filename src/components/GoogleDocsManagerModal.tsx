@@ -1,0 +1,936 @@
+import React, { useState, useEffect } from 'react';
+import {
+  FileSpreadsheet,
+  Download,
+  Copy,
+  Check,
+  Upload,
+  RefreshCw,
+  Plus,
+  Trash2,
+  Edit3,
+  Save,
+  X,
+  ExternalLink,
+  Code,
+  ShieldCheck,
+  AlertCircle,
+  Link as LinkIcon,
+  CheckCircle2,
+} from 'lucide-react';
+import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
+import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
+import { SAMPLE_GOOGLE_SHEET_CSV, normalizeStrategyStatus } from '../utils/sheetParser';
+
+interface GoogleDocsManagerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ isOpen, onClose }) => {
+  const [activeTab, setActiveTab] = useState<'CATALOG' | 'WRITE' | 'READ'>('CATALOG');
+  const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
+  const [customSheetUrl, setCustomSheetUrl] = useState<string>(() => strategyService.getCustomSheetUrl());
+  const [webhookUrl, setWebhookUrl] = useState<string>(() => strategyService.getWebhookUrl());
+  const [copiedSuccess, setCopiedSuccess] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [csvInput, setCsvInput] = useState('');
+  const [editingRow, setEditingRow] = useState<GoogleSheetStrategyRow | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showAppsScriptCode, setShowAppsScriptCode] = useState(false);
+
+  // New Strategy Form State
+  const [newStrategy, setNewStrategy] = useState<Partial<GoogleSheetStrategyRow>>({
+    noEstrategia: '',
+    fecha: new Date().toISOString().split('T')[0],
+    nombreEstrategia: '',
+    par: 'ZECUSDT',
+    temporalidad: '1D / 4H / 1H',
+    tipoDeOrden: 'Limit (DCA Escalonado) + Stop-Market + Take-Profit',
+    indicadoresClave: '',
+    reglasDeEntrada: '',
+    reglasDeSalidaTP: '',
+    gestionDeRiesgoStopLoss: '',
+    comentariosBacktesting: '',
+    estado: 'Activa',
+  });
+
+  useEffect(() => {
+    const unsub = strategyService.subscribe(() => {
+      setStrategies([...strategyService.getStrategies()]);
+    });
+    return unsub;
+  }, []);
+
+  if (!isOpen) return null;
+
+  const showNotification = (type: 'success' | 'error', text: string) => {
+    setFeedbackMsg({ type, text });
+    setTimeout(() => setFeedbackMsg(null), 4000);
+  };
+
+  const handleCopyCsv = async () => {
+    const ok = await strategyService.copyCsvToClipboard();
+    if (ok) {
+      setCopiedSuccess(true);
+      showNotification('success', '¡Catálogo copiado al portapapeles! Puedes pegarlo directamente en Google Docs o Google Sheets.');
+      setTimeout(() => setCopiedSuccess(false), 2500);
+    } else {
+      showNotification('error', 'No se pudo copiar automáticamente. Puedes descargar el archivo .CSV');
+    }
+  };
+
+  const handleDownloadCsv = () => {
+    strategyService.downloadCsvFile();
+    showNotification('success', 'Archivo catalogo_estrategias_google_docs.csv generado y descargado.');
+  };
+
+  const handleImportCsv = () => {
+    if (!csvInput.trim()) {
+      showNotification('error', 'Por favor ingresa o pega el contenido CSV antes de importar.');
+      return;
+    }
+    const ok = strategyService.saveRawCsv(csvInput);
+    if (ok) {
+      showNotification('success', '¡Catálogo actualizado correctamente desde el texto CSV!');
+      setCsvInput('');
+      setActiveTab('CATALOG');
+    } else {
+      showNotification('error', 'El formato del CSV no coincide con las columnas requeridas de Google Docs.');
+    }
+  };
+
+  const handleRestoreOfficial = () => {
+    strategyService.refreshOfficialStrategies();
+    showNotification('success', 'Catálogo restablecido al documento oficial de Google Docs (10 estrategias)');
+  };
+
+  const handleStatusChange = (id: string, newStatus: StrategyTradeStatus) => {
+    const found = strategies.find((s) => s.noEstrategia === id);
+    if (found) {
+      const updated = { ...found, estado: newStatus };
+      strategyService.updateStrategyRow(updated);
+      showNotification('success', `Estado de ${id} cambiado a "${newStatus}" y guardado.`);
+    }
+  };
+
+  const handleSaveEditRow = () => {
+    if (!editingRow) return;
+    strategyService.updateStrategyRow(editingRow);
+    showNotification('success', `Estrategia ${editingRow.noEstrategia} actualizada y escrita en el catálogo.`);
+    setEditingRow(null);
+  };
+
+  const handleSaveNewStrategy = () => {
+    if (!newStrategy.noEstrategia?.trim() || !newStrategy.nombreEstrategia?.trim()) {
+      showNotification('error', 'El número de estrategia y el nombre son obligatorios.');
+      return;
+    }
+    const fullRow: GoogleSheetStrategyRow = {
+      noEstrategia: newStrategy.noEstrategia.trim(),
+      fecha: newStrategy.fecha || new Date().toISOString().split('T')[0],
+      nombreEstrategia: newStrategy.nombreEstrategia.trim(),
+      par: (newStrategy.par || 'ZECUSDT').replace(/[^a-zA-Z0-9]/g, '').toUpperCase(),
+      temporalidad: newStrategy.temporalidad || '1D / 4H / 1H',
+      tipoDeOrden: newStrategy.tipoDeOrden || 'Limit (DCA) + SL + TP',
+      indicadoresClave: newStrategy.indicadoresClave || '',
+      reglasDeEntrada: newStrategy.reglasDeEntrada || '',
+      reglasDeSalidaTP: newStrategy.reglasDeSalidaTP || '',
+      gestionDeRiesgoStopLoss: newStrategy.gestionDeRiesgoStopLoss || '',
+      comentariosBacktesting: newStrategy.comentariosBacktesting || '',
+      estado: (newStrategy.estado as StrategyTradeStatus) || 'Activa',
+    };
+
+    strategyService.addStrategyRow(fullRow);
+    showNotification('success', `Nueva estrategia ${fullRow.noEstrategia} agregada al catálogo.`);
+    setIsAddingNew(false);
+    setNewStrategy({
+      noEstrategia: '',
+      fecha: new Date().toISOString().split('T')[0],
+      nombreEstrategia: '',
+      par: 'ZECUSDT',
+      temporalidad: '1D / 4H / 1H',
+      tipoDeOrden: 'Limit (DCA Escalonado) + Stop-Market + Take-Profit',
+      indicadoresClave: '',
+      reglasDeEntrada: '',
+      reglasDeSalidaTP: '',
+      gestionDeRiesgoStopLoss: '',
+      comentariosBacktesting: '',
+      estado: 'Activa',
+    });
+  };
+
+  const handleDeleteRow = (id: string) => {
+    if (confirm(`¿Estás seguro de eliminar la estrategia ${id} del catálogo de Google Docs?`)) {
+      strategyService.deleteStrategyRow(id);
+      showNotification('success', `Estrategia ${id} eliminada.`);
+    }
+  };
+
+  const handleSaveWebhook = async () => {
+    strategyService.setWebhookUrl(webhookUrl);
+    if (webhookUrl.trim()) {
+      const res = await strategyService.syncToWebhook(webhookUrl);
+      if (res.success) {
+        showNotification('success', 'URL de Webhook guardada y prueba de sincronización enviada con éxito.');
+      } else {
+        showNotification('error', res.message);
+      }
+    } else {
+      showNotification('success', 'URL de Webhook desactivada.');
+    }
+  };
+
+  const handleSyncFromSheetUrl = async () => {
+    setIsSyncing(true);
+    strategyService.setCustomSheetUrl(customSheetUrl);
+    await strategyService.syncFromGoogleSheets(customSheetUrl);
+    setIsSyncing(false);
+    showNotification('success', 'Sincronización completada desde Google Sheets.');
+  };
+
+  const appsScriptCodeSnippet = `// Código para Google Apps Script (Extensiones > Apps Script en tu Google Sheet)
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    var csv = data.csv;
+    var rows = Utilities.parseCsv(csv);
+    
+    // Limpiar y sobrescribir con los nuevos datos recibidos
+    sheet.clearContents();
+    sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", rows: rows.length }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-5xl bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-neutral-100">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 bg-neutral-950/80">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+              <FileSpreadsheet className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-white">Gestor Google Docs & Google Sheets</h2>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  Lectura & Escritura Activa
+                </span>
+              </div>
+              <p className="text-xs text-neutral-400">
+                Sincronización bidireccional continua del catálogo de estrategias con tu Google Docs / Sheets.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Feedback Alert */}
+        {feedbackMsg && (
+          <div
+            className={`px-5 py-2.5 text-xs flex items-center gap-2 border-b ${
+              feedbackMsg.type === 'success'
+                ? 'bg-emerald-950/70 border-emerald-800/80 text-emerald-300'
+                : 'bg-rose-950/70 border-rose-800/80 text-rose-300'
+            }`}
+          >
+            {feedbackMsg.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{feedbackMsg.text}</span>
+          </div>
+        )}
+
+        {/* Navigation Tabs */}
+        <div className="flex items-center px-5 pt-3 border-b border-neutral-800 bg-neutral-950/50 gap-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('CATALOG')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'CATALOG'
+                ? 'text-emerald-400 border-emerald-500 bg-neutral-900'
+                : 'text-neutral-400 border-transparent hover:text-neutral-200'
+            }`}
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>Catálogo & Edición ({strategies.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('WRITE')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'WRITE'
+                ? 'text-emerald-400 border-emerald-500 bg-neutral-900'
+                : 'text-neutral-400 border-transparent hover:text-neutral-200'
+            }`}
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>Escribir / Exportar a Google Docs</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('READ')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'READ'
+                ? 'text-emerald-400 border-emerald-500 bg-neutral-900'
+                : 'text-neutral-400 border-transparent hover:text-neutral-200'
+            }`}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Leer / Importar desde Google Docs</span>
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* TAB 1: CATALOG & INLINE EDITING */}
+          {activeTab === 'CATALOG' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-950/60 p-3.5 rounded-xl border border-neutral-800">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Estrategias registradas en Google Docs ({strategies.length} totales)
+                  </h4>
+                  <p className="text-[11px] text-neutral-400">
+                    Puedes modificar el estado de cualquier estrategia, editar sus campos en detalle o agregar una nueva. Los cambios se guardan y sincronizan inmediatamente.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsAddingNew(true)}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-lg shadow-emerald-950/50"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Nueva Estrategia</span>
+                  </button>
+                  <button
+                    onClick={handleCopyCsv}
+                    className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium flex items-center gap-1.5 transition-colors border border-neutral-700"
+                  >
+                    {copiedSuccess ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-neutral-400" />}
+                    <span>{copiedSuccess ? '¡Copiado!' : 'Copiar Tabla CSV'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Table of Strategies */}
+              <div className="border border-neutral-800 rounded-xl overflow-hidden bg-neutral-950/40">
+                <div className="overflow-x-auto max-h-[50vh]">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="sticky top-0 bg-neutral-900 border-b border-neutral-800 text-[11px] font-semibold text-neutral-400 uppercase tracking-wider z-10">
+                      <tr>
+                        <th className="py-2.5 px-3">No. Estrategia</th>
+                        <th className="py-2.5 px-3">Fecha</th>
+                        <th className="py-2.5 px-3">Par</th>
+                        <th className="py-2.5 px-3">Nombre & Reglas</th>
+                        <th className="py-2.5 px-3">Estado</th>
+                        <th className="py-2.5 px-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60 font-sans">
+                      {strategies.map((st) => {
+                        const isLiveOrActive = st.estado === 'Activa' || st.estado === 'Live' || st.estado === 'Live+';
+                        const isObsolete = st.estado === 'Obsoleto';
+
+                        return (
+                          <tr
+                            key={st.noEstrategia}
+                            className={`hover:bg-neutral-900/60 transition-colors ${
+                              isObsolete ? 'opacity-65 bg-neutral-950/30' : ''
+                            }`}
+                          >
+                            <td className="py-3 px-3 font-mono font-bold text-white whitespace-nowrap">
+                              {st.noEstrategia}
+                            </td>
+                            <td className="py-3 px-3 text-neutral-400 font-mono text-[11px] whitespace-nowrap">
+                              {st.fecha}
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <span className="px-2 py-0.5 rounded font-mono font-bold text-xs bg-neutral-800 text-amber-300 border border-neutral-700">
+                                {st.par}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 max-w-xs">
+                              <div className="font-semibold text-neutral-200 line-clamp-1">
+                                {st.nombreEstrategia}
+                              </div>
+                              <div className="text-[10px] text-neutral-400 font-mono line-clamp-1 mt-0.5">
+                                {st.reglasDeEntrada}
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <select
+                                value={st.estado || 'Activa'}
+                                onChange={(e) =>
+                                  handleStatusChange(
+                                    st.noEstrategia,
+                                    e.target.value as StrategyTradeStatus
+                                  )
+                                }
+                                className={`text-[11px] font-bold px-2 py-1 rounded-md border bg-neutral-900 cursor-pointer outline-none ${
+                                  st.estado === 'Activa'
+                                    ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/30'
+                                    : st.estado === 'Live'
+                                    ? 'text-cyan-400 border-cyan-500/40 bg-cyan-950/30'
+                                    : st.estado === 'Live+'
+                                    ? 'text-purple-400 border-purple-500/40 bg-purple-950/30'
+                                    : 'text-neutral-400 border-neutral-700 bg-neutral-900'
+                                }`}
+                              >
+                                <option value="Activa">Activa (Para tomar)</option>
+                                <option value="Live">Live (Órdenes emitidas)</option>
+                                <option value="Live+">Live+ (Completada)</option>
+                                <option value="Obsoleto">Obsoleto</option>
+                              </select>
+                            </td>
+                            <td className="py-3 px-3 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  onClick={() => setEditingRow(st)}
+                                  className="p-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
+                                  title="Editar campos de la estrategia"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRow(st.noEstrategia)}
+                                  className="p-1.5 rounded-md bg-neutral-800 hover:bg-rose-950/80 hover:text-rose-400 text-neutral-400 transition-colors"
+                                  title="Eliminar del catálogo"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: WRITE / EXPORT TO GOOGLE DOCS */}
+          {activeTab === 'WRITE' && (
+            <div className="space-y-5">
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <Copy className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      1. Escritura Manual / Copiar a Google Docs & Sheets
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Copia el catálogo con formato CSV estandarizado para pegarlo directamente en tu Google Sheet o Google Docs con 1 solo clic.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <button
+                    onClick={handleCopyCsv}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors shadow-lg shadow-emerald-950/40"
+                  >
+                    {copiedSuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedSuccess ? '¡Copiado con Éxito!' : 'Copiar Todo el Catálogo (Formato Google Docs)'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadCsv}
+                    className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold flex items-center gap-2 transition-colors"
+                  >
+                    <Download className="w-4 h-4 text-amber-400" />
+                    <span>Descargar archivo .CSV</span>
+                  </button>
+
+                  <a
+                    href={OFFICIAL_GOOGLE_SHEET_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs font-semibold flex items-center gap-2 transition-colors ml-auto"
+                  >
+                    <ExternalLink className="w-4 h-4 text-emerald-400" />
+                    <span>Abrir Hoja Google Sheets</span>
+                  </a>
+                </div>
+              </div>
+
+              {/* Webhook Automatic Writeback */}
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+                    <Code className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      2. Escritura Automática en la Nube (Google Apps Script Webhook)
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Permite que cada cambio de estrategia o estado en la aplicación escriba y actualice automáticamente tu Google Sheet en segundo plano.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-neutral-300">
+                    URL de Google Apps Script Web App (Webhook):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                      value={webhookUrl}
+                      onChange={(e) => setWebhookUrl(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                    <button
+                      onClick={handleSaveWebhook}
+                      className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Guardar & Probar</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => setShowAppsScriptCode(!showAppsScriptCode)}
+                    className="text-xs text-cyan-400 hover:text-cyan-300 underline font-medium flex items-center gap-1"
+                  >
+                    <span>{showAppsScriptCode ? 'Ocultar código de Apps Script' : 'Ver código de Apps Script para pegar en Google Sheets'}</span>
+                  </button>
+
+                  {showAppsScriptCode && (
+                    <div className="mt-2.5 p-3 rounded-lg bg-neutral-900 border border-neutral-800 space-y-2">
+                      <p className="text-[11px] text-neutral-400">
+                        Pega este script en tu Google Sheet en <strong>Extensiones &gt; Apps Script</strong> y luego publícalo como <strong>Implementar &gt; Nueva implementación &gt; Aplicación web (Acceso: Cualquier usuario)</strong>:
+                      </p>
+                      <pre className="p-3 bg-black/60 rounded border border-neutral-800 text-[11px] font-mono text-emerald-300 overflow-x-auto select-all">
+                        {appsScriptCodeSnippet}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: READ / IMPORT FROM GOOGLE DOCS */}
+          {activeTab === 'READ' && (
+            <div className="space-y-5">
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <LinkIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      1. Conexión Directa a URL de Google Sheets
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Ingresa el enlace público o publicado en la web de tu Google Sheets para leer los datos en tiempo real.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv"
+                      value={customSheetUrl}
+                      onChange={(e) => setCustomSheetUrl(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                    <button
+                      onClick={handleSyncFromSheetUrl}
+                      disabled={isSyncing}
+                      className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Leyendo...' : 'Leer Ahora'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Paste Raw CSV */}
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                    <Upload className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      2. Pegar Datos CSV desde Google Docs / Google Sheets
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Copia las celdas o el texto de tu Google Docs y pégalo aquí para actualizar inmediatamente el catálogo en la aplicación.
+                    </p>
+                  </div>
+                </div>
+
+                <textarea
+                  rows={6}
+                  placeholder={`No. Estrategia,Fecha,Nombre de Estrategia,Par,Temporalidad,Tipo de Orden,Indicadores Clave,Reglas de Entrada,Reglas de Salida / TP,Gestión de Riesgo & Stop Loss,Comentarios / Backtesting,Estado\nZEC-20260903-RANGO-V2,2026-09-03,Trading de Rango,ZECUSDT,1D / 4H / 1H,Limit...`}
+                  value={csvInput}
+                  onChange={(e) => setCsvInput(e.target.value)}
+                  className="w-full p-3 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white font-mono placeholder-neutral-600 focus:outline-none focus:border-emerald-500"
+                />
+
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={handleRestoreOfficial}
+                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors underline font-medium"
+                  >
+                    Restablecer al documento oficial original (10 Estrategias)
+                  </button>
+
+                  <button
+                    onClick={handleImportCsv}
+                    className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Importar y Actualizar Catálogo</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="px-5 py-3 border-t border-neutral-800 bg-neutral-950 flex items-center justify-between text-xs text-neutral-400">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <span>Formato oficial: 12 columnas canónicas normalizadas</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold transition-colors"
+          >
+            Cerrar
+          </button>
+        </div>
+      </div>
+
+      {/* SUB-MODAL: EDIT STRATEGY ROW */}
+      {editingRow && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-neutral-900 border border-neutral-700 rounded-xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-emerald-400" />
+                <span>Editar Estrategia: {editingRow.noEstrategia}</span>
+              </h3>
+              <button
+                onClick={() => setEditingRow(null)}
+                className="p-1 rounded text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-neutral-400 block mb-1">Nombre de Estrategia:</label>
+                <input
+                  type="text"
+                  value={editingRow.nombreEstrategia}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, nombreEstrategia: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-400 block mb-1">Par (Símbolo):</label>
+                <input
+                  type="text"
+                  value={editingRow.par}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, par: e.target.value.toUpperCase() })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-400 block mb-1">Estado:</label>
+                <select
+                  value={editingRow.estado}
+                  onChange={(e) =>
+                    setEditingRow({
+                      ...editingRow,
+                      estado: e.target.value as StrategyTradeStatus,
+                    })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white"
+                >
+                  <option value="Activa">Activa (Para tomar)</option>
+                  <option value="Live">Live (Órdenes emitidas)</option>
+                  <option value="Live+">Live+ (Completada)</option>
+                  <option value="Obsoleto">Obsoleto</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-neutral-400 block mb-1">Temporalidad:</label>
+                <input
+                  type="text"
+                  value={editingRow.temporalidad}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, temporalidad: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Reglas de Entrada (DCA):</label>
+                <input
+                  type="text"
+                  value={editingRow.reglasDeEntrada}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, reglasDeEntrada: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Reglas de Salida / Take Profit (TP):</label>
+                <input
+                  type="text"
+                  value={editingRow.reglasDeSalidaTP}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, reglasDeSalidaTP: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Gestión de Riesgo &amp; Stop Loss:</label>
+                <input
+                  type="text"
+                  value={editingRow.gestionDeRiesgoStopLoss}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, gestionDeRiesgoStopLoss: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Comentarios / Backtesting:</label>
+                <textarea
+                  rows={2}
+                  value={editingRow.comentariosBacktesting}
+                  onChange={(e) =>
+                    setEditingRow({ ...editingRow, comentariosBacktesting: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+              <button
+                onClick={() => setEditingRow(null)}
+                className="px-3 py-1.5 rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveEditRow}
+                className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-950/50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Guardar Cambios</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SUB-MODAL: ADD NEW STRATEGY ROW */}
+      {isAddingNew && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-2xl bg-neutral-900 border border-neutral-700 rounded-xl p-5 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" />
+                <span>Agregar Nueva Estrategia al Catálogo</span>
+              </h3>
+              <button
+                onClick={() => setIsAddingNew(false)}
+                className="p-1 rounded text-neutral-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label className="text-neutral-400 block mb-1">No. Estrategia (ID único):</label>
+                <input
+                  type="text"
+                  placeholder="ej. BTC-20260903-RANGO"
+                  value={newStrategy.noEstrategia}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, noEstrategia: e.target.value.toUpperCase() })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-400 block mb-1">Par (Símbolo Binance):</label>
+                <input
+                  type="text"
+                  placeholder="ej. ZECUSDT"
+                  value={newStrategy.par}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, par: e.target.value.toUpperCase() })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Nombre de la Estrategia:</label>
+                <input
+                  type="text"
+                  placeholder="ej. Trading de Rango y Rebote en Soporte Clave"
+                  value={newStrategy.nombreEstrategia}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, nombreEstrategia: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-400 block mb-1">Fecha:</label>
+                <input
+                  type="date"
+                  value={newStrategy.fecha}
+                  onChange={(e) => setNewStrategy({ ...newStrategy, fecha: e.target.value })}
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-neutral-400 block mb-1">Estado:</label>
+                <select
+                  value={newStrategy.estado}
+                  onChange={(e) =>
+                    setNewStrategy({
+                      ...newStrategy,
+                      estado: e.target.value as StrategyTradeStatus,
+                    })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white"
+                >
+                  <option value="Activa">Activa (Para tomar)</option>
+                  <option value="Live">Live (Órdenes emitidas)</option>
+                  <option value="Live+">Live+ (Completada)</option>
+                  <option value="Obsoleto">Obsoleto</option>
+                </select>
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Reglas de Entrada (DCA):</label>
+                <input
+                  type="text"
+                  placeholder="DCA: E1 (50%) @ $100.00, E2 (30%) @ $99.20, E3 (20%) @ $98.70"
+                  value={newStrategy.reglasDeEntrada}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, reglasDeEntrada: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Reglas de Salida / TP:</label>
+                <input
+                  type="text"
+                  placeholder="TP1 (50%) @ $101.20; TP2 (30%) @ $102.50; TP Final (20%) @ $103.50"
+                  value={newStrategy.reglasDeSalidaTP}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, reglasDeSalidaTP: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Gestión de Riesgo &amp; Stop Loss:</label>
+                <input
+                  type="text"
+                  placeholder="Stop-Loss Global @ $97.30. Margen Aislado 5X."
+                  value={newStrategy.gestionDeRiesgoStopLoss}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, gestionDeRiesgoStopLoss: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white font-mono"
+                />
+              </div>
+
+              <div className="sm:col-span-2">
+                <label className="text-neutral-400 block mb-1">Comentarios / Backtesting:</label>
+                <textarea
+                  rows={2}
+                  placeholder="Detalles sobre volatilidad, confluencias técnicas, breakeven tras TP1..."
+                  value={newStrategy.comentariosBacktesting}
+                  onChange={(e) =>
+                    setNewStrategy({ ...newStrategy, comentariosBacktesting: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded bg-neutral-950 border border-neutral-700 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-800">
+              <button
+                onClick={() => setIsAddingNew(false)}
+                className="px-3 py-1.5 rounded bg-neutral-800 text-neutral-300 hover:bg-neutral-700 text-xs font-semibold"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveNewStrategy}
+                className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-emerald-950/50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Agregar Estrategia</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

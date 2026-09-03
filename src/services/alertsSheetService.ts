@@ -1,8 +1,8 @@
 import { SheetAlertRow, GoogleSheetStrategyRow } from '../types/strategy';
 import { parsePricesFromStrategy, parseCsvToStrategies, SAMPLE_GOOGLE_SHEET_CSV } from '../utils/sheetParser';
 import { notificationService } from './notifications';
+import { strategyService } from './strategyService';
 
-const STRATEGIES_STORAGE_KEY = 'binance_futures_strategies_v2';
 const ALERTS_SHEET_STORAGE_KEY = 'binance_sheet_alertas_v2';
 const ALERTS_SHEET_STRUCTURE_VER_KEY = 'binance_sheet_alertas_structure_created';
 
@@ -10,15 +10,8 @@ export const OFFICIAL_ALERTS_SHEET_NAME = 'alertas';
 export const OFFICIAL_WORKBOOK_NAME = 'Diario de Estrategias Cripto - Táctico Oficial (Google Sheets)';
 
 function getStoredStrategies(): GoogleSheetStrategyRow[] {
-  try {
-    const raw = localStorage.getItem(STRATEGIES_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= 5) {
-        return parsed;
-      }
-    }
-  } catch {}
+  const current = strategyService.getStrategies();
+  if (current && current.length > 0) return current;
   return parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
 }
 

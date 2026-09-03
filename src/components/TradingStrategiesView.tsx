@@ -35,6 +35,7 @@ import { StrategyPriceBar } from './StrategyPriceBar';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyCardItem } from './StrategyCardItem';
+import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
 
 interface TradingStrategiesViewProps {
   onOpenOrderModal?: () => void;
@@ -52,6 +53,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
   const [filterType, setFilterType] = useState<'ALL' | 'LONG' | 'SHORT' | 'HIGH_RR'>('ALL');
   const [catalogViewMode, setCatalogViewMode] = useState<'TABLE' | 'CARDS'>('CARDS');
   const [selectedStrategy, setSelectedStrategy] = useState<GoogleSheetStrategyRow | null>(null);
+  const [isDocsManagerOpen, setIsDocsManagerOpen] = useState(false);
   const [ticker, setTicker] = useState(() => binanceWs.getTicker());
   const [walletBalance, setWalletBalance] = useState(() => binanceWs.getBalance());
   const [, setPriceTick] = useState(0);
@@ -216,12 +218,21 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             <button
+              onClick={() => setIsDocsManagerOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+              title="Abrir Gestor de Google Docs: Leer, Escribir, Editar y Sincronizar"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+              <span>Google Docs (Leer / Escribir)</span>
+            </button>
+
+            <button
               onClick={handleSync}
               disabled={isSyncing}
               className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 border border-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : 'text-neutral-400'}`} />
-              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Sheets'}</span>
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
             </button>
 
             <a
@@ -232,7 +243,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
               title="Abrir hoja de cálculo oficial en Google Sheets"
             >
               <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-              <span>Google Sheets</span>
+              <span>Sheets URL</span>
             </a>
           </div>
         </div>
@@ -649,6 +660,12 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
           onApplyToOrderForm={handleSelectStrategyForExecution}
         />
       )}
+
+      {/* Google Docs Manager Modal (Leer / Escribir) */}
+      <GoogleDocsManagerModal
+        isOpen={isDocsManagerOpen}
+        onClose={() => setIsDocsManagerOpen(false)}
+      />
     </div>
   );
 };

@@ -4,12 +4,14 @@ import {
   parseCsvToStrategies,
   resolveLatestStrategiesPerPair,
   convertToGoogleSheetCsvUrl,
+  strategiesToCsv,
 } from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
 
-const STORAGE_KEY = 'binance_futures_strategies_v5';
-const LAST_SYNC_KEY = 'binance_strategies_last_sync_v5';
-const SHEET_URL_KEY = 'binance_strategies_custom_sheet_url';
+const STORAGE_KEY = 'binance_futures_strategies_v6';
+const LAST_SYNC_KEY = 'binance_strategies_last_sync_v6';
+const SHEET_URL_KEY = 'binance_strategies_custom_sheet_url_v6';
+const WEBHOOK_URL_KEY = 'binance_strategies_webhook_url_v6';
 
 export const OFFICIAL_GOOGLE_SHEET_NAME = 'Diario de Estrategias Cripto - Táctico Oficial (Google Sheets)';
 export const OFFICIAL_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTakticoFuturesStrategies2026/pub?output=csv';
@@ -19,6 +21,7 @@ class StrategyService {
   private activeStrategyIndex: number = 0;
   private lastSyncTime: string = new Date().toLocaleTimeString();
   private customSheetUrl: string = '';
+  private webhookUrl: string = '';
   private isSyncing: boolean = false;
   private syncError: string | null = null;
   private autoSyncInterval: any = null;
@@ -32,6 +35,7 @@ class StrategyService {
   private loadStrategies() {
     try {
       this.customSheetUrl = localStorage.getItem(SHEET_URL_KEY) || '';
+      this.webhookUrl = localStorage.getItem(WEBHOOK_URL_KEY) || '';
       const storedSync = localStorage.getItem(LAST_SYNC_KEY);
       if (storedSync) {
         this.lastSyncTime = storedSync;
@@ -39,7 +43,11 @@ class StrategyService {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length >= 5) {
+        if (
+          Array.isArray(parsed) &&
+          parsed.length >= 10 &&
+          parsed.some((s) => s.noEstrategia === 'ZEC-20260903-RANGO-V2')
+        ) {
           const { allResolvedStrategies } = resolveLatestStrategiesPerPair(parsed);
           this.strategies = allResolvedStrategies;
           return;
@@ -49,7 +57,7 @@ class StrategyService {
       console.warn('Error reading stored strategies:', e);
     }
 
-    // Default to official tactical strategies (7 updated strategies)
+    // Default to official tactical strategies (10 strategies updated from Google Docs)
     const initial = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
     this.strategies = initial;
     this.saveToStorage();
@@ -61,6 +69,9 @@ class StrategyService {
       localStorage.setItem(LAST_SYNC_KEY, this.lastSyncTime);
       if (this.customSheetUrl) {
         localStorage.setItem(SHEET_URL_KEY, this.customSheetUrl);
+      }
+      if (this.webhookUrl) {
+        localStorage.setItem(WEBHOOK_URL_KEY, this.webhookUrl);
       }
     } catch (e) {
       console.warn('Error saving strategies to storage:', e);
@@ -339,6 +350,165 @@ class StrategyService {
     this.lastSyncTime = new Date().toLocaleTimeString();
     this.saveToStorage();
     this.notify();
+  }
+
+  /**
+   * Serializes current strategies back to canonical Google Sheets / Google Docs CSV
+   */
+  public exportCsv(): string {
+    return strategiesToCsv(this.strategies);
+  }
+
+  /**
+   * Copies the full strategies CSV to the user's clipboard for pasting directly into Google Docs or Sheets
+   */
+  public async copyCsvToClipboard(): Promise<boolean> {
+    try {
+      const csv = this.exportCsv();
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(csv);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.warn('Clipboard copy failed:', e);
+      return false;
+    }
+  }
+
+  /**
+   * Downloads current strategies as a .csv file
+   */
+  public downloadCsvFile(filename: string = 'catalogo_estrategias_google_docs.csv'): void {
+    const csv = this.exportCsv();
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Overwrite or update strategies from a raw CSV string (e.g. pasted from Google Docs/Sheets)
+   */
+  public saveRawCsv(csvText: string): boolean {
+    try {
+      const parsed = parseCsvToStrategies(csvText);
+      if (parsed.length > 0) {
+        this.strategies = parsed;
+        this.lastSyncTime = new Date().toLocaleTimeString();
+        this.saveToStorage();
+        this.notify();
+        this.syncToWebhook();
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error saving raw CSV:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Updates an existing strategy row in the catalog (Write operation)
+   */
+  public updateStrategyRow(updated: GoogleSheetStrategyRow): boolean {
+    const idx = this.strategies.findIndex((s) => s.noEstrategia === updated.noEstrategia);
+    if (idx !== -1) {
+      this.strategies[idx] = { ...updated };
+      const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+      this.strategies = allResolvedStrategies;
+      this.lastSyncTime = new Date().toLocaleTimeString();
+      this.saveToStorage();
+      this.notify();
+      this.syncToWebhook();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Adds a new strategy row to the catalog (Write operation)
+   */
+  public addStrategyRow(newRow: GoogleSheetStrategyRow): boolean {
+    this.strategies.push(newRow);
+    const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+    this.strategies = allResolvedStrategies;
+    this.lastSyncTime = new Date().toLocaleTimeString();
+    this.saveToStorage();
+    this.notify();
+    this.syncToWebhook();
+    return true;
+  }
+
+  /**
+   * Deletes a strategy row by ID
+   */
+  public deleteStrategyRow(id: string): boolean {
+    const initialLen = this.strategies.length;
+    this.strategies = this.strategies.filter((s) => s.noEstrategia !== id);
+    if (this.strategies.length !== initialLen) {
+      const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
+      this.strategies = allResolvedStrategies;
+      this.lastSyncTime = new Date().toLocaleTimeString();
+      this.saveToStorage();
+      this.notify();
+      this.syncToWebhook();
+      return true;
+    }
+    return false;
+  }
+
+  public getWebhookUrl(): string {
+    return this.webhookUrl;
+  }
+
+  public setWebhookUrl(url: string) {
+    this.webhookUrl = url.trim();
+    if (this.webhookUrl) {
+      localStorage.setItem(WEBHOOK_URL_KEY, this.webhookUrl);
+    } else {
+      localStorage.removeItem(WEBHOOK_URL_KEY);
+    }
+  }
+
+  /**
+   * Automatically pushes current state to a connected Google Apps Script Webhook or custom writeback endpoint
+   */
+  public async syncToWebhook(overrideUrl?: string): Promise<{ success: boolean; message: string }> {
+    const targetUrl = (overrideUrl || this.webhookUrl).trim();
+    if (!targetUrl) {
+      return { success: false, message: 'No hay URL de Webhook configurada para sincronización de escritura automática.' };
+    }
+
+    try {
+      const csv = this.exportCsv();
+      await fetch(targetUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        mode: 'no-cors',
+        body: JSON.stringify({
+          action: 'WRITE_STRATEGIES',
+          timestamp: new Date().toISOString(),
+          csv,
+          strategies: this.strategies,
+        }),
+      });
+
+      return {
+        success: true,
+        message: 'Solicitud de escritura enviada al webhook de Google Sheets.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        message: `Error al escribir en webhook: ${err?.message || 'Error de conexión'}`,
+      };
+    }
   }
 
   /**
