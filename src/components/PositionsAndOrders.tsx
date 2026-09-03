@@ -41,9 +41,10 @@ import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 
 interface PositionsAndOrdersProps {
   defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies' | 'disciplines';
+  onOpenOrderModal?: () => void;
 }
 
-export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions' }) => {
+export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions', onOpenOrderModal }) => {
   const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies' | 'disciplines'>(defaultTab);
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
@@ -139,7 +140,10 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
   };
 
   return (
-    <div className="bg-neutral-900/80 border border-neutral-800/80 rounded-xl overflow-hidden flex flex-col">
+    <div
+      className="w-full flex-1 bg-neutral-900/80 border border-neutral-800/80 rounded-xl overflow-hidden flex flex-col"
+      style={{ minHeight: '460px' }}
+    >
       {/* Tabs Bar */}
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-950/60 px-3 pt-2">
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
@@ -290,8 +294,8 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
 
       {/* Tab 1: Posiciones Activas */}
       {tab === 'positions' && (
-        <div className="p-3">
-          <OpenPositionsTable />
+        <div className="p-2 sm:p-3 w-full flex-1 flex flex-col">
+          <OpenPositionsTable onOpenOrderModal={onOpenOrderModal} />
         </div>
       )}
 

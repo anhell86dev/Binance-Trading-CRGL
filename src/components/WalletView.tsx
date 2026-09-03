@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   AlertCircle,
   ArrowDownLeft,
+  ArrowDownRight,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
   DollarSign,
   HelpCircle,
   Layers,
   Lock,
+  Maximize2,
+  Minimize2,
   PieChart,
   Plus,
   RefreshCw,
@@ -37,6 +41,8 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
   const [mode, setMode] = useState(binanceWs.getMode());
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('1000');
+  const [isTrayExpanded, setIsTrayExpanded] = useState(false);
+  const [trayHeightMode, setTrayHeightMode] = useState<'STANDARD' | 'EXPANDED' | 'XL'>('EXPANDED');
 
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
@@ -75,8 +81,114 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
     notificationService.notify('SYSTEM', 'Billetera Reiniciada', 'El saldo se ha restablecido a $10,000.00 USDT.');
   };
 
+  const scrollToTray = () => {
+    document.getElementById('wallet-tray-section')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // VISTA EXPANDIDA (Prioridad Operativa a Pantalla Completa para la Bandeja)
+  if (isTrayExpanded) {
+    return (
+      <div id="wallet-view-expanded" className="w-full max-w-[1920px] mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-4 min-h-screen pb-32">
+        {/* Ribbon de Resumen Compacto en Vista Expandida */}
+        <div className="bg-neutral-900/95 p-3 sm:p-4 rounded-xl border border-neutral-800 flex flex-wrap items-center justify-between gap-3 shadow-md sticky top-0 z-20 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white uppercase tracking-wider">Billetera de Futuros USDⓈ-M</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30">
+                  Bandeja Pantalla Completa
+                </span>
+              </div>
+              <div className="flex items-center gap-4 text-xs font-mono mt-0.5">
+                <span className="text-neutral-400">
+                  Total: <strong className="text-white">${(balance.totalWalletBalance || 0).toFixed(2)}</strong>
+                </span>
+                <span className="text-neutral-400 hidden sm:inline">
+                  Disponible: <strong className="text-emerald-400">${(balance.availableBalance || 0).toFixed(2)}</strong>
+                </span>
+                <span className="text-neutral-400 hidden sm:inline">
+                  Garantía Aislada: <strong className="text-blue-300">${totalIsolatedMargin.toFixed(2)}</strong>
+                </span>
+                <span className={`font-bold ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  PnL: {totalUnrealizedPnl >= 0 ? '+' : ''}${totalUnrealizedPnl.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsTrayExpanded(false)}
+              className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            >
+              <Minimize2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Restaurar Vista Dividida</span>
+            </button>
+
+            {onOpenOrderModal && (
+              <button
+                type="button"
+                onClick={onOpenOrderModal}
+                className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm"
+              >
+                <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                <span>Nueva Orden (Popup)</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onGoToTrading}
+              className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs transition-colors border border-neutral-800"
+            >
+              Terminal
+            </button>
+          </div>
+        </div>
+
+        {/* Bandeja Rápida en Pantalla Completa con Scroll Completo */}
+        <div className="flex-1 w-full bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-xl min-h-[650px]">
+          <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-amber-400" />
+              <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                Bandeja Operativa Expandida (Posiciones, Órdenes, Historial y Alertas)
+              </h3>
+              {(positions.length > 0 || binanceWs.getOpenOrders().length > 0) && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  {positions.length} pos / {binanceWs.getOpenOrders().length} ord
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsTrayExpanded(false)}
+                className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs font-medium flex items-center gap-1 transition-colors"
+                title="Minimizar a vista dividida"
+              >
+                <Minimize2 className="w-3 h-3" />
+                <span>Minimizar</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="p-3 sm:p-5 flex-1 flex flex-col overflow-y-auto">
+            <PositionsAndOrders defaultTab="positions" onOpenOrderModal={onOpenOrderModal} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // VISTA NORMAL (Ancha, con la tarjeta de posiciones visible inmediatamente arriba)
   return (
-    <div id="wallet-view-container" className="flex-1 overflow-y-auto p-4 sm:p-6 bg-neutral-950 flex flex-col gap-6 max-w-7xl mx-auto w-full">
+    <div id="wallet-view-container" className="w-full max-w-[1920px] mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-5 min-h-screen pb-32">
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-900/80 p-4 rounded-xl border border-neutral-800">
         <div className="flex items-center gap-3">
@@ -97,6 +209,17 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Botón para expandir la bandeja rápida a pantalla completa */}
+          <button
+            type="button"
+            onClick={() => setIsTrayExpanded(true)}
+            className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
+            title="Expandir la bandeja de órdenes y posiciones a vista maximizada"
+          >
+            <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+            <span>Pantalla Completa</span>
+          </button>
+
           {mode === 'simulation' && (
             <>
               <button
@@ -105,7 +228,7 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
                 className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Depositar Fondos Demo</span>
+                <span>Depositar Demo</span>
               </button>
               <button
                 type="button"
@@ -203,7 +326,111 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
         </div>
       </div>
 
-      {/* SECCIÓN DUAL: 1. Widget de Riesgo & Margen Isolated + 2. Control de Garantía y Utilización */}
+      {/* TARJETA PRINCIPAL: BANDEJA DE POSICIONES ACTIVAS & ÓRDENES (Visible inmediatamente) */}
+      <div id="wallet-tray-section" className="w-full bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-xl">
+        <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                  Bandeja Operativa de Posiciones & Órdenes
+                </h3>
+                {(positions.length > 0 || binanceWs.getOpenOrders().length > 0) && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    {positions.length} pos / {binanceWs.getOpenOrders().length} ord
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-neutral-400 hidden sm:block">
+                Monitorea en vivo tus posiciones aisladas, edita TP/SL, consulta historial y gestiona órdenes.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Presets de Altura de Bandeja */}
+            <div className="flex items-center bg-neutral-900 p-0.5 rounded-lg border border-neutral-800 text-[10px] font-mono">
+              <span className="px-2 text-neutral-400 hidden sm:inline">Altura:</span>
+              <button
+                type="button"
+                onClick={() => setTrayHeightMode('STANDARD')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  trayHeightMode === 'STANDARD'
+                    ? 'bg-neutral-800 text-white font-bold'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Altura estándar (450px)"
+              >
+                Normal
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrayHeightMode('EXPANDED')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  trayHeightMode === 'EXPANDED'
+                    ? 'bg-amber-400 text-neutral-950 font-bold'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Bandeja amplia (620px)"
+              >
+                Amplia
+              </button>
+              <button
+                type="button"
+                onClick={() => setTrayHeightMode('XL')}
+                className={`px-2 py-1 rounded transition-colors ${
+                  trayHeightMode === 'XL'
+                    ? 'bg-amber-400 text-neutral-950 font-bold'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+                title="Bandeja extra grande (850px)"
+              >
+                XL
+              </button>
+            </div>
+
+            {/* Botón de Maximizar Bandeja a Pantalla Completa */}
+            <button
+              type="button"
+              onClick={() => setIsTrayExpanded(true)}
+              className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-amber-300 hover:text-amber-200 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+              title="Expandir a pantalla completa"
+            >
+              <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Pantalla Completa</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenOrderModal || onGoToTrading}
+              className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+            >
+              <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+              <span>Nueva Orden</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Contenedor con altura configurada y scroll suave garantizado - Estilo inline para asegurar visibilidad total */}
+        <div
+          className="w-full p-2 sm:p-4 flex-1 flex flex-col overflow-y-auto transition-all duration-200"
+          style={{
+            minHeight:
+              trayHeightMode === 'STANDARD'
+                ? '500px'
+                : trayHeightMode === 'EXPANDED'
+                ? '680px'
+                : '920px',
+          }}
+        >
+          <PositionsAndOrders defaultTab="positions" onOpenOrderModal={onOpenOrderModal} />
+        </div>
+      </div>
+
+      {/* SECCIÓN DUAL DE ANÁLISIS: 1. Widget de Riesgo & Margen Isolated + 2. Control de Garantía y Utilización */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Columna Izquierda (lg:col-span-5): Protocolo de Riesgo & Margen Isolated en Tiempo Real */}
         <div className="lg:col-span-5 flex flex-col">
@@ -302,40 +529,6 @@ export const WalletView: React.FC<WalletViewProps> = ({ onGoToTrading, onOpenOrd
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Bandeja Rápida: Posiciones Activas & Órdenes (Ocupa toda la parte inferior) */}
-      <div className="flex-1 w-full bg-neutral-900/80 rounded-xl border border-neutral-800 overflow-hidden flex flex-col shadow-lg">
-        <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Layers className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-              Bandeja Rápida: Posiciones Activas & Órdenes
-            </h3>
-            {(positions.length > 0 || binanceWs.getOpenOrders().length > 0) && (
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                {positions.length} pos / {binanceWs.getOpenOrders().length} ord
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-neutral-400 font-mono hidden sm:inline">
-              Garantía Aislada Protegida
-            </span>
-            <button
-              type="button"
-              onClick={onOpenOrderModal || onGoToTrading}
-              className="px-2.5 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1"
-            >
-              <Zap className="w-3 h-3" />
-              <span>Nueva Orden (Popup)</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="p-3 sm:p-4 flex-1 flex flex-col">
-          <PositionsAndOrders defaultTab="positions" />
         </div>
       </div>
 

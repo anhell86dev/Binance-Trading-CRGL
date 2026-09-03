@@ -46,7 +46,7 @@ export default function TerminalLayout() {
 
       {/* 2. Pestaña 1: Billetera (Al Principio) */}
       {activeTab === 'billetera' && (
-        <main className="flex-1 overflow-hidden h-[calc(100vh-3rem)] flex flex-col">
+        <main className="flex-1 overflow-y-auto h-[calc(100vh-3rem)] w-full bg-neutral-950 flex flex-col">
           <WalletView
             onGoToTrading={() => setActiveTab('futuros')}
             onOpenOrderModal={() => setIsOrderModalOpen(true)}

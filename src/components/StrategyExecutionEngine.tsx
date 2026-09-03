@@ -44,6 +44,7 @@ import { normalizeBinanceSymbol } from '../data/binancePairs';
 import { StrategyDetailModal } from './StrategyDetailModal';
 import { GoogleAuthModal } from './GoogleAuthModal';
 import { StrategyChartRenderer } from './StrategyChartRenderer';
+import { AssetSelectorModal } from './AssetSelectorModal';
 
 export const StrategyExecutionEngine: React.FC = () => {
   const [symbol, setSymbol] = useState(binanceWs.getCurrentSymbol());
@@ -61,6 +62,7 @@ export const StrategyExecutionEngine: React.FC = () => {
   // UI state
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
   const [executionSuccessIds, setExecutionSuccessIds] = useState<string[] | null>(null);
   const [showChartPreview, setShowChartPreview] = useState(false);
@@ -274,7 +276,16 @@ export const StrategyExecutionEngine: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setIsAssetModalOpen(true)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-neutral-950 hover:bg-neutral-800 text-amber-300 border border-neutral-700 hover:border-amber-500/50 flex items-center gap-1.5 transition-all shadow-xs"
+              title="Cambiar a cualquier activo de Binance Futures"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span>Cambiar Activo ({symbol})</span>
+            </button>
+
             <button
               onClick={() => setShowChartPreview(!showChartPreview)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all ${
@@ -758,6 +769,16 @@ export const StrategyExecutionEngine: React.FC = () => {
           isProcessing={isExecuting}
         />
       )}
+
+      {/* Asset Selector Modal */}
+      <AssetSelectorModal
+        isOpen={isAssetModalOpen}
+        onClose={() => setIsAssetModalOpen(false)}
+        onSelectSymbol={(newSym) => {
+          binanceWs.setSymbol(newSym);
+        }}
+        currentSymbol={symbol}
+      />
     </div>
   );
 };

@@ -8,12 +8,21 @@ import {
   Clock,
   Coins,
   DollarSign,
+  HelpCircle,
+  Info,
   PieChart,
+  Search,
   Shield,
+  Sparkles,
+  TrendingDown,
+  TrendingUp,
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { FuturesMarketMetrics, TickerData } from '../types/binance';
+import { AssetSelectorModal } from './AssetSelectorModal';
+import { DerivativesMetricsInfoModal } from './DerivativesMetricsInfoModal';
+import { notificationService } from '../services/notifications';
 
 const formatPrice = (p: number) => {
   if (!p || isNaN(p)) return '0.00';
@@ -39,6 +48,8 @@ const formatCountdown = (targetTimestamp: number) => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
+const POPULAR_QUICK_PAIRS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'TAOUSDT', 'BNBUSDT', 'SUIUSDT', 'DOGEUSDT', 'NEARUSDT'];
+
 interface HeaderTickerProps {
   symbol?: string;
   price?: number;
@@ -50,6 +61,8 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
   const [priceFlash, setPriceFlash] = useState<'up' | 'down' | null>(null);
   const [showDerivatives, setShowDerivatives] = useState<boolean>(true);
   const [countdownText, setCountdownText] = useState<string>('00:00:00');
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState<boolean>(false);
+  const [isDerivativesInfoModalOpen, setIsDerivativesInfoModalOpen] = useState<boolean>(false);
   const prevPriceRef = useRef<number>(propPrice || ticker.lastPrice);
 
   useEffect(() => {
@@ -83,7 +96,7 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
     };
   }, []);
 
-  const currentSymbol = propSymbol || ticker.symbol || binanceWs.getCurrentSymbol() || 'ZECUSDT';
+  const currentSymbol = propSymbol || ticker.symbol || binanceWs.getCurrentSymbol() || 'TAOUSDT';
   const lastPrice = propPrice || ticker.lastPrice || 0;
   const isPositive = (ticker.change24hPercent ?? 0) >= 0;
   const baseAsset = currentSymbol.replace('USDT', '');
@@ -94,54 +107,105 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
   const rangeSpan = high - low;
   const rangePct = rangeSpan > 0 ? Math.min(100, Math.max(0, ((lastPrice - low) / rangeSpan) * 100)) : 50;
 
+  const handleSelectSymbol = (newSymbol: string) => {
+    binanceWs.setSymbol(newSymbol);
+    notificationService.notify(
+      'SYSTEM',
+      `Activo Seleccionado: ${newSymbol}`,
+      `Conectado a la transmisión de Binance Futures en tiempo real.`
+    );
+  };
+
+  const fundingRateValue =
+    metrics?.fundingRatePercent != null
+      ? metrics.fundingRatePercent
+      : metrics?.fundingRate != null
+      ? metrics.fundingRate * 100
+      : 0;
+  const isFundingPositive = (metrics?.fundingRate || 0) >= 0;
+
   return (
     <div
       id="header_ticker_workspace"
       className="bg-neutral-900 border-b border-neutral-800 p-2.5 sm:p-3 flex flex-col gap-2 shrink-0 transition-colors"
     >
-      {/* Top Main Row: Symbol Identity + High Contrast Stats Flexbox */}
+      {/* Top Main Row: Symbol Identity with Asset Switcher + High Contrast Stats */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {/* Left: Asset Identity & Protocol Badges */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-neutral-950 border border-neutral-700/80 flex items-center justify-center text-amber-400 font-extrabold font-mono text-xs shadow-inner shrink-0">
-            {baseAsset.slice(0, 4)}
+        {/* Left: Asset Selector Button & Identity */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Interactive Asset Selector Trigger Button */}
+          <button
+            type="button"
+            id="btn_change_active_asset"
+            onClick={() => setIsAssetModalOpen(true)}
+            className="group flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-700/90 hover:border-amber-500/60 transition-all text-left shadow-sm"
+            title="Hacer clic para cambiar a cualquier activo de Binance Futures (BTC, ETH, SOL, TAO, DOGE, etc.)"
+          >
+            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 font-extrabold font-mono text-xs shadow-inner shrink-0 group-hover:scale-105 transition-transform">
+              {baseAsset.slice(0, 4)}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-base sm:text-lg font-black font-mono text-white tracking-tight group-hover:text-amber-300 transition-colors">
+                  {currentSymbol}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 text-neutral-400 group-hover:text-amber-400 transition-colors" />
+              </div>
+              <div className="flex items-center gap-1 text-[10px] text-amber-400 font-medium">
+                <Search className="w-2.5 h-2.5" />
+                <span>Cambiar Activo</span>
+              </div>
+            </div>
+          </button>
+
+          {/* Badges */}
+          <div className="flex items-center gap-1.5">
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-blue-500/15 text-blue-300 border border-blue-500/30">
+              PERP
+            </span>
+            <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <Shield className="w-2.5 h-2.5" />
+              1-5x ISOLATED
+            </span>
+            <span className="hidden md:flex items-center gap-1 text-emerald-400 font-mono text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Binance FAPI
+            </span>
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base sm:text-lg font-black font-mono text-white tracking-tight">
-                {currentSymbol}
-              </span>
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                PERP
-              </span>
-              <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold font-mono bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                <Shield className="w-2.5 h-2.5" />
-                1-5x ISOLATED
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px] text-neutral-400">
-              <span className="flex items-center gap-1 text-emerald-400 font-mono text-[10px]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Binance FAPI
-              </span>
-              <span className="text-neutral-600">•</span>
-              <span className="text-neutral-400 font-mono text-[10px]">
-                Mark: ${formatPrice(ticker.markPrice || lastPrice)}
-              </span>
-            </div>
+
+          {/* Quick-switch Asset Chips for Desktop */}
+          <div className="hidden xl:flex items-center gap-1 pl-2 border-l border-neutral-800 text-[11px] font-mono">
+            <span className="text-[10px] text-neutral-400 mr-0.5 font-sans">Rápidos:</span>
+            {POPULAR_QUICK_PAIRS.map((pair) => {
+              const isCurr = currentSymbol.toUpperCase() === pair.toUpperCase();
+              return (
+                <button
+                  key={pair}
+                  type="button"
+                  onClick={() => handleSelectSymbol(pair)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                    isCurr
+                      ? 'bg-amber-500 text-neutral-950 font-extrabold shadow-sm'
+                      : 'bg-neutral-950 text-neutral-400 hover:text-white hover:bg-neutral-800 border border-neutral-800'
+                  }`}
+                >
+                  {pair.replace('USDT', '')}
+                </button>
+              );
+            })}
           </div>
         </div>
 
         {/* Right: Key Stats Ticker (Price, 24h Change, High, Low, Volume) */}
-        <div className="flex items-center gap-3 sm:gap-5 flex-wrap font-mono">
+        <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap font-mono">
           {/* Main Price Box with Flash Effect */}
           <div
-            className={`flex flex-col px-2 py-0.5 rounded transition-all duration-300 ${
+            className={`flex flex-col px-2.5 py-0.5 rounded-lg transition-all duration-300 ${
               priceFlash === 'up'
                 ? 'bg-emerald-950/70 ring-1 ring-emerald-500 scale-[1.02]'
                 : priceFlash === 'down'
                 ? 'bg-rose-950/70 ring-1 ring-rose-500 scale-[1.02]'
-                : 'bg-neutral-950/50'
+                : 'bg-neutral-950/70 border border-neutral-800'
             }`}
           >
             <span className="text-[9px] text-neutral-400 uppercase font-sans font-semibold">Precio en Vivo</span>
@@ -191,16 +255,29 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
             <span className="text-[9px] text-neutral-400">USDT</span>
           </div>
 
-          {/* Derivatives Metrics Collapsible Button */}
-          <button
-            onClick={() => setShowDerivatives(!showDerivatives)}
-            className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-white transition-colors text-[10px] font-mono flex items-center gap-1"
-            title="Mostrar / Ocultar métricas de futuros (OI, Funding, Taker)"
-          >
-            <BarChart2 className="w-3 h-3 text-amber-400" />
-            <span className="hidden lg:inline">Futuros</span>
-            {showDerivatives ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
+          {/* Derivatives Toggle & Info Help Button */}
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsDerivativesInfoModalOpen(true)}
+              className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px] font-sans font-semibold flex items-center gap-1 transition-colors"
+              title="Ver guía completa: ¿Qué significan OI, Funding, Taker y Top L/S?"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">¿Qué significan?</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowDerivatives(!showDerivatives)}
+              className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 text-neutral-400 hover:text-white transition-colors text-[10px] font-mono flex items-center gap-1"
+              title="Mostrar / Ocultar barra de métricas de futuros"
+            >
+              <BarChart2 className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden lg:inline">OI/Funding</span>
+              {showDerivatives ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -221,45 +298,114 @@ export const HeaderTicker: React.FC<HeaderTickerProps> = memo(({ symbol: propSym
         </div>
       </div>
 
-      {/* Collapsible Derivatives Metrics Row */}
+      {/* Enhanced Explanatory Derivatives Metrics Row with Clear Indicators of what the numbers mean */}
       {showDerivatives && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1.5 border-t border-neutral-800/80 text-[11px] font-mono">
-          {/* OI */}
-          <div className="bg-neutral-950/80 px-2 py-1 rounded border border-neutral-800 flex items-center justify-between">
-            <span className="text-neutral-400 text-[10px] flex items-center gap-1">
-              <Coins className="w-3 h-3 text-amber-400" />
-              OI:
-            </span>
-            <span className="font-bold text-neutral-200">${formatVolume(metrics.openInterestValueUsdt)}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1.5 border-t border-neutral-800/80 text-[11px] font-mono">
+          {/* 1. OI (Interés Abierto) */}
+          <div
+            onClick={() => setIsDerivativesInfoModalOpen(true)}
+            className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-amber-500/50 cursor-pointer transition-all p-2 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1 group"
+            title="Haz clic para ver explicación detallada del Interés Abierto (OI)"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
+                <Coins className="w-3 h-3 text-amber-400" />
+                Interés Abierto (OI):
+              </span>
+              <span className="font-extrabold text-amber-300 font-mono text-xs">
+                ${formatVolume(metrics.openInterestValueUsdt)}
+              </span>
+            </div>
+            <div className="text-[10px] text-neutral-400 font-sans flex items-center justify-between">
+              <span>Capital activo en contratos</span>
+              <span className="text-neutral-400 font-mono text-[9px]">
+                {formatVolume(metrics.openInterest)} {baseAsset}
+              </span>
+            </div>
           </div>
 
-          {/* Funding */}
-          <div className="bg-neutral-950/80 px-2 py-1 rounded border border-neutral-800 flex items-center justify-between">
-            <span className="text-neutral-400 text-[10px] flex items-center gap-1">
-              <Clock className="w-3 h-3 text-blue-400" />
-              Funding ({countdownText}):
-            </span>
-            <span className={`font-bold ${(metrics?.fundingRate || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {(metrics?.fundingRate || 0) >= 0 ? '+' : ''}
-              {(metrics?.fundingRatePercent != null ? metrics.fundingRatePercent : (metrics?.fundingRate != null ? metrics.fundingRate * 100 : 0)).toFixed(4)}%
-            </span>
+          {/* 2. Funding Rate (Tasa de Financiación) */}
+          <div
+            onClick={() => setIsDerivativesInfoModalOpen(true)}
+            className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-blue-500/50 cursor-pointer transition-all p-2 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1 group"
+            title="Haz clic para ver explicación detallada de la Tasa de Financiación (Funding Rate)"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
+                <Clock className="w-3 h-3 text-blue-400" />
+                Funding ({countdownText}):
+              </span>
+              <span className={`font-extrabold font-mono text-xs ${isFundingPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {isFundingPositive ? '+' : ''}{fundingRateValue.toFixed(4)}%
+              </span>
+            </div>
+            <div className="text-[10px] font-sans flex items-center justify-between">
+              <span className={isFundingPositive ? 'text-emerald-400' : 'text-rose-400'}>
+                {isFundingPositive ? 'Longs pagan a Shorts' : 'Shorts pagan a Longs'}
+              </span>
+              <span className="text-neutral-400 font-mono text-[9px]">Cada 8h</span>
+            </div>
           </div>
 
-          {/* Taker Buy/Sell */}
-          <div className="bg-neutral-950/80 px-2 py-1 rounded border border-neutral-800 flex items-center justify-between">
-            <span className="text-neutral-400 text-[10px]">Taker C/V:</span>
-            <span className="font-bold text-amber-400">
-              {metrics.buyVolumePercent}% / {metrics.sellVolumePercent}%
-            </span>
+          {/* 3. Taker Buy/Sell (Presión a Mercado) */}
+          <div
+            onClick={() => setIsDerivativesInfoModalOpen(true)}
+            className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-purple-500/50 cursor-pointer transition-all p-2 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1 group"
+            title="Haz clic para ver explicación detallada del Volumen Taker Compra / Venta"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
+                <BarChart2 className="w-3 h-3 text-purple-400" />
+                Taker C/V:
+              </span>
+              <div className="flex items-center gap-1 font-bold text-xs">
+                <span className="text-emerald-400">{metrics.buyVolumePercent}% C</span>
+                <span className="text-neutral-600">/</span>
+                <span className="text-rose-400">{metrics.sellVolumePercent}% V</span>
+              </div>
+            </div>
+            <div className="text-[10px] text-neutral-400 font-sans flex items-center justify-between">
+              <span>{metrics.buyVolumePercent >= 50 ? 'Presión compradora activa' : 'Presión vendedora activa'}</span>
+              <span className="text-amber-400 font-mono text-[9px]">{metrics.buySellRatio}x ratio</span>
+            </div>
           </div>
 
-          {/* Top Long/Short */}
-          <div className="bg-neutral-950/80 px-2 py-1 rounded border border-neutral-800 flex items-center justify-between">
-            <span className="text-neutral-400 text-[10px]">Top L/S:</span>
-            <span className="font-bold text-cyan-400">{metrics.topPositionLongShortRatio}:1</span>
+          {/* 4. Top Trader Long/Short Ratio */}
+          <div
+            onClick={() => setIsDerivativesInfoModalOpen(true)}
+            className="bg-neutral-950/90 hover:bg-neutral-950 hover:border-cyan-500/50 cursor-pointer transition-all p-2 rounded-lg border border-neutral-800 flex flex-col justify-between gap-1 group"
+            title="Haz clic para ver explicación detallada del Ratio Long/Short de Ballenas / Cuentas Top"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-400 text-[10px] font-sans font-semibold flex items-center gap-1.5">
+                <PieChart className="w-3 h-3 text-cyan-400" />
+                Top L/S:
+              </span>
+              <span className="font-extrabold text-cyan-300 font-mono text-xs">
+                {metrics.topPositionLongShortRatio}:1 ({metrics.topPositionLongPercent}% L)
+              </span>
+            </div>
+            <div className="text-[10px] text-neutral-400 font-sans flex items-center justify-between">
+              <span>{metrics.topPositionLongShortRatio >= 1.0 ? 'Ballenas netamente en Long' : 'Ballenas netamente en Short'}</span>
+              <span className="text-cyan-400 font-mono text-[9px]">Top 20% cuentas</span>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Asset Selector Modal */}
+      <AssetSelectorModal
+        isOpen={isAssetModalOpen}
+        onClose={() => setIsAssetModalOpen(false)}
+        onSelectSymbol={handleSelectSymbol}
+        currentSymbol={currentSymbol}
+      />
+
+      {/* Educational Derivatives Metrics Explanation Modal */}
+      <DerivativesMetricsInfoModal
+        isOpen={isDerivativesInfoModalOpen}
+        onClose={() => setIsDerivativesInfoModalOpen(false)}
+      />
     </div>
   );
 });

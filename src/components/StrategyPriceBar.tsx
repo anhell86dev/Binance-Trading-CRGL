@@ -1,24 +1,30 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   AlertTriangle,
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
   CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Crosshair,
   Flag,
   Flame,
   Gauge,
+  MoveRight,
   Radio,
   Shield,
   Sliders,
   Sparkles,
   Target,
+  TrendingDown,
+  TrendingUp,
   Zap,
 } from 'lucide-react';
 import { GoogleSheetStrategyRow, ParsedStrategyPrices } from '../types/strategy';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
+import { livePriceService } from '../services/livePriceService';
 
 interface StrategyPriceBarProps {
   strategy: GoogleSheetStrategyRow;
@@ -32,6 +38,14 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
   compact = false,
 }) => {
   const [manualMode, setManualMode] = useState<'AUTO' | 'ENTRIES' | 'SL_TP'>('AUTO');
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const unsub = livePriceService.subscribe(() => {
+      setTick((t) => t + 1);
+    });
+    return unsub;
+  }, []);
 
   const prices: ParsedStrategyPrices = useMemo(() => {
     return parsePricesFromStrategy(strategy);
@@ -57,11 +71,14 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
   const currentPrice = livePrice || entry1Price || 100;
   const decimalPlaces = currentPrice < 10 ? 4 : 2;
 
+  // Live market trend / 24h change data for this symbol
+  const liveData = livePriceService.getPriceData(strategy.par);
+  const change24h = liveData.change24hPercent || 0;
+  const isPricePositive = change24h >= 0;
+
   // Comprobar si el precio live ha tocado E1, E2 o E3
   const hasTouchedE1 = useMemo(() => {
     if (!entry1Price || !currentPrice) return false;
-    // Para LONG: si el precio bajó hasta E1 (o por debajo)
-    // Para SHORT: si el precio subió hasta E1 (o por encima)
     return isLong ? currentPrice <= entry1Price * 1.001 : currentPrice >= entry1Price * 0.999;
   }, [isLong, currentPrice, entry1Price]);
 
@@ -105,6 +122,26 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
     tpFinalPrice > 0 && currentPrice > 0
       ? ((tpFinalPrice - currentPrice) / currentPrice) * 100
       : 0;
+
+  // Direction indicator of where the price is heading
+  const directionTargetText = useMemo(() => {
+    if (showSlTpMode) {
+      if (isPricePositive) {
+        return isLong ? 'Rumbo a TP1 / TP2 (Alcista)' : 'Retroceso hacia SL';
+      } else {
+        return isLong ? 'Retroceso hacia SL / E2' : 'Rumbo a TP1 / TP2 (Bajista)';
+      }
+    } else {
+      if (Math.abs(distE1Pct) <= 0.75) {
+        return 'En zona óptima de Entrada 1';
+      }
+      if (isLong) {
+        return distE1Pct > 0 ? 'Hacia Entrada 1 (Esperando retroceso)' : 'Hacia Rebote E1 (En descuento)';
+      } else {
+        return distE1Pct > 0 ? 'Hacia Entrada 1 Short (Zona óptima)' : 'Hacia Entrada 1 (Esperando rebote)';
+      }
+    }
+  }, [showSlTpMode, isPricePositive, isLong, distE1Pct]);
 
   // Calcular límites de la barra para mapeo visual 0% -> 100%
   const { minBound, maxBound } = useMemo(() => {
@@ -186,15 +223,25 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] bg-sky-500/15 text-sky-300 border border-sky-500/30">
               <Crosshair className="w-3 h-3 text-sky-400" />
               <span>APROXIMACIÓN A ENTRADAS</span>
-              <span className="text-neutral-400 font-normal">
-                | Distancia a E1:{' '}
-                <strong className={distE1Pct >= 0 ? 'text-amber-300' : 'text-emerald-400'}>
-                  {distE1Pct >= 0 ? '+' : ''}
-                  {distE1Pct.toFixed(2)}%
-                </strong>
-              </span>
             </span>
           )}
+
+          {/* Direction Indicator Badge showing where the Live Price is going */}
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+              isPricePositive
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+                : 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+            }`}
+          >
+            {isPricePositive ? (
+              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+            ) : (
+              <ArrowDownRight className="w-3 h-3 text-rose-400" />
+            )}
+            <span>Dirección: {isPricePositive ? '↗ Alcista' : '↘ Bajista'}</span>
+            <span className="opacity-90">({directionTargetText})</span>
+          </span>
 
           <span className="text-[10px] text-neutral-400">
             {isLong ? 'LONG 📈' : 'SHORT 📉'}
@@ -225,11 +272,11 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
         </div>
       </div>
 
-      {/* Visual Dynamic Price Track */}
-      <div className="relative pt-6 pb-6 px-2 sm:px-3">
+      {/* Visual Dynamic Price Track with Directional Arrow */}
+      <div className="relative pt-7 pb-7 px-2 sm:px-3">
         {/* Background Track Rail */}
-        <div className="h-2 w-full bg-neutral-900 rounded-full relative overflow-hidden border border-neutral-800">
-          {/* Active Corridor Gradient */}
+        <div className="h-2.5 w-full bg-neutral-900 rounded-full relative overflow-hidden border border-neutral-800 flex items-center">
+          {/* Active Corridor Gradient with Directional Indicator */}
           {showSlTpMode ? (
             <>
               {/* SL Danger Zone */}
@@ -242,7 +289,7 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
               />
               {/* TP Profit Zone */}
               <div
-                className="absolute top-0 bottom-0 bg-emerald-500/30"
+                className="absolute top-0 bottom-0 bg-emerald-500/35"
                 style={{
                   left: `${Math.min(liveX, tpFinalX || tp1X)}%`,
                   width: `${Math.abs((tpFinalX || tp1X) - liveX)}%`,
@@ -252,13 +299,36 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
           ) : (
             /* Entry Approach Corridor */
             <div
-              className="absolute top-0 bottom-0 bg-sky-500/25"
+              className={`absolute top-0 bottom-0 ${
+                isPricePositive ? 'bg-gradient-to-r from-sky-500/20 to-emerald-500/40' : 'bg-gradient-to-r from-rose-500/25 to-sky-500/20'
+              }`}
               style={{
                 left: `${Math.min(liveX, e1X)}%`,
                 width: `${Math.max(1, Math.abs(e1X - liveX))}%`,
               }}
             />
           )}
+
+          {/* Directional Arrows inside the bar pointing in the movement direction if positive or trending */}
+          <div
+            className={`absolute inset-0 flex items-center justify-center pointer-events-none text-[9px] font-mono font-bold tracking-widest ${
+              isPricePositive ? 'text-emerald-400/70' : 'text-rose-400/70'
+            }`}
+          >
+            {isPricePositive ? (
+              <span className="flex items-center gap-1 text-[8px] animate-pulse">
+                <span>►►►</span>
+                <span className="hidden sm:inline">IMPULSO ALCISTA</span>
+                <span>►►►</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[8px] opacity-70">
+                <span>◄◄◄</span>
+                <span className="hidden sm:inline">MOVIMIENTO BAJISTA</span>
+                <span>◄◄◄</span>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* ----------------- RENDER MARKERS ON TRACK ----------------- */}
@@ -272,33 +342,27 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
             {/* Top Label */}
             <div className="absolute -top-6 whitespace-nowrap bg-rose-950/90 text-rose-300 border border-rose-500/50 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shadow-xs">
               SL ${slPrice.toFixed(decimalPlaces)}
-              <span className="text-[8px] opacity-85 ml-1">
-                ({distSlPct >= 0 ? '+' : ''}
-                {distSlPct.toFixed(2)}%)
-              </span>
             </div>
             {/* Marker Pin */}
             <div className="w-3 h-3 rounded-full bg-rose-500 border-2 border-neutral-950 ring-1 ring-rose-400 shadow-sm" />
             {/* Bottom Note */}
-            <div className="absolute -bottom-5 whitespace-nowrap text-[8px] font-mono text-rose-400">
-              Stop Loss
+            <div className="absolute -bottom-5.5 whitespace-nowrap text-[8px] font-mono text-rose-400">
+              Stop Loss ({distSlPct >= 0 ? '+' : ''}{distSlPct.toFixed(1)}%)
             </div>
           </div>
         )}
 
-        {/* ENTRADA 1 (E1) */}
+        {/* ENTRADA 1 (E1) - CON % VS E1 UBICADO ABAJO */}
         {entry1Price > 0 && (!showSlTpMode || !hasTouchedE1) && (
           <div
             className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-10"
             style={{ left: `${e1X}%` }}
           >
-            <div className="absolute -top-6 whitespace-nowrap bg-sky-950/90 text-sky-300 border border-sky-500/50 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shadow-xs">
+            {/* Top Label: E1 Price */}
+            <div className="absolute -top-6 whitespace-nowrap bg-sky-950/95 text-sky-300 border border-sky-500/60 px-1.5 py-0.2 rounded text-[9px] font-mono font-black shadow-xs">
               E1 ${entry1Price.toFixed(decimalPlaces)}
-              <span className="text-[8px] text-sky-200 ml-1">
-                ({distE1Pct >= 0 ? '+' : ''}
-                {distE1Pct.toFixed(2)}%)
-              </span>
             </div>
+            {/* Marker Pin */}
             <div
               className={`w-3 h-3 rounded-full border-2 border-neutral-950 ${
                 hasTouchedE1
@@ -306,8 +370,9 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
                   : 'bg-sky-400 ring-1 ring-sky-400'
               }`}
             />
-            <div className="absolute -bottom-5 whitespace-nowrap text-[8px] font-mono text-sky-400">
-              Entrada 1 (50%)
+            {/* Bottom Label: % vs E1 PASADO ABAJO DE PRECIO ENTRADA DE E1 */}
+            <div className="absolute -bottom-6 whitespace-nowrap bg-neutral-950/90 border border-sky-500/40 text-sky-300 px-1 py-0.2 rounded text-[8px] font-mono font-bold shadow-xs">
+              {distE1Pct >= 0 ? '+' : ''}{distE1Pct.toFixed(2)}% vs E1
             </div>
           </div>
         )}
@@ -352,14 +417,10 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
           >
             <div className="absolute -top-6 whitespace-nowrap bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded text-[9px] font-mono font-bold shadow-xs">
               TP1 ${tp1Price.toFixed(decimalPlaces)}
-              <span className="text-[8px] text-emerald-200 ml-1">
-                ({distTp1Pct >= 0 ? '+' : ''}
-                {distTp1Pct.toFixed(2)}%)
-              </span>
             </div>
             <div className="w-3 h-3 rounded-full bg-emerald-400 border-2 border-neutral-950 ring-1 ring-emerald-300 shadow-sm" />
-            <div className="absolute -bottom-5 whitespace-nowrap text-[8px] font-mono text-emerald-400">
-              TP1 (50%)
+            <div className="absolute -bottom-5.5 whitespace-nowrap text-[8px] font-mono text-emerald-400">
+              TP1 ({distTp1Pct >= 0 ? '+' : ''}{distTp1Pct.toFixed(1)}%)
             </div>
           </div>
         )}
@@ -372,14 +433,10 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
           >
             <div className="absolute -top-6 whitespace-nowrap bg-emerald-950/80 text-emerald-300/90 border border-emerald-600/40 px-1.5 py-0.2 rounded text-[9px] font-mono shadow-xs">
               TP2 ${tp2Price.toFixed(decimalPlaces)}
-              <span className="text-[8px] opacity-80 ml-1">
-                ({distTp2Pct >= 0 ? '+' : ''}
-                {distTp2Pct.toFixed(2)}%)
-              </span>
             </div>
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-neutral-950 ring-1 ring-emerald-500" />
             <div className="absolute -bottom-5 whitespace-nowrap text-[8px] font-mono text-neutral-400">
-              TP2 (30%)
+              TP2 (+{distTp2Pct.toFixed(1)}%)
             </div>
           </div>
         )}
@@ -392,60 +449,58 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
           >
             <div className="absolute -top-6 whitespace-nowrap bg-emerald-950/80 text-emerald-300/90 border border-emerald-600/40 px-1.5 py-0.2 rounded text-[9px] font-mono shadow-xs">
               TP Fin ${tpFinalPrice.toFixed(decimalPlaces)}
-              <span className="text-[8px] opacity-80 ml-1">
-                ({distTpFinalPct >= 0 ? '+' : ''}
-                {distTpFinalPct.toFixed(2)}%)
-              </span>
             </div>
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-neutral-950 ring-1 ring-emerald-500" />
             <div className="absolute -bottom-5 whitespace-nowrap text-[8px] font-mono text-neutral-400">
-              TP Final (20%)
+              TP Fin (+{distTpFinalPct.toFixed(1)}%)
             </div>
           </div>
         )}
 
-        {/* PRECIO LIVE ACTUAL (PULSO DESTACADO EN ORO / BLANCO) */}
+        {/* PRECIO LIVE ACTUAL (CON CAMBIO PASADO ABAJO DEL PRECIO Y FLECHA DE DIRECCIÓN) */}
         <div
           className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center pointer-events-none z-20"
           style={{ left: `${liveX}%` }}
         >
-          {/* Live Price Tag Above or Below */}
-          <div className="absolute -top-7.5 whitespace-nowrap bg-amber-400 text-neutral-950 font-black px-1.5 py-0.2 rounded text-[9px] font-mono shadow-md ring-1 ring-amber-300 flex items-center gap-1">
+          {/* Live Price Tag Above: PRECIO LIVE */}
+          <div className="absolute -top-7 whitespace-nowrap bg-amber-400 text-neutral-950 font-black px-1.5 py-0.2 rounded text-[9px] font-mono shadow-md ring-1 ring-amber-300 flex items-center gap-1">
             <Radio className="w-2 h-2 animate-ping text-neutral-950" />
             <span>LIVE ${currentPrice.toFixed(decimalPlaces)}</span>
           </div>
 
-          {/* Needle / Marker Pin */}
+          {/* Needle / Marker Pin with Directional Arrow */}
           <div className="w-4 h-4 rounded-full bg-amber-400 border-2 border-neutral-950 ring-2 ring-amber-400/90 shadow-lg flex items-center justify-center">
-            <div className="w-1.5 h-1.5 rounded-full bg-neutral-950" />
+            {isPricePositive ? (
+              <ArrowRight className="w-2.5 h-2.5 text-neutral-950 stroke-[3]" />
+            ) : (
+              <div className="w-1.5 h-1.5 rounded-full bg-neutral-950" />
+            )}
           </div>
 
-          {/* Subtitle Distance */}
-          <div className="absolute -bottom-5.5 whitespace-nowrap bg-neutral-900/90 text-amber-300 border border-amber-500/40 px-1 rounded text-[8px] font-mono font-bold">
-            {showSlTpMode ? (
-              <span>
-                SL:{' '}
-                <strong className="text-rose-400 font-bold">
-                  {distSlPct.toFixed(2)}%
-                </strong>{' '}
-                | TP1:{' '}
-                <strong className="text-emerald-400 font-bold">
-                  +{distTp1Pct.toFixed(2)}%
-                </strong>
-              </span>
+          {/* EL CAMBIO PASADO ABAJO DEL PRECIO CON SU FLECHA DE DIRECCIÓN */}
+          <div
+            className={`absolute -bottom-6.5 whitespace-nowrap px-1.5 py-0.2 rounded text-[8px] font-mono font-bold flex items-center gap-0.5 border shadow-sm ${
+              isPricePositive
+                ? 'bg-emerald-950/95 text-emerald-300 border-emerald-500/60 ring-1 ring-emerald-500/20'
+                : 'bg-rose-950/95 text-rose-300 border-rose-500/60'
+            }`}
+          >
+            {isPricePositive ? (
+              <ArrowUpRight className="w-2.5 h-2.5 text-emerald-400" />
             ) : (
-              <span>
-                {distE1Pct >= 0 ? '+' : ''}
-                {distE1Pct.toFixed(2)}% vs E1
-              </span>
+              <ArrowDownRight className="w-2.5 h-2.5 text-rose-400" />
             )}
+            <span>
+              {isPricePositive ? '+' : ''}
+              {change24h.toFixed(2)}% (24h)
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Summary Footer with Quick Legend */}
-      <div className="flex items-center justify-between pt-1 border-t border-neutral-900 text-[9px] font-mono text-neutral-400">
-        <div className="flex items-center gap-3">
+      {/* Summary Footer with Quick Legend & Direction Info */}
+      <div className="flex flex-wrap items-center justify-between pt-1 border-t border-neutral-900 text-[9px] font-mono text-neutral-400 gap-1">
+        <div className="flex items-center gap-3 flex-wrap">
           {showSlTpMode ? (
             <>
               <span className="flex items-center gap-1 text-rose-400">
@@ -467,30 +522,24 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
             <>
               <span className="flex items-center gap-1 text-sky-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-sky-400 inline-block" />
-                Entrada 1: ${entry1Price.toFixed(decimalPlaces)} (50%)
+                Entrada 1: ${entry1Price.toFixed(decimalPlaces)}
               </span>
-              {entry2Price > 0 && (
-                <span className="flex items-center gap-1 text-neutral-400 hidden sm:inline-flex">
-                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500/70 inline-block" />
-                  E2: ${entry2Price.toFixed(decimalPlaces)} (30%)
-                </span>
-              )}
+              <span className="flex items-center gap-1 text-amber-300 font-bold">
+                Dist. E1: {distE1Pct >= 0 ? '+' : ''}{distE1Pct.toFixed(2)}%
+              </span>
             </>
           )}
         </div>
 
-        <div className="text-neutral-400 font-sans">
-          {showSlTpMode
-            ? '🎯 Operación en curso / Monitoreando niveles SL & TP'
-            : Math.abs(distE1Pct) <= 0.75
-            ? '🎯 En zona de Entrada 1'
-            : isLong
-            ? distE1Pct > 0
-              ? `Esperando retroceso de ${distE1Pct.toFixed(2)}% hacia E1`
-              : `Precio en zona de descuento (${Math.abs(distE1Pct).toFixed(2)}% bajo E1)`
-            : distE1Pct > 0
-            ? `Precio en zona óptima Short (+${distE1Pct.toFixed(2)}%)`
-            : `Esperando rebote hacia E1 (${Math.abs(distE1Pct).toFixed(2)}%)`}
+        <div className="flex items-center gap-1.5 text-neutral-300 font-sans">
+          <span className="text-neutral-400 font-mono text-[9px]">Trayectoria:</span>
+          <span
+            className={`font-semibold font-mono text-[9px] ${
+              isPricePositive ? 'text-emerald-400' : 'text-rose-400'
+            }`}
+          >
+            {isPricePositive ? '➔ Hacia Objetivos Altos (Verde)' : '➔ En Corrección (Rojo)'}
+          </span>
         </div>
       </div>
     </div>

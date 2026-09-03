@@ -1,14 +1,15 @@
-import React, { useState, useEffect, useMemo, Fragment } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
-  ChevronDown,
-  ChevronUp,
   Crown,
   Eye,
+  Layers,
   Radio,
   Shield,
   Sparkles,
+  Table,
   Target,
   Zap,
 } from 'lucide-react';
@@ -34,6 +35,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
   highlightSymbol,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
+  const [viewMode, setViewMode] = useState<'CARDS' | 'TABLE'>('CARDS');
   const [, setPriceTick] = useState(0);
 
   useEffect(() => {
@@ -44,7 +46,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
       setPriceTick((prev) => prev + 1);
     });
     return () => {
-      unStrat: unsubStrat();
+      unsubStrat();
       unsubPrice();
     };
   }, []);
@@ -76,6 +78,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
       const diffDollar = livePrice - entry1Price;
       const diffPct = entry1Price > 0 ? (diffDollar / entry1Price) * 100 : 0;
       const absDiffPct = Math.abs(diffPct);
+      const isPricePositive = (liveData.change24hPercent || 0) >= 0;
 
       const ratio = rr.ratio > 0 ? rr.ratio : 2.0;
 
@@ -90,6 +93,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
         diffDollar,
         diffPct,
         absDiffPct,
+        isPricePositive,
         ratio,
       };
     });
@@ -155,317 +159,359 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
   };
 
   return (
-    <div id="top-strategies-risk-reward-list" className="flex flex-col gap-3">
-      {/* Header Banner with Focus on R:B > 1:2 sobre estrategias activas */}
-      <div className="bg-neutral-900/90 border border-amber-500/30 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-            <Crown className="w-4 h-4" />
+    <div id="top-strategies-risk-reward-list" className="flex flex-col gap-2">
+      {/* Header Banner - Compacto y elegante */}
+      <div className="bg-neutral-900/90 border border-amber-500/30 rounded-xl px-3 py-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-md bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+            <Crown className="w-3.5 h-3.5" />
           </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h4 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                Top 3 Estrategias Activas con Mayor Ratio R/B
-              </h4>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
-                Mínimo 1:2+
-              </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
-                Filtrado de Catálogo Activo
-              </span>
-            </div>
-            <p className="text-[11px] text-neutral-400 mt-0.5">
-              Calculadas en vivo sobre las estrategias activas. Se destaca en dorado la estrategia más próxima a su Entrada 1.
-            </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+              Resumen Top 3 Estrategias R/B
+            </h4>
+            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
+              Mín 1:2+
+            </span>
+            <span className="text-[9px] font-mono text-neutral-400 hidden md:inline">
+              (Estrategias operables activas)
+            </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-950/40 border border-emerald-800/60 text-[10px] font-mono text-emerald-400">
-            <Radio className="w-3 h-3 animate-pulse" />
-            <span>Precios Live FAPI</span>
+          <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
+            <Radio className="w-2.5 h-2.5 animate-pulse" />
+            <span>Live FAPI</span>
           </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-[10px] font-mono text-neutral-300">
-            <Shield className="w-3 h-3 text-emerald-400" />
-            <span>Máx <strong>5x</strong> | <strong>ISOLATED</strong></span>
+
+          {/* Toggle View Mode */}
+          <div className="flex items-center bg-neutral-950 p-0.5 rounded border border-neutral-800 text-[10px] font-mono">
+            <button
+              onClick={() => setViewMode('CARDS')}
+              className={`px-2 py-0.5 rounded transition-all flex items-center gap-1 ${
+                viewMode === 'CARDS'
+                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Ver en 3 tarjetas compactas"
+            >
+              <Layers className="w-3 h-3" />
+              <span>Resumen</span>
+            </button>
+            <button
+              onClick={() => setViewMode('TABLE')}
+              className={`px-2 py-0.5 rounded transition-all flex items-center gap-1 ${
+                viewMode === 'TABLE'
+                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Ver en tabla compacta"
+            >
+              <Table className="w-3 h-3" />
+              <span>Tabla</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Tabla de Top 3 Estrategias Activas */}
-      <div className="bg-neutral-900/80 rounded-xl border border-neutral-800 overflow-hidden shadow-lg">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-neutral-950/90 text-[10px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
-                <th className="py-2.5 px-3 font-semibold text-center w-12">Rank</th>
-                <th className="py-2.5 px-3 font-semibold">Par / Activo</th>
-                <th className="py-2.5 px-3 font-semibold">Dirección</th>
-                <th className="py-2.5 px-3 font-semibold min-w-[180px]">Estrategia</th>
-                <th className="py-2.5 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
-                  Precio Live
-                </th>
-                <th className="py-2.5 px-3 font-semibold">Entrada 1 (E1)</th>
-                <th className="py-2.5 px-3 font-semibold min-w-[150px]">Dif. vs E1</th>
-                <th className="py-2.5 px-3 font-semibold">Stop Loss</th>
-                <th className="py-2.5 px-3 font-semibold">Take Profit</th>
-                <th className="py-2.5 px-3 font-semibold text-center">Ratio R:B</th>
-                <th className="py-2.5 px-3 font-semibold">Apalancamiento</th>
-                <th className="py-2.5 px-3 font-semibold text-right min-w-[120px]">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800/80 font-mono">
-              {rankedTop3.length === 0 ? (
-                <tr>
-                  <td colSpan={12} className="py-8 text-center text-xs text-neutral-500 font-sans">
-                    No hay suficientes estrategias activas para calcular el Top 3.
-                  </td>
+      {/* VISTA 1: BENTO 3 TARJETAS COMPACTAS (Default - Bajo footprint vertical) */}
+      {viewMode === 'CARDS' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+          {rankedTop3.length === 0 ? (
+            <div className="col-span-3 py-6 text-center text-xs text-neutral-500 font-sans bg-neutral-900/60 rounded-xl border border-neutral-800">
+              No hay suficientes estrategias activas para calcular el Top 3.
+            </div>
+          ) : (
+            rankedTop3.map((item, index) => {
+              const strat = item.strategy;
+              const rank = index + 1;
+              const isClosest = closestInTop3Id === strat.noEstrategia;
+              const isSelected = highlightSymbol && highlightSymbol.toUpperCase() === strat.par.replace(/[^A-Z0-9]/g, '');
+
+              const rankBadgeClass =
+                rank === 1
+                  ? 'bg-amber-400 text-neutral-950 font-black'
+                  : rank === 2
+                  ? 'bg-sky-400 text-neutral-950 font-black'
+                  : 'bg-emerald-400 text-neutral-950 font-black';
+
+              const decimalPlaces = item.entry1Price < 10 || item.livePrice < 10 ? 4 : 2;
+              const isCloseToEntry = item.absDiffPct <= 0.75;
+
+              return (
+                <div
+                  key={strat.noEstrategia}
+                  className={`rounded-xl border p-2.5 flex flex-col gap-2 transition-all relative ${
+                    isClosest
+                      ? 'bg-amber-950/20 border-amber-500/50 shadow-md ring-1 ring-amber-500/30'
+                      : isSelected
+                      ? 'bg-neutral-900 border-amber-400/50'
+                      : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700'
+                  }`}
+                >
+                  {/* Card Top: Rank, Par, Tipo, R:B */}
+                  <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-neutral-800/80">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`w-4 h-4 rounded text-[10px] flex items-center justify-center shrink-0 ${rankBadgeClass}`}>
+                        #{rank}
+                      </span>
+                      <strong className="text-white text-xs font-mono truncate">{strat.par}</strong>
+                      <span
+                        className={`text-[9px] font-bold px-1 py-0.2 rounded font-mono ${
+                          item.isLong
+                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                            : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                        }`}
+                      >
+                        {item.isLong ? 'LONG ↗' : 'SHORT ↘'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                        1:{item.ratio.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Strategy Name & Proximity Tag */}
+                  <div className="flex items-center justify-between gap-1 text-[10px]">
+                    <span className="text-neutral-300 font-sans font-medium truncate" title={strat.nombreEstrategia}>
+                      {strat.nombreEstrategia}
+                    </span>
+                    {isClosest && (
+                      <span className="text-[8px] font-mono font-bold px-1 py-0.2 rounded bg-amber-400 text-neutral-950 shrink-0">
+                        🎯 MÁS PRÓXIMA
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Key Stats Grid: 1. Precio Live (con cambio abajo) & 2. Entrada 1 (con % vs E1 abajo) */}
+                  <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-2 rounded-lg border border-neutral-800/80 font-mono">
+                    {/* Precio Live con cambio abajo y dirección */}
+                    <div className="flex flex-col">
+                      <span className="text-[9px] text-amber-400/90 font-medium flex items-center gap-1">
+                        <Radio className="w-2 h-2 text-amber-400 animate-pulse" />
+                        Precio Live
+                      </span>
+                      <span className="text-xs font-bold text-white mt-0.5">
+                        ${item.livePrice.toFixed(decimalPlaces)}
+                      </span>
+                      {/* CAMBIO PASADO ABAJO DEL PRECIO */}
+                      <span
+                        className={`text-[9px] font-bold flex items-center gap-0.5 mt-0.5 ${
+                          item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'
+                        }`}
+                      >
+                        {item.isPricePositive ? (
+                          <ArrowUpRight className="w-2.5 h-2.5" />
+                        ) : (
+                          <ArrowDownRight className="w-2.5 h-2.5" />
+                        )}
+                        <span>
+                          {item.isPricePositive ? '+' : ''}
+                          {(item.liveData.change24hPercent || 0).toFixed(2)}% (24h)
+                        </span>
+                      </span>
+                    </div>
+
+                    {/* Entrada 1 con % vs E1 pasado abajo de Entrada 1 */}
+                    <div className="flex flex-col border-l border-neutral-850 pl-2">
+                      <span className="text-[9px] text-sky-400/90 font-medium">
+                        Entrada 1 (E1)
+                      </span>
+                      <span className="text-xs font-bold text-sky-300 mt-0.5">
+                        ${item.entry1Price.toFixed(decimalPlaces)}
+                      </span>
+                      {/* % VS E1 PASADO ABAJO DE PRECIO ENTRADA DE E1 */}
+                      <span
+                        className={`text-[9px] font-bold mt-0.5 ${
+                          isCloseToEntry
+                            ? 'text-emerald-400'
+                            : isClosest
+                            ? 'text-amber-300'
+                            : 'text-neutral-300'
+                        }`}
+                      >
+                        {item.diffPct >= 0 ? '+' : ''}
+                        {item.diffPct.toFixed(2)}% vs E1
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* SL / TP1 Compact Line */}
+                  <div className="flex items-center justify-between text-[9px] font-mono px-1 text-neutral-400">
+                    <span className="text-rose-400 font-bold">
+                      SL: ${item.prices.slPrice ? item.prices.slPrice.toFixed(decimalPlaces) : '-'}
+                    </span>
+                    <span className="text-emerald-400 font-bold">
+                      TP1: ${item.prices.tp1Price ? item.prices.tp1Price.toFixed(decimalPlaces) : '-'}
+                    </span>
+                    <span className="text-neutral-500">2x Isolate</span>
+                  </div>
+
+                  {/* Directional Mini Track (Compact 4px rail with directional arrow) */}
+                  <div className="relative pt-2 pb-1 px-1">
+                    <div className="h-1.5 w-full bg-neutral-950 rounded-full border border-neutral-800 relative overflow-hidden flex items-center">
+                      <div
+                        className={`h-full ${
+                          item.isPricePositive
+                            ? 'bg-gradient-to-r from-sky-500 to-emerald-400'
+                            : 'bg-gradient-to-r from-rose-500 to-sky-400'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(15, 50 + item.diffPct * 2))}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[8px] font-mono text-neutral-500 mt-1">
+                      <span>SL</span>
+                      <span className={`font-bold flex items-center gap-0.5 ${item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {item.isPricePositive ? '➔ Impulso Alcista' : '➔ En Corrección'}
+                      </span>
+                      <span>TP1</span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-800/80">
+                    {onOpenDetails && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenDetails(strat)}
+                        className="px-2 py-1 rounded bg-neutral-950 hover:bg-neutral-800 text-neutral-300 text-[10px] font-medium flex items-center gap-1 border border-neutral-800 transition-colors"
+                      >
+                        <Eye className="w-2.5 h-2.5" />
+                        <span>Detalles</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleExecute(item)}
+                      className="flex-1 py-1 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-bold font-mono flex items-center justify-center gap-1 transition-all shadow-xs"
+                      title="Cargar orden de esta estrategia a Binance Futures"
+                    >
+                      <Zap className="w-3 h-3 fill-neutral-950" />
+                      <span>Cargar Orden</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* VISTA 2: TABLA COMPACTA DE ALTA DENSIDAD */}
+      {viewMode === 'TABLE' && (
+        <div className="bg-neutral-900/80 rounded-xl border border-neutral-800 overflow-hidden shadow-md">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-neutral-950/90 text-[10px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
+                  <th className="py-2 px-2.5 font-semibold text-center w-10">Rank</th>
+                  <th className="py-2 px-2.5 font-semibold">Par</th>
+                  <th className="py-2 px-2.5 font-semibold">Tipo</th>
+                  <th className="py-2 px-2.5 font-semibold">Estrategia</th>
+                  <th className="py-2 px-2.5 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
+                    Precio Live
+                  </th>
+                  <th className="py-2 px-2.5 font-semibold">Entrada 1 (E1)</th>
+                  <th className="py-2 px-2.5 font-semibold">Stop Loss</th>
+                  <th className="py-2 px-2.5 font-semibold">Take Profit</th>
+                  <th className="py-2 px-2.5 font-semibold text-center">Ratio R:B</th>
+                  <th className="py-2 px-2.5 font-semibold text-right min-w-[100px]">Acción</th>
                 </tr>
-              ) : (
-                rankedTop3.map((item, index) => {
+              </thead>
+              <tbody className="divide-y divide-neutral-800/80 font-mono text-[11px]">
+                {rankedTop3.map((item, index) => {
                   const strat = item.strategy;
                   const rank = index + 1;
                   const isClosest = closestInTop3Id === strat.noEstrategia;
-                  const isSelected = highlightSymbol && highlightSymbol.toUpperCase() === strat.par.replace(/[^A-Z0-9]/g, '');
-
-                  const rankBadgeClass =
-                    rank === 1
-                      ? 'bg-amber-400 text-neutral-950 font-black ring-1 ring-amber-400/50'
-                      : rank === 2
-                      ? 'bg-sky-400 text-neutral-950 font-black ring-1 ring-sky-400/50'
-                      : 'bg-emerald-400 text-neutral-950 font-black ring-1 ring-emerald-400/50';
-
                   const decimalPlaces = item.entry1Price < 10 || item.livePrice < 10 ? 4 : 2;
-                  const isCloseToEntry = item.absDiffPct <= 0.75;
 
                   return (
-                    <Fragment key={strat.noEstrategia}>
-                      <tr
-                        className={`transition-all ${
-                          isClosest
-                            ? 'bg-amber-500/15 hover:bg-amber-500/20 ring-1 ring-inset ring-amber-400/50 shadow-inner'
-                            : isSelected
-                            ? 'bg-amber-500/10 hover:bg-amber-500/15'
-                            : 'hover:bg-neutral-850/60'
-                        }`}
-                      >
-                      {/* Rank */}
-                      <td className="py-3 px-3 text-center">
-                        <span className={`inline-flex w-5 h-5 rounded-md items-center justify-center text-xs ${rankBadgeClass}`}>
-                          #{rank}
-                        </span>
+                    <tr
+                      key={strat.noEstrategia}
+                      className={`hover:bg-neutral-850/60 transition-colors ${
+                        isClosest ? 'bg-amber-500/10' : ''
+                      }`}
+                    >
+                      <td className="py-2 px-2.5 text-center">
+                        <span className="font-bold text-amber-400">#{rank}</span>
                       </td>
-
-                      {/* Par */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 font-bold text-white text-xs">
-                          <span>{strat.par}</span>
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-950 text-neutral-400 border border-neutral-800">
-                            PERP
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Dirección */}
-                      <td className="py-3 px-3">
+                      <td className="py-2 px-2.5 font-bold text-white">{strat.par}</td>
+                      <td className="py-2 px-2.5">
                         <span
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            item.isLong
-                              ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                              : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                          className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                            item.isLong ? 'text-emerald-400 bg-emerald-500/15' : 'text-rose-400 bg-rose-500/15'
                           }`}
                         >
-                          {item.isLong ? (
-                            <>
-                              <ArrowUpRight className="w-3 h-3 text-emerald-400" />
-                              LONG
-                            </>
-                          ) : (
-                            <>
-                              <ArrowDownRight className="w-3 h-3 text-rose-400" />
-                              SHORT
-                            </>
-                          )}
+                          {item.isLong ? 'LONG' : 'SHORT'}
                         </span>
                       </td>
-
-                      {/* Nombre & Badge de Más Próxima */}
-                      <td className="py-3 px-3 font-sans">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-white text-xs">{strat.nombreEstrategia}</span>
-                          {isClosest && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full text-[9px] font-black bg-amber-400 text-neutral-950 ring-1 ring-amber-400/60 shadow-xs animate-pulse">
-                              <Target className="w-2.5 h-2.5" />
-                              MÁS PRÓXIMA A E1
-                            </span>
-                          )}
-                        </div>
-                        {strat.comentariosBacktesting && (
-                          <div className="text-[10px] text-neutral-400 line-clamp-1 mt-0.5">
-                            {strat.comentariosBacktesting}
-                          </div>
-                        )}
+                      <td className="py-2 px-2.5 font-sans truncate max-w-[140px]">
+                        {strat.nombreEstrategia}
                       </td>
 
-                      {/* 1. PRECIO LIVE (PRIMERO: CON % DE DISTANCIA VS E1 ABAJO) */}
-                      <td className="py-3 px-3 bg-amber-500/5 border-x border-amber-500/20">
+                      {/* 1. PRECIO LIVE: CAMBIO ABAJO DEL PRECIO */}
+                      <td className="py-2 px-2.5 bg-amber-500/5 border-x border-amber-500/20">
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-amber-300 text-xs">
-                              ${item.livePrice.toFixed(decimalPlaces)}
-                            </span>
-                            <span
-                              className={`text-[9px] font-semibold ${
-                                item.liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                              }`}
-                            >
-                              {item.liveData.change24hPercent >= 0 ? '+' : ''}
-                              {item.liveData.change24hPercent.toFixed(1)}%
-                            </span>
-                          </div>
-                          {/* % de Distancia vs Entrada 1 ubicado directamente abajo del Precio Live */}
-                          <div
-                            className={`text-[10px] font-mono font-bold mt-0.5 inline-flex items-center gap-1 ${
-                              isCloseToEntry
-                                ? 'text-emerald-400'
-                                : isClosest
-                                ? 'text-amber-300'
-                                : item.isLong
-                                ? item.diffPct > 0
-                                  ? 'text-amber-400/90'
-                                  : 'text-emerald-400'
-                                : item.diffPct > 0
-                                ? 'text-emerald-400'
-                                : 'text-amber-400/90'
-                            }`}
-                          >
-                            <span>
-                              {item.diffPct >= 0 ? '+' : ''}
-                              {item.diffPct.toFixed(2)}% vs E1
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* 2. ENTRADA 1 (E1) (DESPUÉS) */}
-                      <td className="py-3 px-3 font-bold text-white">
-                        ${item.entry1Price.toFixed(decimalPlaces)}
-                      </td>
-
-                      {/* 3. DIFERENCIA VS ENTRADA 1 */}
-                      <td className="py-3 px-3">
-                        <div className="flex flex-col gap-0.5">
-                          <div
-                            className={`font-bold text-xs flex items-center gap-1 ${
-                              isClosest
-                                ? 'text-amber-300'
-                                : isCloseToEntry
-                                ? 'text-emerald-400'
-                                : item.isLong
-                                ? item.diffDollar > 0
-                                  ? 'text-sky-300'
-                                  : 'text-emerald-300'
-                                : item.diffDollar > 0
-                                ? 'text-emerald-300'
-                                : 'text-sky-300'
-                            }`}
-                          >
-                            <span>
-                              {item.diffDollar >= 0 ? '+' : ''}${item.diffDollar.toFixed(decimalPlaces)}
-                            </span>
-                            <span className="text-[10px]">
-                              ({item.diffPct >= 0 ? '+' : ''}{item.diffPct.toFixed(2)}%)
-                            </span>
-                          </div>
+                          <span className="font-bold text-amber-300">
+                            ${item.livePrice.toFixed(decimalPlaces)}
+                          </span>
                           <span
-                            className={`text-[9px] font-medium font-sans ${
-                              isClosest
-                                ? 'text-amber-300 font-bold'
-                                : isCloseToEntry
-                                ? 'text-emerald-400 font-bold'
-                                : 'text-neutral-400'
+                            className={`text-[9px] font-bold flex items-center gap-0.5 ${
+                              item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'
                             }`}
                           >
-                            {isClosest
-                              ? `⭐ Más cercana (${item.absDiffPct.toFixed(2)}% dist)`
-                              : isCloseToEntry
-                              ? '🎯 En zona E1'
-                              : item.isLong
-                              ? item.diffDollar > 0
-                                ? 'Esperando retroceso'
-                                : '💎 Descuento vs E1'
-                              : item.diffDollar > 0
-                              ? '💎 Mejor precio Short'
-                              : 'Esperando rebote'}
+                            {item.isPricePositive ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
+                            <span>{item.isPricePositive ? '+' : ''}{(item.liveData.change24hPercent || 0).toFixed(2)}% (24h)</span>
                           </span>
                         </div>
                       </td>
 
-                      {/* Stop Loss */}
-                      <td className="py-3 px-3">
-                        <div className="text-rose-400 font-bold">
-                          {item.prices.slPrice ? `$${item.prices.slPrice.toFixed(decimalPlaces)}` : '-'}
+                      {/* 2. ENTRADA 1: % VS E1 ABAJO DEL PRECIO */}
+                      <td className="py-2 px-2.5">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-white">${item.entry1Price.toFixed(decimalPlaces)}</span>
+                          <span className="text-[9px] font-bold text-sky-300">
+                            {item.diffPct >= 0 ? '+' : ''}{item.diffPct.toFixed(2)}% vs E1
+                          </span>
                         </div>
                       </td>
 
-                      {/* Take Profit */}
-                      <td className="py-3 px-3">
-                        <div className="text-emerald-400 font-bold">
-                          {item.prices.tp1Price ? `$${item.prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
-                        </div>
+                      <td className="py-2 px-2.5 text-rose-400 font-bold">
+                        ${item.prices.slPrice ? item.prices.slPrice.toFixed(decimalPlaces) : '-'}
                       </td>
 
-                      {/* Ratio R:B */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="inline-block px-2 py-0.5 rounded-md font-bold text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                      <td className="py-2 px-2.5 text-emerald-400 font-bold">
+                        ${item.prices.tp1Price ? item.prices.tp1Price.toFixed(decimalPlaces) : '-'}
+                      </td>
+
+                      <td className="py-2 px-2.5 text-center">
+                        <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
                           1:{item.ratio.toFixed(1)}
                         </span>
                       </td>
 
-                      {/* Apalancamiento */}
-                      <td className="py-3 px-3">
-                        <span className="px-1.5 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-neutral-300 text-[11px] font-bold">
-                          2x Isolated
-                        </span>
-                      </td>
-
-                      {/* Acción */}
-                      <td className="py-3 px-3 text-right">
+                      <td className="py-2 px-2.5 text-right">
                         <button
                           type="button"
                           onClick={() => handleExecute(item)}
-                          className="px-2.5 py-1 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-bold inline-flex items-center gap-1 transition-all shadow-xs"
-                          title="Cargar orden de esta estrategia a Binance Futures"
+                          className="px-2 py-1 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-[10px] inline-flex items-center gap-1 shadow-xs"
                         >
-                          <Zap className="w-3 h-3 fill-neutral-950" />
+                          <Zap className="w-2.5 h-2.5 fill-neutral-950" />
                           <span>Cargar</span>
                         </button>
                       </td>
                     </tr>
-
-                    {/* BARRA DE PRECIO DINÁMICA DEBAJO DE LA ESTRATEGIA (PRECIO LIVE VS ENTRADAS / SL & TP) */}
-                    <tr
-                      key={`bar-${strat.noEstrategia}`}
-                      className={`border-b border-neutral-800/80 ${
-                        isClosest ? 'bg-amber-500/10' : 'bg-neutral-950/40'
-                      }`}
-                    >
-                      <td colSpan={12} className="px-3 py-2">
-                        <StrategyPriceBar
-                          strategy={strat}
-                          livePrice={item.livePrice}
-                          compact={false}
-                        />
-                      </td>
-                    </tr>
-                  </Fragment>
-                );
-              })
-            )}
-            </tbody>
-          </table>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

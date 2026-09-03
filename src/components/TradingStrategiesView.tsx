@@ -401,25 +401,39 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                           )}
                         </td>
 
-                        {/* 1. PRECIO LIVE (PRIMERO: CON % DE DISTANCIA VS E1 ABAJO) */}
+                        {/* 1. PRECIO LIVE: CAMBIO ABAJO DEL PRECIO */}
                         <td className="py-3 px-3 bg-amber-500/5 border-x border-amber-500/20">
                           <div className="flex flex-col">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-amber-300 text-xs">
-                                ${livePrice.toFixed(decimalPlaces)}
-                              </span>
-                              <span
-                                className={`text-[9px] font-semibold ${
-                                  liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                                }`}
-                              >
+                            <span className="font-bold text-amber-300 text-xs">
+                              ${livePrice.toFixed(decimalPlaces)}
+                            </span>
+                            {/* Cambio 24h pasado ABAJO del precio */}
+                            <span
+                              className={`text-[9px] font-bold flex items-center gap-0.5 mt-0.5 ${
+                                liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                              }`}
+                            >
+                              {liveData.change24hPercent >= 0 ? (
+                                <ArrowUpRight className="w-2.5 h-2.5 shrink-0" />
+                              ) : (
+                                <ArrowDownRight className="w-2.5 h-2.5 shrink-0" />
+                              )}
+                              <span>
                                 {liveData.change24hPercent >= 0 ? '+' : ''}
-                                {liveData.change24hPercent.toFixed(1)}%
+                                {liveData.change24hPercent.toFixed(2)}% (24h)
                               </span>
-                            </div>
-                            {/* % de Distancia vs Entrada 1 ubicado directamente abajo del Precio Live */}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* 2. ENTRADA 1 (E1): % VS E1 PASADO ABAJO DE PRECIO ENTRADA DE E1 */}
+                        <td className="py-3 px-3">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-white text-xs">
+                              {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
+                            </span>
                             {entry1Price > 0 && (
-                              <div
+                              <span
                                 className={`text-[10px] font-mono font-bold mt-0.5 inline-flex items-center gap-1 ${
                                   isCloseToEntry
                                     ? 'text-emerald-400'
@@ -434,18 +448,11 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({ on
                                     : 'text-amber-400/90'
                                 }`}
                               >
-                                <span>
-                                  {diffPercent >= 0 ? '+' : ''}
-                                  {diffPercent.toFixed(2)}% vs E1
-                                </span>
-                              </div>
+                                {diffPercent >= 0 ? '+' : ''}
+                                {diffPercent.toFixed(2)}% vs E1
+                              </span>
                             )}
                           </div>
-                        </td>
-
-                        {/* 2. ENTRADA 1 (E1) (DESPUÉS) */}
-                        <td className="py-3 px-3 font-bold text-white">
-                          {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
                         </td>
 
                         {/* 3. DIFERENCIA VS ENTRADA 1 */}

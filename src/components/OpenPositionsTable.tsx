@@ -20,12 +20,14 @@ import { EmergencyCloseButton } from './EmergencyCloseButton';
 import { auditPositionRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
+import { strategyAutofillService } from '../services/strategyAutofillService';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
+  onOpenOrderModal?: () => void;
 }
 
-export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelectPosition }) => {
+export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelectPosition, onOpenOrderModal }) => {
   const [positions, setPositions] = useState<PositionRisk[]>(() => binanceWs.getPositions());
   const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
@@ -53,6 +55,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     await binanceWs.syncAllAccountData();
   };
 
+  const handleOpenOrder = () => {
+    if (onOpenOrderModal) {
+      onOpenOrderModal();
+    } else {
+      strategyAutofillService.openOrderModal();
+    }
+  };
+
   const openEditModal = (pos: PositionRisk) => {
     setEditingPos(pos);
     setEditTp(pos.takeProfit ? pos.takeProfit.toString() : '');
@@ -68,16 +78,16 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   };
 
   return (
-    <div id="open-positions-table-container" className="flex flex-col bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden">
+    <div id="open-positions-table-container" className="w-full flex flex-col bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden shadow-lg">
       {/* Table Header Controls */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 bg-neutral-950/80 border-b border-neutral-800">
+      <div className="flex items-center justify-between px-3.5 py-2.5 bg-neutral-950/90 border-b border-neutral-800">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-white uppercase tracking-wider">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
             <span>Posiciones Abiertas (Binance Futures)</span>
           </div>
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono font-bold">
-            {positions.length}
+          <span className="px-2 py-0.5 rounded-full text-[10px] bg-neutral-800 text-amber-300 font-mono font-bold border border-neutral-700">
+            {positions.length} activas
           </span>
           <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
             <Lock className="w-2.5 h-2.5" />
@@ -86,6 +96,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleOpenOrder}
+            className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-[11px] flex items-center gap-1 transition-all shadow-xs"
+          >
+            <Zap className="w-3 h-3 fill-neutral-950" />
+            <span>Nueva Orden</span>
+          </button>
           <button
             onClick={handleManualSync}
             disabled={isSyncing}
@@ -98,44 +116,71 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         </div>
       </div>
 
-      {/* Table Body or Empty State */}
-      <div className="overflow-x-auto min-h-[180px]">
-        {positions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 px-4 text-center text-neutral-400 text-xs">
-            <Shield className="w-8 h-8 text-neutral-600 mb-2" />
-            <p className="font-semibold text-neutral-200 text-sm">Sin posiciones activas en Binance</p>
-            <p className="text-[11px] text-neutral-500 mt-0.5 max-w-md">
-              Tus órdenes de futuros se ejecutan con margen estrictamente ISOLATED y apalancamiento seguro de 1x a 5x.
-            </p>
-            {mode === 'simulation' && (
-              <button
-                onClick={() => binanceWs.loadSimulationDemoData()}
-                className="mt-3 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors"
-              >
-                Cargar Posición Demo
-              </button>
-            )}
-          </div>
-        ) : (
-          <table className="w-full text-left text-xs font-mono">
-            <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
+      {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
+      <div className="overflow-x-auto w-full" style={{ minHeight: '220px' }}>
+        <table className="w-full text-left text-xs font-mono">
+          <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
+            <tr>
+              <th className="py-2.5 px-3">Par</th>
+              <th className="py-2.5 px-3">Estrategia Ligada</th>
+              <th className="py-2.5 px-3">Gestión de Riesgo</th>
+              <th className="py-2.5 px-3">Apalancamiento</th>
+              <th className="py-2.5 px-3">Margen</th>
+              <th className="py-2.5 px-3">Tamaño</th>
+              <th className="py-2.5 px-3">Precio Entrada</th>
+              <th className="py-2.5 px-3">Precio Marcado</th>
+              <th className="py-2.5 px-3">Precio Liq.</th>
+              <th className="py-2.5 px-3">PnL No Realizado</th>
+              <th className="py-2.5 px-3">TP / SL</th>
+              <th className="py-2.5 px-3 text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-800/60">
+            {positions.length === 0 ? (
               <tr>
-                <th className="py-2.5 px-3">Par</th>
-                <th className="py-2.5 px-3">Estrategia Ligada</th>
-                <th className="py-2.5 px-3">Gestión de Riesgo</th>
-                <th className="py-2.5 px-3">Apalancamiento</th>
-                <th className="py-2.5 px-3">Margen</th>
-                <th className="py-2.5 px-3">Tamaño</th>
-                <th className="py-2.5 px-3">Precio Entrada</th>
-                <th className="py-2.5 px-3">Precio Marcado</th>
-                <th className="py-2.5 px-3">Precio Liq.</th>
-                <th className="py-2.5 px-3">PnL No Realizado</th>
-                <th className="py-2.5 px-3">TP / SL</th>
-                <th className="py-2.5 px-3 text-right">Acción</th>
+                <td colSpan={12} className="py-12 px-4 text-center">
+                  <div className="flex flex-col items-center justify-center max-w-md mx-auto">
+                    <div className="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-neutral-500 mb-3 shadow-inner">
+                      <ShieldCheck className="w-6 h-6 text-emerald-400/80" />
+                    </div>
+                    <h4 className="text-sm font-bold text-white font-sans">
+                      Sin posiciones activas en Binance Futures
+                    </h4>
+                    <p className="text-xs text-neutral-400 font-sans mt-1 leading-relaxed">
+                      Tus órdenes de futuros se ejecutan con margen estrictamente <strong>ISOLATED</strong> y apalancamiento seguro de <strong>1x a 5x</strong>.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4">
+                      <button
+                        type="button"
+                        onClick={handleOpenOrder}
+                        className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <Zap className="w-3.5 h-3.5 fill-neutral-950" />
+                        <span>Abrir Nueva Orden</span>
+                      </button>
+                      {mode === 'simulation' && (
+                        <button
+                          type="button"
+                          onClick={() => binanceWs.loadSimulationDemoData()}
+                          className="px-3.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 text-xs font-semibold font-sans transition-colors"
+                        >
+                          Cargar Posición Demo
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleManualSync}
+                        disabled={isSyncing}
+                        className="px-3.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-xs font-semibold font-sans transition-colors"
+                      >
+                        Sincronizar Binance
+                      </button>
+                    </div>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-800/60">
-              {positions.map((pos) => {
+            ) : (
+              positions.map((pos) => {
                 const isLong = pos.positionAmt > 0;
                 const isProfit = pos.unRealizedProfit >= 0;
                 const safeLeverage = Math.min(5, Math.max(1, pos.leverage || 2));
@@ -278,10 +323,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                     </td>
                   </tr>
                 );
-              })}
-            </tbody>
-          </table>
-        )}
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Edit TP/SL Modal */}
