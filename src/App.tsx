@@ -1,6 +1,6 @@
 import { useNavigation } from './context/NavigationContext';
 import { AppShell } from './layouts/AppShell';
-import { DashboardHome } from './components/DashboardHome';
+import { DashboardHomeWithData } from './components/DashboardHomeWithData';
 import { TerminalView } from './views/TerminalView';
 
 function AppContent() {
@@ -9,11 +9,11 @@ function AppContent() {
   const renderContent = () => {
     switch (currentRoute) {
       case '/dashboard':
-        return <DashboardHome />;
+        return <DashboardHomeWithData />;
       case '/terminal':
         return <TerminalView />;
       default:
-        return <DashboardHome />;
+        return <DashboardHomeWithData />;
     }
   };
 
