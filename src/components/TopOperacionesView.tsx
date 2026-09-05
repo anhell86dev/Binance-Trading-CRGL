@@ -559,21 +559,21 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       ) : (
         /* VISTA TABLA TÉCNICA COMPARATIVA */
         <div className="crypto-table-container shadow-md">
-          <table className="financial-table text-sm font-mono">
+          <table className="financial-table text-base font-mono" style={{ fontSize: '16px' }}>
             <thead>
-                <tr className="bg-neutral-950 text-neutral-400 uppercase tracking-wider text-xs border-b border-neutral-800">
-                  <th className="p-3"># R:B</th>
-                  <th className="p-3">Par & Dirección</th>
-                  <th className="p-3">Ratio R:B</th>
-                  <th className="p-3 text-right">Precio Live</th>
-                  <th className="p-3">Entradas (DCA)</th>
-                  <th className="p-3">SL Global</th>
-                  <th className="p-3">Take Profits</th>
-                  <th className="p-3 text-center">Confluencia</th>
-                  <th className="p-3 text-right">Acciones</th>
+                <tr className="bg-neutral-950 text-neutral-400 uppercase tracking-wider text-sm border-b border-neutral-800">
+                  <th className="p-3.5"># R:B</th>
+                  <th className="p-3.5">Par & Dirección</th>
+                  <th className="p-3.5">Ratio R:B</th>
+                  <th className="p-3.5 text-right">Precio Live</th>
+                  <th className="p-3.5">Entradas (DCA)</th>
+                  <th className="p-3.5">SL Global</th>
+                  <th className="p-3.5">Take Profits</th>
+                  <th className="p-3.5 text-center">Confluencia</th>
+                  <th className="p-3.5 text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800/80">
+              <tbody className="divide-y divide-neutral-800/80 text-base">
                 {filteredAndSortedOperations.map((op, idx) => {
                   return (
                     <tr
@@ -583,30 +583,30 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       }`}
                     >
                       {/* Ranking */}
-                      <td className="p-3">
-                        <span className="font-bold text-amber-400 text-sm">#{idx + 1}</span>
+                      <td className="p-3.5">
+                        <span className="font-bold text-amber-400 text-base">#{idx + 1}</span>
                       </td>
 
                       {/* Par & Dirección (Solo flecha verde para compra o roja para venta) */}
-                      <td className="p-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="ticker-badge font-bold">{op.strategy.par}</span>
+                      <td className="p-3.5">
+                        <div className="flex items-center gap-2">
+                          <span className="ticker-badge font-bold text-base px-2.5 py-1">{op.strategy.par}</span>
                           {op.isLong ? (
                             <span title="Compra / Long">
-                              <ArrowUp className="w-4 h-4 text-emerald-400 shrink-0 stroke-[3]" />
+                              <ArrowUp className="w-5 h-5 text-emerald-400 shrink-0 stroke-[3]" />
                             </span>
                           ) : (
                             <span title="Venta / Short">
-                              <ArrowDown className="w-4 h-4 text-rose-400 shrink-0 stroke-[3]" />
+                              <ArrowDown className="w-5 h-5 text-rose-400 shrink-0 stroke-[3]" />
                             </span>
                           )}
                         </div>
                       </td>
 
                       {/* Ratio R:B */}
-                      <td className="p-3 num-data">
+                      <td className="p-3.5 num-data">
                         <span
-                          className={`px-2.5 py-1 rounded font-bold text-sm border ${
+                          className={`px-3 py-1 rounded font-bold text-base border ${
                             op.ratio >= 2.5
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -617,14 +617,14 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* Precio Live & Proximidad a E1 integrada */}
-                      <td className="p-3 num-data text-right">
+                      <td className="p-3.5 num-data text-right">
                         <div className="flex flex-col items-end">
-                          <span className="font-extrabold text-white text-base">
+                          <span className="font-extrabold text-white text-lg">
                             ${op.livePrice.toFixed(op.decimalPlaces)}
                           </span>
-                          <div className="flex items-center gap-1 mt-0.5 font-mono">
+                          <div className="flex items-center gap-1.5 mt-0.5 font-mono">
                             <span
-                              className={`font-bold text-xs ${
+                              className={`font-bold text-sm ${
                                 op.isInZone
                                   ? 'text-amber-300 animate-pulse'
                                   : op.absDiffPct <= 2.5
@@ -636,7 +636,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                                 ? '🔥 En Zona E1'
                                 : `${op.diffPct > 0 ? '+' : ''}${op.diffPct.toFixed(2)}%`}
                             </span>
-                            <span className="text-[11px] text-neutral-400">
+                            <span className="text-xs text-neutral-400">
                               (${Math.abs(op.diffDollar).toFixed(op.decimalPlaces)})
                             </span>
                           </div>
@@ -644,16 +644,16 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* Entradas */}
-                      <td className="p-3 num-data">
-                        <div className="flex flex-col text-xs leading-relaxed">
-                          <span className="text-amber-300 font-bold text-sm">
+                      <td className="p-3.5 num-data">
+                        <div className="flex flex-col text-sm leading-relaxed">
+                          <span className="text-amber-300 font-bold text-base">
                             E1: ${op.entry1Price.toFixed(op.decimalPlaces)} (50%)
                           </span>
-                          <span className="text-neutral-300">
+                          <span className="text-neutral-300 text-sm">
                             E2: ${op.entry2Price > 0 ? op.entry2Price.toFixed(op.decimalPlaces) : '-'} (30%)
                           </span>
                           {op.entry3Price && op.entry3Price > 0 && (
-                            <span className="text-neutral-400">
+                            <span className="text-neutral-400 text-xs">
                               E3: ${op.entry3Price.toFixed(op.decimalPlaces)} (20%)
                             </span>
                           )}
@@ -661,9 +661,9 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* SL Global */}
-                      <td className="p-3 num-data">
-                        <div className="flex flex-col text-xs leading-relaxed">
-                          <span className="text-rose-400 font-bold text-sm">
+                      <td className="p-3.5 num-data">
+                        <div className="flex flex-col text-sm leading-relaxed">
+                          <span className="text-rose-400 font-bold text-base">
                             ${op.slPrice.toFixed(op.decimalPlaces)}
                           </span>
                           <span className="text-neutral-400 text-xs">
@@ -673,12 +673,12 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* Take Profits */}
-                      <td className="p-3 num-data">
-                        <div className="flex flex-col text-xs leading-relaxed">
-                          <span className="text-emerald-400 font-bold text-sm">
+                      <td className="p-3.5 num-data">
+                        <div className="flex flex-col text-sm leading-relaxed">
+                          <span className="text-emerald-400 font-bold text-base">
                             TP1: ${op.tp1Price.toFixed(op.decimalPlaces)}
                           </span>
-                          <span className="text-neutral-300">
+                          <span className="text-neutral-300 text-sm">
                             TP2: ${op.tp2Price > 0 ? op.tp2Price.toFixed(op.decimalPlaces) : '-'}
                           </span>
                           {op.tpFinalPrice > 0 && (
@@ -690,7 +690,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* Semáforo de Confluencia */}
-                      <td className="p-3 text-center">
+                      <td className="p-3.5 text-center">
                         <div className="flex justify-center">
                           <StrategyFuturesConfluenceBadge
                             symbol={op.strategy.par}
@@ -701,12 +701,12 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* Acciones */}
-                      <td className="p-3 text-right">
+                      <td className="p-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             id={`btn-table-execute-${op.strategy.noEstrategia}`}
                             onClick={() => handleAutofillOrder(op)}
-                            className="p-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95"
+                            className="p-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95"
                             title="Autoejecutar orden en E1"
                           >
                             <Zap className="w-4 h-4 fill-current" />
@@ -714,7 +714,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                           <button
                             id={`btn-table-detail-${op.strategy.noEstrategia}`}
                             onClick={() => setSelectedStrategyForModal(op.strategy)}
-                            className="p-2 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer active:scale-95"
+                            className="p-2.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer active:scale-95"
                             title="Ver detalles"
                           >
                             <Eye className="w-4 h-4" />
