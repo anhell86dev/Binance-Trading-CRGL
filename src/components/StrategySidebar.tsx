@@ -474,7 +474,7 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
 
                     <button
                       onClick={() => handleSelectAndLoadStrategy(strat)}
-                      className={`px-2.5 py-1 rounded text-[10px] font-bold font-mono flex items-center gap-1 transition-all ${
+                      className={`p-1.5 rounded font-bold font-mono flex items-center justify-center transition-all cursor-pointer ${
                         isObsolete
                           ? 'bg-neutral-800 text-neutral-400 border border-neutral-700 hover:text-neutral-200'
                           : isCurrentPair
@@ -487,8 +487,7 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
                           : 'Cargar estrategia y configurar órdenes en Binance'
                       }
                     >
-                      <Zap className="w-3 h-3" />
-                      <span>{isObsolete ? 'Cargar Hist.' : isCurrentPair ? 'Activa' : 'Cargar'}</span>
+                      <Zap className="w-3.5 h-3.5 fill-current" />
                     </button>
                   </div>
                 </div>

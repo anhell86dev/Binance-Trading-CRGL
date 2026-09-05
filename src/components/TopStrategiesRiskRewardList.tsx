@@ -5,7 +5,6 @@ import {
   ArrowUpRight,
   Crown,
   Eye,
-  Layers,
   Radio,
   Shield,
   Sparkles,
@@ -271,7 +270,6 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
   highlightSymbol,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
-  const [viewMode, setViewMode] = useState<'CARDS' | 'TABLE'>('TABLE');
   const [, setPriceTick] = useState(0);
 
   useEffect(() => {
@@ -429,59 +427,29 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-neutral-950 px-2 py-1 rounded-md border border-neutral-800">
+          <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-neutral-950 px-2.5 py-1 rounded-md border border-neutral-800">
             <Radio className="w-2.5 h-2.5 animate-pulse text-emerald-400" />
             <span>Live FAPI</span>
-          </div>
-
-          {/* Toggle View Mode */}
-          <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-[10px] font-mono">
-            <button
-              onClick={() => setViewMode('TABLE')}
-              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
-                viewMode === 'TABLE'
-                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-              title="Ver catálogo completo en tipo tabla"
-            >
-              <Table className="w-3 h-3" />
-              <span>Tabla</span>
-            </button>
-            <button
-              onClick={() => setViewMode('CARDS')}
-              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1.5 ${
-                viewMode === 'CARDS'
-                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-              title="Ver catálogo en tarjetas"
-            >
-              <Layers className="w-3 h-3" />
-              <span>Tarjetas</span>
-            </button>
           </div>
         </div>
       </div>
 
-      {/* VISTA 1: TABLA DE ALTA DENSIDAD ORDENADA POR R/B DE MAYOR A MENOR CON EFECTO BRILLANTE EN E1 */}
-      {viewMode === 'TABLE' && (
-        <div className="bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden shadow-xl">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-neutral-950/95 text-[10px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
-                  <th className="py-2.5 px-3 font-semibold text-center w-12">Rank</th>
-                  <th className="py-2.5 px-3 font-semibold">Par</th>
-                  <th className="py-2.5 px-3 font-semibold">Tipo</th>
-                  <th className="py-2.5 px-3 font-semibold min-w-[180px]">Estrategia</th>
-                  <th className="py-2.5 px-3 font-semibold min-w-[390px] lg:min-w-[460px] text-center bg-neutral-900/60 text-amber-300 border-x border-neutral-800">
+      {/* TABLA DE ALTA DENSIDAD ORDENADA POR R/B DE MAYOR A MENOR */}
+      <div className="crypto-table-container shadow-xl">
+        <table className="financial-table text-sm">
+          <thead>
+            <tr>
+              <th className="py-2.5 px-3 font-semibold text-center w-12 text-xs">Rank</th>
+              <th className="py-2.5 px-3 font-semibold text-xs">Par</th>
+              <th className="py-2.5 px-3 font-semibold text-xs">Tipo</th>
+              <th className="py-2.5 px-3 font-semibold min-w-[180px] text-xs">Estrategia</th>
+                  <th className="py-2.5 px-3 font-semibold min-w-[390px] lg:min-w-[460px] text-center bg-neutral-900/60 text-amber-300 border-x border-neutral-800 text-xs">
                     <div className="flex items-center justify-center gap-1.5">
                       <Radio className="w-3 h-3 text-amber-400 animate-pulse" />
                       <span>Barra de Precio (SL • E1 • Live • TP)</span>
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 font-semibold text-center min-w-[190px] bg-neutral-900/40 text-neutral-300 border-x border-neutral-800">
+                  <th className="py-2.5 px-3 font-semibold text-center min-w-[190px] bg-neutral-900/40 text-neutral-300 border-x border-neutral-800 text-xs">
                     <div className="flex items-center justify-center gap-1.5">
                       <div className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-neutral-950 border border-neutral-800">
                         <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
@@ -491,13 +459,13 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                       <span>Semáforo Confluencia</span>
                     </div>
                   </th>
-                  <th className="py-2.5 px-3 font-semibold text-center bg-emerald-500/5 text-emerald-300 border-x border-emerald-500/20">
+                  <th className="py-2.5 px-3 font-semibold text-center bg-emerald-500/5 text-emerald-300 border-x border-emerald-500/20 text-xs">
                     Ratio R:B 🔽
                   </th>
-                  <th className="py-2.5 px-3 font-semibold text-right min-w-[90px]">Acción</th>
+                  <th className="py-2.5 px-3 font-semibold text-right min-w-[90px] text-xs">Acción</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800/80 font-mono text-[11px]">
+              <tbody className="divide-y divide-neutral-800/80 font-mono text-sm">
                 {rankedStrategies.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-8 text-center text-xs text-neutral-500 font-sans">
@@ -617,27 +585,26 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                           </span>
                         </td>
 
-                        {/* ACCIÓN: CARGAR ORDEN */}
+                        {/* ACCIÓN: CARGAR ORDEN (ICONO SOLAMENTE) */}
                         <td className="py-2.5 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-1.5">
                             {onOpenDetails && (
                               <button
                                 type="button"
                                 onClick={() => onOpenDetails(strat)}
-                                className="p-1.5 rounded bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition-colors"
+                                className="p-2 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition-colors cursor-pointer active:scale-95"
                                 title="Ver detalles de estrategia"
                               >
-                                <Eye className="w-3 h-3" />
+                                <Eye className="w-4 h-4" />
                               </button>
                             )}
                             <button
                               type="button"
                               onClick={() => handleExecute(item)}
-                              className="px-2.5 py-1.5 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black text-xs inline-flex items-center gap-1 shadow-md transition-all active:scale-95 cursor-pointer"
+                              className="p-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black inline-flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
                               title="Cargar orden de esta estrategia en Binance Futures"
                             >
-                              <Zap className="w-3 h-3 fill-neutral-950" />
-                              <span>Cargar</span>
+                              <Zap className="w-4 h-4 fill-neutral-950" />
                             </button>
                           </div>
                         </td>
@@ -647,140 +614,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                 )}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* VISTA 2: BENTO TARJETAS RESPONSIVE AL MONITOR (1 col móvil, 2 cols sm/md, 3 cols lg, 4 cols xl, 5 cols 2xl, 6 cols ultrawide) */}
-      {viewMode === 'CARDS' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[2200px]:grid-cols-6 gap-3.5 w-full">
-          {rankedStrategies.length === 0 ? (
-            <div className="col-span-full py-8 text-center text-xs text-neutral-500 font-sans bg-neutral-900/60 rounded-xl border border-neutral-800">
-              No hay estrategias activas para mostrar.
-            </div>
-          ) : (
-            rankedStrategies.map((item, index) => {
-              const strat = item.strategy;
-              const rank = index + 1;
-              const isClosestGlobal = closestInListId === strat.noEstrategia;
-              const isGlow = item.isVeryCloseToE1 || isClosestGlobal;
-              const isSelected = highlightSymbol && highlightSymbol.toUpperCase() === strat.par.replace(/[^A-Z0-9]/g, '');
-
-              const rankBadgeClass =
-                rank === 1
-                  ? 'bg-amber-400 text-neutral-950 font-black'
-                  : rank === 2
-                  ? 'bg-sky-400 text-neutral-950 font-black'
-                  : rank === 3
-                  ? 'bg-emerald-400 text-neutral-950 font-black'
-                  : 'bg-neutral-800 text-neutral-300 font-bold';
-
-              const decimalPlaces = item.entry1Price < 10 || item.livePrice < 10 ? 4 : 2;
-
-              return (
-                <div
-                  key={strat.noEstrategia}
-                  className={`rounded-xl border p-3 flex flex-col gap-2.5 transition-all relative w-full ${
-                    isGlow
-                      ? 'bg-gradient-to-b from-amber-950/30 via-neutral-900 to-amber-950/20 border-amber-400/80 shadow-[0_0_20px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/50'
-                      : isSelected
-                      ? 'bg-neutral-900 border-amber-400/50'
-                      : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700'
-                  }`}
-                >
-                  {/* Card Top: Rank, Par, Tipo, R:B */}
-                  <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-neutral-800/80">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`w-5 h-5 rounded text-[10px] flex items-center justify-center shrink-0 ${rankBadgeClass}`}>
-                        #{rank}
-                      </span>
-                      <strong className="text-white text-xs font-mono truncate">{strat.par}</strong>
-                      <span
-                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                          item.isLong
-                            ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-                            : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                        }`}
-                      >
-                        {item.isLong ? 'LONG ↗' : 'SHORT ↘'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                        1:{item.ratio.toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Strategy Name & Proximity Tag */}
-                  <div className="flex items-center justify-between gap-1 text-[10px]">
-                    <span className="text-neutral-300 font-sans font-medium truncate" title={strat.nombreEstrategia}>
-                      {strat.nombreEstrategia}
-                    </span>
-                    {isGlow && (
-                      <span className="text-[9px] font-mono font-black px-1.5 py-0.5 rounded bg-amber-400 text-neutral-950 shrink-0 flex items-center gap-1 shadow-xs animate-pulse">
-                        <Sparkles className="w-3 h-3 text-neutral-950 fill-neutral-950" />
-                        <span>✨ PRÓXIMA E1</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Barra de precio con todos los datos integrados (SL, E1, Live, TP, Distancias) */}
-                  <StrategyRowPriceBar
-                    livePrice={item.livePrice}
-                    entry1Price={item.entry1Price}
-                    slPrice={item.prices.slPrice || 0}
-                    tpPrice={item.prices.tp1Price || 0}
-                    diffPct={item.diffPct}
-                    absDiffPct={item.absDiffPct}
-                    diffDollar={item.diffDollar}
-                    isPricePositive={item.isPricePositive}
-                    change24h={item.liveData.change24hPercent || 0}
-                    isLong={item.isLong}
-                    isGlow={isGlow}
-                    decimalPlaces={decimalPlaces}
-                  />
-
-                  {/* Semáforo de Confluencia de Futuros */}
-                  <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-neutral-950/80 border border-neutral-800">
-                    <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider flex items-center gap-1">
-                      <span>Semáforo:</span>
-                    </span>
-                    <StrategyFuturesConfluenceBadge
-                      symbol={strat.par}
-                      isLong={item.isLong}
-                      compact={false}
-                    />
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-neutral-800/80">
-                    {onOpenDetails && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenDetails(strat)}
-                        className="px-2 py-1 rounded bg-neutral-950 hover:bg-neutral-800 text-neutral-300 text-[10px] font-medium flex items-center gap-1 border border-neutral-800 transition-colors"
-                      >
-                        <Eye className="w-2.5 h-2.5" />
-                        <span>Detalles</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleExecute(item)}
-                      className="flex-1 py-1 rounded bg-amber-400 hover:bg-amber-300 text-neutral-950 text-xs font-bold font-mono flex items-center justify-center gap-1 transition-all shadow-xs cursor-pointer"
-                    >
-                      <Zap className="w-3 h-3 fill-neutral-950" />
-                      <span>Cargar Orden</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
+      </div>
     </div>
   );
 };

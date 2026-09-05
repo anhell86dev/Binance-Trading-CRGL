@@ -42,15 +42,14 @@ export const EmergencyCloseButton: React.FC<EmergencyCloseButtonProps> = ({
       <button
         id={`emergency-close-btn-${symbol}`}
         onClick={() => setIsModalOpen(true)}
-        className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all flex items-center gap-1 shadow-xs active:scale-95 ${
+        className={`p-2 rounded-lg font-mono font-bold transition-all flex items-center justify-center shadow-xs active:scale-95 cursor-pointer ${
           variant === 'danger'
             ? 'bg-rose-950/80 hover:bg-rose-900 border border-rose-800 text-rose-300 hover:text-white'
-            : 'bg-neutral-800 hover:bg-rose-950 hover:border-rose-800 text-rose-400 text-[11px]'
+            : 'bg-neutral-800 hover:bg-rose-950 hover:border-rose-800 text-rose-400'
         }`}
-        title="Cierre de Emergencia a Mercado (Market Close) con confirmación de seguridad"
+        title="Cierre de Emergencia a Mercado (Market Close)"
       >
-        <Zap className="w-3 h-3 text-rose-400 fill-rose-400 shrink-0" />
-        <span>Cerrar Mercado</span>
+        <Zap className="w-4 h-4 text-rose-400 fill-rose-400 shrink-0" />
       </button>
 
       {/* Confirmation Modal */}

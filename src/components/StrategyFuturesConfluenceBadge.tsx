@@ -88,111 +88,65 @@ export const StrategyFuturesConfluenceBadge: React.FC<StrategyFuturesConfluenceB
   const fundingPct = metrics.fundingRatePercent || 0;
 
   return (
-    <div className="relative inline-block text-left">
+    <div className="relative inline-block text-center">
+      {/* CUADRO DE CONFLUENCIA */}
       <div
         onClick={() => showDetailsPopover && setShowPopover(!showPopover)}
-        className={`flex items-center gap-2 p-1.5 rounded-lg bg-neutral-950/90 border transition-all cursor-pointer select-none ${
+        className={`flex flex-col items-center justify-center py-2 px-3 rounded-xl border transition-all cursor-pointer select-none min-w-[84px] shadow-xs active:scale-95 ${
           isConfluent
-            ? 'border-emerald-500/40 hover:border-emerald-400/80 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+            ? 'bg-emerald-950/30 border-emerald-500/40 hover:border-emerald-400/80 shadow-[0_0_12px_rgba(16,185,129,0.15)]'
             : isConflicting
-            ? 'border-rose-500/40 hover:border-rose-400/80 shadow-[0_0_10px_rgba(244,63,94,0.15)]'
-            : 'border-amber-500/30 hover:border-amber-400/70 shadow-[0_0_10px_rgba(251,191,36,0.12)]'
+            ? 'bg-rose-950/30 border-rose-500/40 hover:border-rose-400/80 shadow-[0_0_12px_rgba(244,63,94,0.15)]'
+            : 'bg-amber-950/30 border-amber-500/40 hover:border-amber-400/80 shadow-[0_0_12px_rgba(251,191,36,0.12)]'
         }`}
-        title="Clic para ver desglose de confluencia de futuros"
+        title="Clic para ver desglose de confluencia"
       >
-        {/* SEMÁFORO FÍSICO COMPACTO CON 3 LUCES */}
-        <div className="flex items-center gap-1 px-1.5 py-1 rounded-md bg-neutral-900 border border-neutral-800 shrink-0">
-          {/* Luz Roja */}
+        {/* Punto / Círculo con el color del semáforo */}
+        <div className="relative flex items-center justify-center my-0.5">
           <div
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+            className={`w-3.5 h-3.5 rounded-full transition-all duration-300 ${
               isRed
-                ? 'bg-rose-500 ring-2 ring-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.9)] scale-110'
-                : 'bg-rose-950/40 opacity-25'
+                ? 'bg-rose-500 ring-2 ring-rose-500/40 shadow-[0_0_8px_rgba(244,63,94,0.9)]'
+                : isYellow
+                ? 'bg-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_8px_rgba(251,191,36,0.9)]'
+                : 'bg-emerald-400 ring-2 ring-emerald-400/40 shadow-[0_0_8px_rgba(52,211,153,0.9)]'
             }`}
-            title="Luz Roja: Presión Bajista / Riesgo"
-          />
-          {/* Luz Amarilla */}
-          <div
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-              isYellow
-                ? 'bg-amber-400 ring-2 ring-amber-400/40 shadow-[0_0_8px_rgba(251,191,36,0.9)] scale-110'
-                : 'bg-amber-950/40 opacity-25'
-            }`}
-            title="Luz Amarilla: Rango / Mixto"
-          />
-          {/* Luz Verde */}
-          <div
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-              isGreen
-                ? 'bg-emerald-400 ring-2 ring-emerald-400/40 shadow-[0_0_8px_rgba(52,211,153,0.9)] scale-110'
-                : 'bg-emerald-950/40 opacity-25'
-            }`}
-            title="Luz Verde: Continuación Alcista"
+            title={isRed ? 'Luz Roja: Riesgo' : isYellow ? 'Luz Amarilla: Rango / Neutro' : 'Luz Verde: Continuación Alcista'}
           />
         </div>
 
-        {/* ETIQUETA Y SCORE */}
-        <div className="flex flex-col min-w-0 font-mono">
-          <div className="flex items-center gap-1">
-            <span className={`text-[10px] font-black px-1.5 py-0.2 rounded border uppercase tracking-wider ${badgeColorClass}`}>
-              {verdictAction}
-            </span>
-            <span className="text-[10px] text-neutral-400 font-bold">
-              {confidenceScore}%
-            </span>
-          </div>
+        {/* Abajo del círculo su resultado */}
+        <span
+          className={`text-[11px] font-black uppercase tracking-wider mt-1 text-center whitespace-nowrap leading-tight font-mono ${
+            isConfluent
+              ? 'text-emerald-300'
+              : isConflicting
+              ? 'text-rose-300'
+              : 'text-amber-300'
+          }`}
+        >
+          {verdictAction}
+        </span>
 
-          {!compact && (
-            <span className="text-[9px] text-neutral-400 truncate max-w-[130px] font-sans mt-0.5">
-              {verdictLabel}
-            </span>
-          )}
-        </div>
-
-        {/* Micro-chips de factores clave */}
-        {!compact && (
-          <div className="hidden xl:flex items-center gap-1 text-[9px] font-mono border-l border-neutral-800/80 pl-1.5 text-neutral-400">
-            <span
-              className={`px-1 py-0.5 rounded ${
-                analysis.oiStatus === 'bullish' ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
-              }`}
-              title={`Interés Abierto: ${analysis.oiLegend}`}
-            >
-              OI:{analysis.oiStatus === 'bullish' ? '↑' : '↓'}
-            </span>
-            <span
-              className={`px-1 py-0.5 rounded ${
-                takerBuyPct >= 50 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
-              }`}
-              title={`Taker Buy Ratio: ${takerBuyPct.toFixed(1)}% Compra`}
-            >
-              C:{takerBuyPct.toFixed(0)}%
-            </span>
-            <span
-              className={`px-1 py-0.5 rounded ${
-                topRatio >= 1.0 ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'
-              }`}
-              title={`Top Traders L/S: ${topRatio.toFixed(2)}`}
-            >
-              Top:{topRatio.toFixed(1)}
-            </span>
-          </div>
-        )}
+        {/* El % abajo */}
+        <span className="text-xs font-mono font-bold text-neutral-300 mt-0.5">
+          {confidenceScore}%
+        </span>
       </div>
 
-      {/* POPOVER CON DESGLOSE COMPLETO DE FUTUROS */}
+      {/* POPOVER CON DESGLOSE COMPLETO DE CONFLUENCIA */}
       {showPopover && showDetailsPopover && (
         <>
           <div
             className="fixed inset-0 z-40"
             onClick={() => setShowPopover(false)}
           />
-          <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-50 w-72 sm:w-80 bg-neutral-950 border border-neutral-700/90 rounded-xl p-3 shadow-2xl animate-in zoom-in-95 duration-150 font-sans text-xs">
+          <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 z-50 w-72 sm:w-80 bg-neutral-950 border border-neutral-700/90 rounded-xl p-3 shadow-2xl animate-in zoom-in-95 duration-150 font-sans text-xs text-left">
             <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
               <div className="flex items-center gap-1.5">
                 <Radio className="w-3 h-3 text-amber-400 animate-pulse" />
                 <span className="font-bold text-white font-mono text-[11px]">
-                  Confluencia Futuros ({symbol})
+                  Confluencia ({symbol})
                 </span>
               </div>
               <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${badgeColorClass}`}>

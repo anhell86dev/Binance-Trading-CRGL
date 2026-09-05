@@ -12,7 +12,6 @@ import {
   FileSpreadsheet,
   Filter,
   Layers,
-  LayoutGrid,
   Plus,
   Radio,
   RefreshCw,
@@ -34,7 +33,6 @@ import { StrategyDetailModal } from './StrategyDetailModal';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
-import { StrategyCardItem } from './StrategyCardItem';
 import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
 
 interface TradingStrategiesViewProps {
@@ -51,7 +49,6 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => strategyService.getLastSyncTime());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'ALL' | 'LONG' | 'SHORT' | 'HIGH_RR'>('ALL');
-  const [catalogViewMode, setCatalogViewMode] = useState<'TABLE' | 'CARDS'>('CARDS');
   const [selectedStrategy, setSelectedStrategy] = useState<GoogleSheetStrategyRow | null>(null);
   const [isDocsManagerOpen, setIsDocsManagerOpen] = useState(false);
   const [ticker, setTicker] = useState(() => binanceWs.getTicker());
@@ -310,80 +307,29 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                 Short
               </button>
             </div>
-
-            {/* Selector de Modo de Visualización: Tabla vs Tarjetas */}
-            <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 text-xs font-mono shrink-0 shadow-inner">
-              <button
-                type="button"
-                onClick={() => setCatalogViewMode('TABLE')}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 font-bold ${
-                  catalogViewMode === 'TABLE'
-                    ? 'bg-amber-400 text-neutral-950 shadow-xs'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="Ver catálogo en formato tabla con números ampliados"
-              >
-                <Table className="w-3.5 h-3.5" />
-                <span>Tabla</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setCatalogViewMode('CARDS')}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1.5 font-bold ${
-                  catalogViewMode === 'CARDS'
-                    ? 'bg-amber-400 text-neutral-950 shadow-xs'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-                title="Ver catálogo en formato tarjetas visuales grandes"
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span>Tarjetas</span>
-              </button>
-            </div>
           </div>
         </div>
 
-        {/* VISTA 1: MODO TARJETAS RESPONSIVE AL MONITOR (1 col móvil, 2 cols tablet/laptop, 3 cols desktop amplio/1440p, 4 cols ultrawide) */}
-        {catalogViewMode === 'CARDS' ? (
-          <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 min-[2200px]:grid-cols-4 gap-5 pt-1 w-full">
-            {filteredStrategies.length === 0 ? (
-              <div className="col-span-full py-16 text-center text-sm text-neutral-400 font-sans bg-neutral-950/80 rounded-xl border border-neutral-800">
-                No se encontraron estrategias activas que coincidan con los filtros aplicados.
-              </div>
-            ) : (
-              filteredStrategies.map((strat) => (
-                <StrategyCardItem
-                  key={strat.noEstrategia}
-                  strat={strat}
-                  availableBalance={walletBalance.availableBalance}
-                  isClosestGlobal={strat.noEstrategia === closestToEntryStrategyId}
-                  onNavigateToFutures={handleNavigateToFutures}
-                />
-              ))
-            )}
-          </div>
-        ) : (
-          /* VISTA 2: FORMATO TABLA PRINCIPAL CON NÚMEROS AMPLIADOS */
-          <div className="bg-neutral-950 rounded-xl border border-neutral-800 overflow-hidden shadow-inner">
-            <div className="overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-neutral-900/90 text-[11px] font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
-                    <th className="py-3 px-3 font-semibold w-14">ID</th>
-                    <th className="py-3 px-3 font-semibold">Par</th>
-                    <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
-                    <th className="py-3 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
-                      Precio Live
-                    </th>
-                    <th className="py-3 px-3 font-semibold">Entrada 1 (E1)</th>
-                    <th className="py-3 px-3 font-semibold min-w-[150px]">Dif. vs Entrada 1</th>
-                    <th className="py-3 px-3 font-semibold">Stop Loss</th>
-                    <th className="py-3 px-3 font-semibold">Take Profit</th>
-                    <th className="py-3 px-3 font-semibold text-center">Ratio R:B</th>
-                    <th className="py-3 px-3 font-semibold text-center">Estado</th>
-                    <th className="py-3 px-3 font-semibold text-right min-w-[80px]">Acciones</th>
-                  </tr>
-                </thead>
+        {/* FORMATO TABLA PRINCIPAL CON DISEÑO FINANCIERO AVANZADO */}
+        <div className="crypto-table-container shadow-md">
+          <table className="financial-table text-sm">
+            <thead>
+              <tr className="bg-neutral-900/90 text-xs font-mono uppercase tracking-wider text-neutral-400 border-b border-neutral-800">
+                <th className="py-3 px-3 font-semibold w-14">ID</th>
+                <th className="py-3 px-3 font-semibold">Par</th>
+                <th className="py-3 px-3 font-semibold min-w-[190px]">Nombre de Estrategia</th>
+                <th className="py-3 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
+                  Precio Live
+                </th>
+                <th className="py-3 px-3 font-semibold">Entrada 1 (E1)</th>
+                <th className="py-3 px-3 font-semibold min-w-[150px]">Dif. vs Entrada 1</th>
+                <th className="py-3 px-3 font-semibold">Stop Loss</th>
+                <th className="py-3 px-3 font-semibold">Take Profit</th>
+                <th className="py-3 px-3 font-semibold text-center">Ratio R:B</th>
+                <th className="py-3 px-3 font-semibold text-center">Estado</th>
+                <th className="py-3 px-3 font-semibold text-right min-w-[90px]">Acciones</th>
+              </tr>
+            </thead>
                 <tbody className="divide-y divide-neutral-850 font-mono">
                   {filteredStrategies.length === 0 ? (
                     <tr>
@@ -438,12 +384,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
 
                           {/* Par */}
                           <td className="py-3.5 px-3">
-                            <div className="flex items-center gap-1.5 font-bold text-white text-sm font-mono">
-                              <span>{strat.par}</span>
-                              <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-900 text-neutral-400 border border-neutral-800">
-                                PERP
-                              </span>
-                            </div>
+                            <span className="ticker-badge font-bold">{strat.par}</span>
                           </td>
 
                           {/* Nombre de Estrategia */}
@@ -465,7 +406,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                           </td>
 
                           {/* 1. PRECIO LIVE: NÚMERO GRANDE CON CAMBIO ABAJO */}
-                          <td className="py-3.5 px-3 bg-amber-500/5 border-x border-amber-500/20">
+                          <td className="py-3.5 px-3 bg-amber-500/5 border-x border-amber-500/20 num-data">
                             <div className="flex flex-col">
                               <span className="font-black text-amber-300 text-base font-mono tracking-tight">
                                 ${livePrice.toFixed(decimalPlaces)}
@@ -473,7 +414,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                               {/* Cambio 24h pasado ABAJO del precio */}
                               <span
                                 className={`text-[11px] font-bold flex items-center gap-0.5 mt-0.5 ${
-                                  liveData.change24hPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                  liveData.change24hPercent >= 0 ? 'trend-up' : 'trend-down'
                                 }`}
                               >
                                 {liveData.change24hPercent >= 0 ? (
@@ -490,7 +431,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                           </td>
 
                           {/* 2. ENTRADA 1 (E1): NÚMERO GRANDE CON % VS E1 ABAJO */}
-                          <td className="py-3.5 px-3">
+                          <td className="py-3.5 px-3 num-data">
                             <div className="flex flex-col">
                               <span className="font-black text-white text-base font-mono tracking-tight">
                                 {entry1Price ? `$${entry1Price.toFixed(decimalPlaces)}` : '-'}
@@ -519,7 +460,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                           </td>
 
                           {/* 3. DIFERENCIA VS ENTRADA 1 */}
-                          <td className="py-3.5 px-3">
+                          <td className="py-3.5 px-3 num-data">
                             {entry1Price > 0 ? (
                               <div className="flex flex-col gap-0.5">
                                 <div
@@ -572,14 +513,14 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                           </td>
 
                           {/* Stop Loss - NÚMERO GRANDE */}
-                          <td className="py-3.5 px-3">
+                          <td className="py-3.5 px-3 num-data">
                             <div className="text-rose-400 font-bold text-sm sm:text-base font-mono">
                               {prices.slPrice ? `$${prices.slPrice.toFixed(decimalPlaces)}` : '-'}
                             </div>
                           </td>
 
                           {/* Take Profit - NÚMERO GRANDE */}
-                          <td className="py-3.5 px-3">
+                          <td className="py-3.5 px-3 num-data">
                             <div className="text-emerald-400 font-bold text-sm sm:text-base font-mono">
                               {prices.tp1Price ? `$${prices.tp1Price.toFixed(decimalPlaces)}` : '-'}
                             </div>
@@ -591,7 +532,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                           </td>
 
                           {/* Ratio R:B */}
-                          <td className="py-3.5 px-3 text-center">
+                          <td className="py-3.5 px-3 text-center num-data">
                             <span
                               className={`inline-block px-2.5 py-1 rounded-md font-bold text-xs sm:text-sm font-mono border ${
                                 rr.ratio >= 2.0
@@ -605,18 +546,26 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
 
                           {/* Estado */}
                           <td className="py-3.5 px-3 text-center">
-                            <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/60">
+                            <span className="inline-block px-2.5 py-1 rounded text-xs font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-800/60">
                               {strat.estado || 'Activa'}
                             </span>
                           </td>
 
-                          {/* Acciones: Botón de detalles como icono para navegar a Futuros */}
+                          {/* Acciones: Botón de ejecución (icono solo) y botón de detalles */}
                           <td className="py-3.5 px-3 text-right">
-                            <div className="flex items-center justify-end">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectStrategyForExecution(strat)}
+                                className="p-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 transition-colors shadow-xs cursor-pointer active:scale-95"
+                                title="Autoejecutar orden en E1"
+                              >
+                                <Zap className="w-4 h-4 fill-neutral-950" />
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => handleNavigateToFutures(strat)}
-                                className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-300 border border-neutral-750 transition-colors shadow-xs cursor-pointer active:scale-95"
+                                className="p-2 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-amber-300 border border-neutral-750 transition-colors shadow-xs cursor-pointer active:scale-95"
                                 title="Ver detalles y operar en Futuros"
                               >
                                 <Eye className="w-4 h-4 text-amber-400" />
@@ -646,9 +595,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
                 )}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Detail Modal */}

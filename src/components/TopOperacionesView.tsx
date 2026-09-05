@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowDownRight,
   ArrowRight,
+  ArrowUp,
   ArrowUpRight,
   CheckCircle2,
   Clock,
@@ -13,7 +15,6 @@ import {
   Filter,
   Flame,
   Layers,
-  LayoutGrid,
   Radio,
   RefreshCw,
   Search,
@@ -93,7 +94,6 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
   const [confluenceFilter, setConfluenceFilter] = useState<'ALL' | 'CONFLUENT' | 'NEUTRAL'>('ALL');
   const [sortBy, setSortBy] = useState<'RB' | 'PROXIMITY' | 'TP_POTENTIAL'>('RB');
-  const [viewMode, setViewMode] = useState<'CARDS' | 'TABLE'>('CARDS');
 
   // Modal
   const [selectedStrategyForModal, setSelectedStrategyForModal] =
@@ -532,36 +532,6 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               Cercanía E1
             </button>
           </div>
-
-          {/* Toggle Vista Tarjetas vs Tabla */}
-          <div className="flex items-center bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 font-mono text-[11px] ml-auto">
-            <button
-              id="toggle-view-cards"
-              onClick={() => setViewMode('CARDS')}
-              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1 ${
-                viewMode === 'CARDS'
-                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-              title="Vista en tarjetas bento"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tarjetas</span>
-            </button>
-            <button
-              id="toggle-view-table"
-              onClick={() => setViewMode('TABLE')}
-              className={`px-2.5 py-1 rounded transition-all flex items-center gap-1 ${
-                viewMode === 'TABLE'
-                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-              title="Vista en tabla técnica compacta"
-            >
-              <Table className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Tabla</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -586,327 +556,20 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             Restablecer filtros
           </button>
         </div>
-      ) : viewMode === 'CARDS' ? (
-        /* VISTA BENTO CARDS RESPONSIVE AL MONITOR */
-        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 min-[2200px]:grid-cols-4 gap-4 w-full">
-          {filteredAndSortedOperations.map((op, idx) => {
-            const isTop1 = idx === 0 && sortBy === 'RB';
-            const isGlow = op.isInZone || op.absDiffPct <= 1.2;
-
-            return (
-              <div
-                key={op.strategy.noEstrategia}
-                id={`top-operation-card-${op.strategy.noEstrategia}`}
-                className={`rounded-2xl border p-4 sm:p-5 flex flex-col justify-between gap-4 transition-all relative overflow-hidden ${
-                  isGlow
-                    ? 'bg-gradient-to-b from-amber-950/30 via-neutral-900/95 to-neutral-950 border-amber-400/80 shadow-[0_0_25px_rgba(251,191,36,0.2)] ring-1 ring-amber-400/40'
-                    : 'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700 shadow-md'
-                }`}
-              >
-                {/* Badge Top 1 R:B */}
-                {isTop1 && (
-                  <div className="absolute top-0 right-0 bg-gradient-to-l from-amber-500 to-amber-600 text-neutral-950 text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-bl-xl font-mono flex items-center gap-1 shadow-md z-10">
-                    <Crown className="w-3.5 h-3.5" />
-                    <span>#1 Mejor R:B</span>
-                  </div>
-                )}
-
-                {/* Encabezado: Par, Dirección, Título de Estrategia, R:B y Semáforo */}
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base font-extrabold font-mono text-white tracking-tight">
-                        {op.strategy.par}
-                      </span>
-                      <span
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border ${
-                          op.isLong
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                            : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                        }`}
-                      >
-                        {op.isLong ? 'LONG / COMPRA' : 'SHORT / VENTA'}
-                      </span>
-                      <span className="text-[10px] font-mono text-neutral-400 bg-neutral-950 px-2 py-0.5 rounded border border-neutral-800">
-                        {op.strategy.temporalidad || '1D / 4H'}
-                      </span>
-                    </div>
-
-                    {/* Ratio R:B Destacado */}
-                    <div className="flex flex-col items-end shrink-0">
-                      <span className="text-[9px] text-neutral-400 font-mono uppercase tracking-wider">Ratio R:B</span>
-                      <div
-                        className={`text-sm font-mono font-black px-2.5 py-0.5 rounded-lg border ${
-                          op.ratio >= 2.5
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-[0_0_12px_rgba(16,185,129,0.2)]'
-                            : op.ratio >= 1.8
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-neutral-850 text-neutral-300 border-neutral-700'
-                        }`}
-                        title="Ratio Recompensa / Riesgo Global"
-                      >
-                        1:{op.ratio > 0 ? op.ratio.toFixed(1) : '-'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Nombre de la Estrategia */}
-                  <h4 className="text-xs font-semibold text-neutral-200 line-clamp-1 font-sans">
-                    {op.strategy.nombreEstrategia}
-                  </h4>
-
-                  {/* RADAR DE PROXIMIDAD A ENTRADA 1 (E1) */}
-                  <div
-                    className={`rounded-xl p-2.5 flex items-center justify-between gap-2 border font-mono text-xs ${
-                      op.isInZone
-                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300'
-                        : op.absDiffPct <= 2.5
-                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                        : 'bg-neutral-950 border-neutral-800 text-neutral-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-400 animate-ping" />
-                      <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-bold tracking-wide text-neutral-400">
-                          Estado de Activación E1
-                        </span>
-                        <span className="font-extrabold text-white text-xs truncate">
-                          {op.isInZone
-                            ? '🔥 ¡EN ZONA DE ENTRADA 1!'
-                            : op.absDiffPct <= 2.5
-                            ? '⚡ MUY PRÓXIMA A E1'
-                            : '⏳ PRÓXIMA A E1'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="text-right shrink-0">
-                      <div className="text-[10px] text-neutral-400 font-sans">Distancia a E1:</div>
-                      <div className="font-bold text-xs">
-                        <span className={op.diffPct > 0 ? 'text-amber-400' : 'text-emerald-400'}>
-                          {op.diffPct > 0 ? '+' : ''}
-                          {op.diffPct.toFixed(2)}%
-                        </span>
-                        <span className="text-[10px] text-neutral-400 ml-1">
-                          (${Math.abs(op.diffDollar).toFixed(op.decimalPlaces)})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Semáforo de Confluencia de Binance Futures */}
-                  <div className="flex items-center justify-between gap-2 bg-neutral-950/80 p-2 rounded-xl border border-neutral-800">
-                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-300">
-                      <Compass className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="font-sans font-medium">Confluencia Futuros:</span>
-                    </div>
-                    <StrategyFuturesConfluenceBadge
-                      symbol={op.strategy.par}
-                      isLong={op.isLong}
-                      compact={false}
-                    />
-                  </div>
-                </div>
-
-                {/* 3 Bloques Técnicos: ENTRADAS, SL GLOBAL, TAKE PROFITS */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs font-mono">
-                  {/* BLOQUE 1: ENTRADAS (E1, E2, E3, Promedio) */}
-                  <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-2.5 flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-amber-400 uppercase tracking-wider pb-1 border-b border-neutral-800/60">
-                      <span>Entradas (DCA)</span>
-                      <span className="text-neutral-500 font-sans font-normal">Escalonadas</span>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      {/* E1 Gatillo Principal */}
-                      <div className="flex items-center justify-between bg-amber-500/10 px-1.5 py-1 rounded border border-amber-500/30">
-                        <span className="font-bold text-amber-300 flex items-center gap-1">
-                          <Target className="w-3 h-3 text-amber-400" />
-                          <span>E1 ({op.prices.entry1Pct || 50}%):</span>
-                        </span>
-                        <span className="font-extrabold text-white">
-                          ${op.entry1Price.toFixed(op.decimalPlaces)}
-                        </span>
-                      </div>
-
-                      {/* E2 */}
-                      <div className="flex items-center justify-between text-neutral-300 px-1">
-                        <span className="text-neutral-400">E2 ({op.prices.entry2Pct || 30}%):</span>
-                        <span className="font-bold">
-                          {op.entry2Price > 0 ? `$${op.entry2Price.toFixed(op.decimalPlaces)}` : '-'}
-                        </span>
-                      </div>
-
-                      {/* E3 si existe */}
-                      {op.entry3Price && op.entry3Price > 0 ? (
-                        <div className="flex items-center justify-between text-neutral-300 px-1">
-                          <span className="text-neutral-400">E3 ({op.prices.entry3Pct || 20}%):</span>
-                          <span className="font-bold">
-                            ${op.entry3Price.toFixed(op.decimalPlaces)}
-                          </span>
-                        </div>
-                      ) : null}
-
-                      {/* Promedio Ponderado */}
-                      <div className="flex items-center justify-between pt-1 border-t border-neutral-800/60 text-neutral-400 px-1">
-                        <span className="text-[10px]">Promedio:</span>
-                        <span className="font-bold text-amber-300">
-                          ${op.avgEntryPrice.toFixed(op.decimalPlaces)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* BLOQUE 2: STOP LOSS GLOBAL */}
-                  <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-2.5 flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-rose-400 uppercase tracking-wider pb-1 border-b border-neutral-800/60">
-                      <span>SL Global</span>
-                      <ShieldAlert className="w-3 h-3 text-rose-400" />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between bg-rose-500/10 px-1.5 py-1 rounded border border-rose-500/30">
-                        <span className="font-bold text-rose-300">Nivel Stop:</span>
-                        <span className="font-extrabold text-white">
-                          ${op.slPrice.toFixed(op.decimalPlaces)}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-neutral-300 px-1">
-                        <span className="text-neutral-400">Distancia SL:</span>
-                        <span className="font-bold text-rose-400">
-                          {op.entry1Price > 0
-                            ? `${(((op.slPrice - op.entry1Price) / op.entry1Price) * 100).toFixed(2)}%`
-                            : '-'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between text-neutral-300 px-1">
-                        <span className="text-neutral-400">ROE Máx {op.prices.leverage}X:</span>
-                        <span className="font-bold text-rose-400">
-                          -{op.rewardToRisk.maxLossPct.toFixed(1)}%
-                        </span>
-                      </div>
-
-                      <div className="text-[9px] text-neutral-500 line-clamp-1 pt-1 border-t border-neutral-800/60 px-1 font-sans" title={op.strategy.gestionDeRiesgoStopLoss}>
-                        {op.strategy.gestionDeRiesgoStopLoss || 'Margen Aislado Estricto'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* BLOQUE 3: TAKE PROFITS (TP) */}
-                  <div className="bg-neutral-950/90 border border-neutral-800/90 rounded-xl p-2.5 flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-[10px] font-bold text-emerald-400 uppercase tracking-wider pb-1 border-b border-neutral-800/60">
-                      <span>Take Profits</span>
-                      <TrendingUp className="w-3 h-3 text-emerald-400" />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      {/* TP1 */}
-                      <div className="flex items-center justify-between bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
-                        <span className="text-emerald-300 font-bold">TP1 ({op.prices.tp1Pct || 50}%):</span>
-                        <span className="font-bold text-white">
-                          ${op.tp1Price.toFixed(op.decimalPlaces)}
-                        </span>
-                      </div>
-
-                      {/* TP2 */}
-                      <div className="flex items-center justify-between text-neutral-300 px-1">
-                        <span className="text-neutral-400">TP2 ({op.prices.tp2Pct || 30}%):</span>
-                        <span className="font-bold">
-                          {op.tp2Price > 0 ? `$${op.tp2Price.toFixed(op.decimalPlaces)}` : '-'}
-                        </span>
-                      </div>
-
-                      {/* TP Final */}
-                      <div className="flex items-center justify-between text-neutral-300 px-1">
-                        <span className="text-neutral-400">TP Final ({op.prices.tpFinalPct || 20}%):</span>
-                        <span className="font-bold text-emerald-300">
-                          {op.tpFinalPrice > 0 ? `$${op.tpFinalPrice.toFixed(op.decimalPlaces)}` : '-'}
-                        </span>
-                      </div>
-
-                      {/* Potencial Máximo */}
-                      <div className="flex items-center justify-between pt-1 border-t border-neutral-800/60 text-neutral-400 px-1">
-                        <span className="text-[10px]">Beneficio Est.:</span>
-                        <span className="font-bold text-emerald-300">
-                          +{op.rewardToRisk.maxProfitPct.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Mini Barra de Navegación de Precios: SL -> E1 -> Live -> TP */}
-                <div className="bg-neutral-950 p-2 rounded-xl border border-neutral-800/80 flex flex-col gap-1 text-[10px] font-mono">
-                  <div className="flex items-center justify-between text-neutral-400">
-                    <span className="text-rose-400">SL: ${op.slPrice.toFixed(op.decimalPlaces)}</span>
-                    <span className="font-bold text-amber-300">E1: ${op.entry1Price.toFixed(op.decimalPlaces)}</span>
-                    <span className="text-emerald-400">TP1: ${op.tp1Price.toFixed(op.decimalPlaces)}</span>
-                  </div>
-                  <div className="w-full h-1.5 bg-neutral-900 rounded-full overflow-hidden relative flex">
-                    <div className="w-1/3 bg-rose-500/40 h-full" />
-                    <div className="w-1/3 bg-amber-500/40 h-full" />
-                    <div className="w-1/3 bg-emerald-500/40 h-full" />
-                  </div>
-                  <div className="flex items-center justify-between text-[9px] text-neutral-500 font-sans">
-                    <span>Precio Live: <strong className="text-white">${op.livePrice.toFixed(op.decimalPlaces)}</strong></span>
-                    <span>Apalancamiento: <strong className="text-amber-300">{op.prices.leverage}x Aislado</strong></span>
-                  </div>
-                </div>
-
-                {/* Botones de Acción Rápida */}
-                <div className="flex items-center gap-2 pt-2 border-t border-neutral-800/80">
-                  <button
-                    id={`btn-execute-top-${op.strategy.noEstrategia}`}
-                    onClick={() => handleAutofillOrder(op)}
-                    className="flex-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-neutral-950 font-extrabold font-mono text-xs transition-all shadow-md flex items-center justify-center gap-1.5"
-                    title="Cargar orden límite en E1 con Stop Loss y Take Profit configurados"
-                  >
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    <span>Autoejecutar E1</span>
-                  </button>
-
-                  <button
-                    id={`btn-futures-top-${op.strategy.noEstrategia}`}
-                    onClick={() => handleNavigateToFutures(op)}
-                    className="py-2 px-3 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 text-neutral-300 hover:text-white font-mono text-xs transition-all flex items-center gap-1.5"
-                    title="Abrir terminal de futuros con este par"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5 text-neutral-400" />
-                    <span className="hidden sm:inline">Futuros</span>
-                  </button>
-
-                  <button
-                    id={`btn-detail-top-${op.strategy.noEstrategia}`}
-                    onClick={() => setSelectedStrategyForModal(op.strategy)}
-                    className="py-2 px-3 rounded-xl bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 text-neutral-400 hover:text-amber-300 font-mono text-xs transition-all flex items-center justify-center"
-                    title="Ver gráfico detallado con velas y zonas trazadas"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
       ) : (
         /* VISTA TABLA TÉCNICA COMPARATIVA */
-        <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl overflow-hidden shadow-md">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono border-collapse">
-              <thead>
-                <tr className="bg-neutral-950 text-neutral-400 uppercase tracking-wider text-[10px] border-b border-neutral-800">
+        <div className="crypto-table-container shadow-md">
+          <table className="financial-table text-sm font-mono">
+            <thead>
+                <tr className="bg-neutral-950 text-neutral-400 uppercase tracking-wider text-xs border-b border-neutral-800">
                   <th className="p-3"># R:B</th>
                   <th className="p-3">Par & Dirección</th>
                   <th className="p-3">Ratio R:B</th>
-                  <th className="p-3">Proximidad E1</th>
-                  <th className="p-3">Precio Live</th>
+                  <th className="p-3 text-right">Precio Live</th>
                   <th className="p-3">Entradas (DCA)</th>
                   <th className="p-3">SL Global</th>
                   <th className="p-3">Take Profits</th>
-                  <th className="p-3">Confluencia Futuros</th>
+                  <th className="p-3 text-center">Confluencia</th>
                   <th className="p-3 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -921,27 +584,29 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                     >
                       {/* Ranking */}
                       <td className="p-3">
-                        <span className="font-bold text-amber-400">#{idx + 1}</span>
+                        <span className="font-bold text-amber-400 text-sm">#{idx + 1}</span>
                       </td>
 
-                      {/* Par */}
+                      {/* Par & Dirección (Solo flecha verde para compra o roja para venta) */}
                       <td className="p-3">
-                        <div className="flex flex-col">
-                          <span className="font-extrabold text-white text-sm">{op.strategy.par}</span>
-                          <span
-                            className={`text-[9px] font-bold ${
-                              op.isLong ? 'text-emerald-400' : 'text-rose-400'
-                            }`}
-                          >
-                            {op.isLong ? 'LONG / COMPRA' : 'SHORT / VENTA'}
-                          </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="ticker-badge font-bold">{op.strategy.par}</span>
+                          {op.isLong ? (
+                            <span title="Compra / Long">
+                              <ArrowUp className="w-4 h-4 text-emerald-400 shrink-0 stroke-[3]" />
+                            </span>
+                          ) : (
+                            <span title="Venta / Short">
+                              <ArrowDown className="w-4 h-4 text-rose-400 shrink-0 stroke-[3]" />
+                            </span>
+                          )}
                         </div>
                       </td>
 
                       {/* Ratio R:B */}
-                      <td className="p-3">
+                      <td className="p-3 num-data">
                         <span
-                          className={`px-2 py-0.5 rounded font-bold border ${
+                          className={`px-2.5 py-1 rounded font-bold text-sm border ${
                             op.ratio >= 2.5
                               ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
                               : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
@@ -951,46 +616,44 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                         </span>
                       </td>
 
-                      {/* Proximidad a E1 */}
-                      <td className="p-3">
-                        <div className="flex flex-col">
-                          <span
-                            className={`font-bold ${
-                              op.isInZone
-                                ? 'text-amber-300 animate-pulse'
-                                : op.absDiffPct <= 2.5
-                                ? 'text-emerald-400'
-                                : 'text-neutral-300'
-                            }`}
-                          >
-                            {op.isInZone
-                              ? '🔥 En Zona E1'
-                              : `${op.diffPct > 0 ? '+' : ''}${op.diffPct.toFixed(2)}%`}
+                      {/* Precio Live & Proximidad a E1 integrada */}
+                      <td className="p-3 num-data text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="font-extrabold text-white text-base">
+                            ${op.livePrice.toFixed(op.decimalPlaces)}
                           </span>
-                          <span className="text-[10px] text-neutral-500">
-                            (${Math.abs(op.diffDollar).toFixed(op.decimalPlaces)})
-                          </span>
+                          <div className="flex items-center gap-1 mt-0.5 font-mono">
+                            <span
+                              className={`font-bold text-xs ${
+                                op.isInZone
+                                  ? 'text-amber-300 animate-pulse'
+                                  : op.absDiffPct <= 2.5
+                                  ? 'text-emerald-400'
+                                  : 'text-neutral-300'
+                              }`}
+                            >
+                              {op.isInZone
+                                ? '🔥 En Zona E1'
+                                : `${op.diffPct > 0 ? '+' : ''}${op.diffPct.toFixed(2)}%`}
+                            </span>
+                            <span className="text-[11px] text-neutral-400">
+                              (${Math.abs(op.diffDollar).toFixed(op.decimalPlaces)})
+                            </span>
+                          </div>
                         </div>
                       </td>
 
-                      {/* Precio Live */}
-                      <td className="p-3">
-                        <span className="font-extrabold text-white">
-                          ${op.livePrice.toFixed(op.decimalPlaces)}
-                        </span>
-                      </td>
-
                       {/* Entradas */}
-                      <td className="p-3">
-                        <div className="flex flex-col text-[11px]">
-                          <span className="text-amber-300 font-bold">
+                      <td className="p-3 num-data">
+                        <div className="flex flex-col text-xs leading-relaxed">
+                          <span className="text-amber-300 font-bold text-sm">
                             E1: ${op.entry1Price.toFixed(op.decimalPlaces)} (50%)
                           </span>
-                          <span className="text-neutral-400">
+                          <span className="text-neutral-300">
                             E2: ${op.entry2Price > 0 ? op.entry2Price.toFixed(op.decimalPlaces) : '-'} (30%)
                           </span>
                           {op.entry3Price && op.entry3Price > 0 && (
-                            <span className="text-neutral-500">
+                            <span className="text-neutral-400">
                               E3: ${op.entry3Price.toFixed(op.decimalPlaces)} (20%)
                             </span>
                           )}
@@ -998,28 +661,28 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* SL Global */}
-                      <td className="p-3">
-                        <div className="flex flex-col text-[11px]">
-                          <span className="text-rose-400 font-bold">
+                      <td className="p-3 num-data">
+                        <div className="flex flex-col text-xs leading-relaxed">
+                          <span className="text-rose-400 font-bold text-sm">
                             ${op.slPrice.toFixed(op.decimalPlaces)}
                           </span>
-                          <span className="text-neutral-500 text-[10px]">
+                          <span className="text-neutral-400 text-xs">
                             ROE: -{op.rewardToRisk.maxLossPct.toFixed(1)}%
                           </span>
                         </div>
                       </td>
 
                       {/* Take Profits */}
-                      <td className="p-3">
-                        <div className="flex flex-col text-[11px]">
-                          <span className="text-emerald-400 font-bold">
+                      <td className="p-3 num-data">
+                        <div className="flex flex-col text-xs leading-relaxed">
+                          <span className="text-emerald-400 font-bold text-sm">
                             TP1: ${op.tp1Price.toFixed(op.decimalPlaces)}
                           </span>
-                          <span className="text-neutral-400">
+                          <span className="text-neutral-300">
                             TP2: ${op.tp2Price > 0 ? op.tp2Price.toFixed(op.decimalPlaces) : '-'}
                           </span>
                           {op.tpFinalPrice > 0 && (
-                            <span className="text-emerald-300 text-[10px]">
+                            <span className="text-emerald-300 text-xs">
                               TP Final: ${op.tpFinalPrice.toFixed(op.decimalPlaces)}
                             </span>
                           )}
@@ -1027,12 +690,14 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </td>
 
                       {/* Semáforo de Confluencia */}
-                      <td className="p-3">
-                        <StrategyFuturesConfluenceBadge
-                          symbol={op.strategy.par}
-                          isLong={op.isLong}
-                          compact={true}
-                        />
+                      <td className="p-3 text-center">
+                        <div className="flex justify-center">
+                          <StrategyFuturesConfluenceBadge
+                            symbol={op.strategy.par}
+                            isLong={op.isLong}
+                            compact={true}
+                          />
+                        </div>
                       </td>
 
                       {/* Acciones */}
@@ -1041,19 +706,18 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                           <button
                             id={`btn-table-execute-${op.strategy.noEstrategia}`}
                             onClick={() => handleAutofillOrder(op)}
-                            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs transition-all flex items-center gap-1 shadow-xs"
+                            className="p-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95"
                             title="Autoejecutar orden en E1"
                           >
-                            <Zap className="w-3 h-3 fill-current" />
-                            <span>Ejecutar</span>
+                            <Zap className="w-4 h-4 fill-current" />
                           </button>
                           <button
                             id={`btn-table-detail-${op.strategy.noEstrategia}`}
                             onClick={() => setSelectedStrategyForModal(op.strategy)}
-                            className="p-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800"
+                            className="p-2 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer active:scale-95"
                             title="Ver detalles"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -1062,7 +726,6 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                 })}
               </tbody>
             </table>
-          </div>
         </div>
       )}
 

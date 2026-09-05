@@ -118,8 +118,8 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
 
       {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
       <div className="overflow-x-auto w-full" style={{ minHeight: '520px' }}>
-        <table className="w-full text-left text-xs font-mono min-w-[1280px]">
-          <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
+        <table className="w-full text-left text-sm font-mono min-w-[1280px]">
+          <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-xs">
             <tr>
               <th className="py-3 px-4">Par</th>
               <th className="py-3 px-4">Estrategia Ligada</th>

@@ -12,6 +12,8 @@ import {
   Radio,
   Sliders,
   Terminal,
+  Sun,
+  Moon,
   TrendingUp,
   Volume2,
   VolumeX,
@@ -22,6 +24,7 @@ import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
 import { NetworkMode } from '../types/binance';
 import { SecurityBadge } from './SecurityBadge';
+import { useTheme } from '../context/ThemeContext';
 
 export type NavTab = 'billetera' | 'estrategias' | 'top-operaciones' | 'futuros';
 
@@ -52,6 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [positionsCount, setPositionsCount] = useState(() => binanceWs.getPositions().length);
   const [isModeDropdownOpen, setIsModeDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
@@ -167,7 +171,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           <Flame className={`w-3.5 h-3.5 ${activeTab === 'top-operaciones' ? 'text-amber-400 animate-pulse' : 'text-neutral-500'}`} />
-          <span>Top Operaciones</span>
+          <span>Top de Operaciones</span>
           <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
             E1
           </span>
@@ -272,6 +276,27 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden md:inline">Disciplinas</span>
           </button>
         )}
+
+        {/* Selector de Tema Claro / Oscuro */}
+        <button
+          type="button"
+          id="btn-theme-toggle"
+          onClick={toggleTheme}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 hover:text-amber-400 border border-neutral-800 text-xs font-mono font-bold transition-all shadow-xs"
+          title={theme === 'light' ? 'Cambiar a Versión Oscura' : 'Cambiar a Versión Clara'}
+        >
+          {theme === 'light' ? (
+            <>
+              <Sun className="w-3.5 h-3.5 text-amber-500 fill-amber-500/20" />
+              <span className="hidden sm:inline text-[11px] font-sans">Claro</span>
+            </>
+          ) : (
+            <>
+              <Moon className="w-3.5 h-3.5 text-blue-400" />
+              <span className="hidden sm:inline text-[11px] font-sans">Oscuro</span>
+            </>
+          )}
+        </button>
 
         {/* API Key Modal Button */}
         <button

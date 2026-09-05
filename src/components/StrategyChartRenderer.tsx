@@ -31,6 +31,7 @@ import { strategyService } from '../services/strategyService';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { TickerData } from '../types/binance';
+import { useTheme } from '../context/ThemeContext';
 
 interface StrategyChartRendererProps {
   symbol: string;
@@ -80,6 +81,7 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [ticker, setTicker] = useState<TickerData>(binanceWs.getTicker());
+  const { isLight } = useTheme();
 
   // Visibility toggles for tactical levels
   const [showEntries, setShowEntries] = useState<boolean>(true);
@@ -190,26 +192,26 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
       width: container.clientWidth || 800,
       height: typeof height === 'number' ? height : parseInt(String(height)) || 520,
       layout: {
-        background: { type: ColorType.Solid, color: '#09090b' },
-        textColor: '#a1a1aa',
-        fontFamily: "'JetBrains Mono', 'Fira Code', monospace, sans-serif",
+        background: { type: ColorType.Solid, color: isLight ? '#ffffff' : '#09090b' },
+        textColor: isLight ? '#334155' : '#a1a1aa',
+        fontFamily: "'JetBrains Mono', 'Noto Sans', monospace, sans-serif",
       },
       grid: {
-        vertLines: { color: '#18181b', style: LineStyle.Dotted },
-        horzLines: { color: '#18181b', style: LineStyle.Dotted },
+        vertLines: { color: isLight ? '#f1f5f9' : '#18181b', style: LineStyle.Dotted },
+        horzLines: { color: isLight ? '#f1f5f9' : '#18181b', style: LineStyle.Dotted },
       },
       crosshair: {
         mode: 1, // Magnet
-        vertLine: { color: '#fbbf24', width: 1, style: LineStyle.Dashed },
-        horzLine: { color: '#fbbf24', width: 1, style: LineStyle.Dashed },
+        vertLine: { color: isLight ? '#d97706' : '#fbbf24', width: 1, style: LineStyle.Dashed },
+        horzLine: { color: isLight ? '#d97706' : '#fbbf24', width: 1, style: LineStyle.Dashed },
       },
       rightPriceScale: {
-        borderColor: '#27272a',
+        borderColor: isLight ? '#e2e8f0' : '#27272a',
         scaleMargins: { top: 0.12, bottom: 0.12 },
         autoScale: true,
       },
       timeScale: {
-        borderColor: '#27272a',
+        borderColor: isLight ? '#e2e8f0' : '#27272a',
         timeVisible: true,
         secondsVisible: false,
       },
@@ -268,7 +270,7 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
         priceLinesRef.current = [];
       }
     };
-  }, [symbol, interval, height, fetchCandles]);
+  }, [symbol, interval, height, fetchCandles, isLight]);
 
   // Draw or update Strategy Price Lines (E1, E2, SL, TP1, TP2, TP Final)
   useEffect(() => {

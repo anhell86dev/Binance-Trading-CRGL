@@ -21,6 +21,7 @@ import { GoogleSheetStrategyRow } from '../types/strategy';
 import { TradingViewWidget } from './TradingViewWidget';
 import { StrategyChartRenderer } from './StrategyChartRenderer';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
+import { useTheme } from '../context/ThemeContext';
 
 interface TimeframeOption {
   label: string;
@@ -47,6 +48,7 @@ export const ChartSection: React.FC = () => {
   const [timeframe, setTimeframe] = useState<string>('240'); // 4H default as instructed
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [chartEngine, setChartEngine] = useState<'strategy_levels' | 'tradingview'>('strategy_levels');
+  const { theme } = useTheme();
 
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
@@ -274,7 +276,7 @@ export const ChartSection: React.FC = () => {
           <TradingViewWidget
             symbol={currentSymbol}
             interval={timeframe}
-            theme="dark"
+            theme={theme}
             height={isExpanded ? 'calc(100vh - 120px)' : '520px'}
           />
         )}
