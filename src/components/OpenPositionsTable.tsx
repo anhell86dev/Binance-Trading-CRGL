@@ -1,419 +1,226 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
+  TrendingUp,
+  TrendingDown,
   AlertTriangle,
-  ArrowDownRight,
-  ArrowUpRight,
-  Edit2,
-  Link as LinkIcon,
-  Lock,
-  RefreshCw,
   Shield,
-  ShieldAlert,
-  ShieldCheck,
-  Sparkles,
-  X,
-  Zap,
+  Target,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  Trash2,
+  Edit2,
+  Layers,
 } from 'lucide-react';
-import { binanceWs } from '../services/binanceWs';
-import { PositionRisk } from '../types/binance';
-import { EmergencyCloseButton } from './EmergencyCloseButton';
-import { auditPositionRisk } from '../utils/riskAuditor';
-import { RiskAuditModal } from './RiskAuditModal';
-import { LinkStrategyModal } from './LinkStrategyModal';
-import { strategyAutofillService } from '../services/strategyAutofillService';
 
-interface OpenPositionsTableProps {
-  onSelectPosition?: (pos: PositionRisk) => void;
-  onOpenOrderModal?: () => void;
+interface Position {
+  symbol: string;
+  side: 'LONG' | 'SHORT';
+  strategyId?: string;
+  strategyName?: string;
+  leverage: number;
+  isolatedMargin: number;
+  positionAmt: number;
+  entryPrice: number;
+  markPrice: number;
+  liquidationPrice: number;
+  unRealizedProfit: number;
+  roePercent: number;
+  takeProfit?: number;
+  stopLoss?: number;
 }
 
-export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelectPosition, onOpenOrderModal }) => {
-  const [positions, setPositions] = useState<PositionRisk[]>(() => binanceWs.getPositions());
-  const [balance, setBalance] = useState(() => binanceWs.getBalance());
-  const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
-  const mode = binanceWs.getMode();
+interface OpenPositionsTableProps {
+  positions: Position[];
+  onClosePosition?: (symbol: string, side: 'LONG' | 'SHORT') => void;
+  onEditPosition?: (symbol: string, side: 'LONG' | 'SHORT') => void;
+  mode?: 'live' | 'simulation';
+}
 
-  // Modal for editing TP/SL
-  const [editingPos, setEditingPos] = useState<PositionRisk | null>(null);
-  const [editTp, setEditTp] = useState<string>('');
-  const [editSl, setEditSl] = useState<string>('');
-
-  // Modals for Risk Audit & Link Strategy
-  const [auditPos, setAuditPos] = useState<PositionRisk | null>(null);
-  const [linkPos, setLinkPos] = useState<PositionRisk | null>(null);
-
-  useEffect(() => {
-    const unsub = binanceWs.subscribe(() => {
-      setPositions(binanceWs.getPositions());
-      setBalance(binanceWs.getBalance());
-      setIsSyncing(binanceWs.getIsSyncingData());
-    });
-    return () => unsub();
-  }, []);
-
-  const handleManualSync = async () => {
-    await binanceWs.syncAllAccountData();
-  };
-
-  const handleOpenOrder = () => {
-    if (onOpenOrderModal) {
-      onOpenOrderModal();
-    } else {
-      strategyAutofillService.openOrderModal();
-    }
-  };
-
-  const openEditModal = (pos: PositionRisk) => {
-    setEditingPos(pos);
-    setEditTp(pos.takeProfit ? pos.takeProfit.toString() : '');
-    setEditSl(pos.stopLoss ? pos.stopLoss.toString() : '');
-  };
-
-  const handleSaveTPSL = () => {
-    if (!editingPos) return;
-    const tp = editTp ? parseFloat(editTp) : undefined;
-    const sl = editSl ? parseFloat(editSl) : undefined;
-    binanceWs.updatePositionTPSL(editingPos.symbol, tp, sl);
-    setEditingPos(null);
-  };
-
-  return (
-    <div id="open-positions-table-container" className="w-full flex flex-col bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden shadow-lg">
-      {/* Table Header Controls */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 bg-neutral-950/90 border-b border-neutral-800">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-white uppercase tracking-wider">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Posiciones Abiertas (Binance Futures)</span>
-          </div>
-          <span className="px-2 py-0.5 rounded-full text-[10px] bg-neutral-800 text-amber-300 font-mono font-bold border border-neutral-700">
-            {positions.length} activas
-          </span>
-          <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/30">
-            <Lock className="w-2.5 h-2.5" />
-            Margen Aislado • Máx 5x
+export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({
+  positions,
+  onClosePosition,
+  onEditPosition,
+  mode = 'live',
+}) => {
+  if (!positions || positions.length === 0) {
+    return (
+      <div className="flex flex-col h-full bg-neutral-900/40">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-900/60">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+            <Layers size={16} className="text-amber-500" />
+            Posiciones Abiertas
+          </h3>
+          <span className="text-[10px] font-mono text-neutral-500">
+            {mode === 'simulation' ? 'SIMULACIÓ¡N' : 'BINANCE FUTURES'}
           </span>
         </div>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="text-center space-y-3">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-neutral-800 border border-neutral-700">
+              <Shield size={24} className="text-neutral-500" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-neutral-300">## Sin posiciones activas en Binance Futures</p>
+              <p className="text-xs text-neutral-500 mt-1">Tus órdenes de futuros se ejecutan con margen estrictamente ISOLATED 1x-5x</p>
+              {mode === 'simulation' && (
+                <div className="mt-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/30">
+                  <AlertTriangle size={12} className="text-amber-400" />
+                  <span className="text-[10px] font-mono text-amber-300">MODO SIMULACIÓ¡N ACTIVO</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleOpenOrder}
-            className="px-2.5 py-1 rounded bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-[11px] flex items-center gap-1 transition-all shadow-xs"
-          >
-            <Zap className="w-3 h-3 fill-neutral-950" />
-            <span>Nueva Orden</span>
-          </button>
-          <button
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="text-[11px] font-medium text-neutral-300 hover:text-white px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title="Sincronizar posiciones en vivo con la API de Binance"
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-amber-400' : 'text-neutral-400'}`} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
-          </button>
+  return (
+    <div className="flex flex-col h-full bg-neutral-900/40">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-900/60">
+        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+          <Layers size={16} className="text-amber-500" />
+          Posiciones Abiertas
+        </h3>
+        <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-500">
+          <span>{positions.length} {positions.length === 1 ? 'POSICIÓ¡N' : 'POSICIONES'}</span>
+          <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">ISOLATED 1x-5x</span>
         </div>
       </div>
 
-      {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
-      <div className="overflow-x-auto w-full" style={{ minHeight: '520px' }}>
-        <table className="w-full text-left text-sm font-mono min-w-[1280px]">
-          <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-xs">
+      <div className="flex-1 overflow-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-neutral-900 border-b border-neutral-800">
             <tr>
-              <th className="py-3 px-4">Par</th>
-              <th className="py-3 px-4">Estrategia Ligada</th>
-              <th className="py-3 px-4">Gestión de Riesgo</th>
-              <th className="py-3 px-4">Apalancamiento</th>
-              <th className="py-3 px-4">Margen</th>
-              <th className="py-3 px-4">Tamaño</th>
-              <th className="py-3 px-4">Precio Entrada</th>
-              <th className="py-3 px-4">Precio Marcado</th>
-              <th className="py-3 px-4">Precio Liq.</th>
-              <th className="py-3 px-4">PnL No Realizado</th>
-              <th className="py-3 px-4">TP / SL</th>
-              <th className="py-3 px-4 text-right">Acción</th>
+              <th className="text-left px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Par</th>
+              <th className="text-left px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Estrategia</th>
+              <th className="text-center px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Leverage</th>
+              <th className="text-right px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Margen</th>
+              <th className="text-right px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Tamañ¡±¢o</th>
+              <th className="text-right px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Entrada</th>
+              <th className="text-right px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Marcado</th>
+              <th className="text-right px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Liq.</th>
+              <th className="text-right px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">PnL</th>
+              <th className="text-center px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">TP / SL</th>
+              <th className="text-center px-3 py-2 font-bold text-neutral-400 uppercase text-[10px]">Acció¡±¢n</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-800/60">
-            {positions.length === 0 ? (
-              <tr>
-                <td colSpan={12} className="py-12 px-4 text-center">
-                  <div className="flex flex-col items-center justify-center max-w-md mx-auto">
-                    <div className="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-neutral-500 mb-3 shadow-inner">
-                      <ShieldCheck className="w-6 h-6 text-emerald-400/80" />
+          <tbody className="divide-y divide-neutral-800">
+            {positions.map((pos, idx) => {
+              const isLong = pos.side === 'LONG';
+              const isProfit = pos.unRealizedProfit >= 0;
+              const safeLeverage = Math.min(5, Math.max(1, pos.leverage));
+              const baseAsset = pos.symbol.replace('USDT', '');
+              return (
+                <tr key={`${pos.symbol}-${pos.side}-${idx}`} className="hover:bg-neutral-800/40 transition-colors">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold font-mono text-white">{pos.symbol}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${isLong ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
+                        {isLong ? 'LONG' : 'SHORT'}
+                      </span>
                     </div>
-                    <h4 className="text-sm font-bold text-white font-sans">
-                      Sin posiciones activas en Binance Futures
-                    </h4>
-                    <p className="text-xs text-neutral-400 font-sans mt-1 leading-relaxed">
-                      Tus órdenes de futuros se ejecutan con margen estrictamente <strong>ISOLATED</strong> y apalancamiento seguro de <strong>1x a 5x</strong>.
-                    </p>
-                    <div className="flex flex-wrap items-center justify-center gap-2.5 mt-4">
-                      <button
-                        type="button"
-                        onClick={handleOpenOrder}
-                        className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold font-sans flex items-center gap-1.5 transition-all shadow-sm"
-                      >
-                        <Zap className="w-3.5 h-3.5 fill-neutral-950" />
-                        <span>Abrir Nueva Orden</span>
-                      </button>
-                      {mode === 'simulation' && (
-                        <button
-                          type="button"
-                          onClick={() => binanceWs.loadSimulationDemoData()}
-                          className="px-3.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 text-xs font-semibold font-sans transition-colors"
-                        >
-                          Cargar Posición Demo
+                  </td>
+                  <td className="px-3 py-2">
+                    {pos.strategyId ? (
+                      <div className="flex items-center gap-1.5">
+                        <Target size={12} className="text-amber-500" />
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-mono font-bold text-amber-300">{pos.strategyId}</span>
+                          {pos.strategyName && <span className="text-[9px] text-neutral-400">{pos.strategyName}</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-neutral-500 italic">Sin estrategia</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700 text-[10px] font-mono font-bold">{safeLeverage}x</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-xs font-mono text-neutral-300">${(pos.isolatedMargin || 0).toFixed(2)}</span>
+                    <span className="text-[9px] text-neutral-500 ml-1">USDT</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-xs font-mono font-bold text-white">{Math.abs(pos.positionAmt || 0).toFixed(3)}</span>
+                    <span className="text-[9px] text-neutral-500 ml-1">{baseAsset}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-xs font-mono text-neutral-300">${(pos.entryPrice || 0).toFixed(2)}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-xs font-mono text-white">${(pos.markPrice || 0).toFixed(2)}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-xs font-mono text-amber-400">${(pos.liquidationPrice || 0).toFixed(2)}</span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className={`text-xs font-mono font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {isProfit ? '+' : ''}${(pos.unRealizedProfit || 0).toFixed(2)}
+                      </span>
+                      <span className={`text-[9px] font-mono ${isProfit ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                        {isProfit ? '+' : ''}{(pos.roePercent || 0).toFixed(2)}%
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      {pos.takeProfit ? (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30">
+                          <Target size={10} className="text-emerald-400" />
+                          <span className="text-[9px] font-mono text-emerald-300">${pos.takeProfit}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[9px] text-neutral-600">TP: -</span>
+                      )}
+                      {pos.stopLoss ? (
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/30">
+                          <Shield size={10} className="text-rose-400" />
+                          <span className="text-[9px] font-mono text-rose-300">${pos.stopLoss}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[9px] text-neutral-600">SL: -</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      {onEditPosition && (
+                        <button onClick={(e) => { e.stopPropagation(); onEditPosition(pos.symbol, pos.side); }} className="p-1.5 rounded hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors" title="Editar">
+                          <Edit2 size={12} />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={handleManualSync}
-                        disabled={isSyncing}
-                        className="px-3.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-xs font-semibold font-sans transition-colors"
-                      >
-                        Sincronizar Binance
-                      </button>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            ) : (
-              positions.map((pos) => {
-                const isLong = pos.positionAmt > 0;
-                const isProfit = pos.unRealizedProfit >= 0;
-                const safeLeverage = Math.min(5, Math.max(1, pos.leverage || 2));
-                const audit = auditPositionRisk(pos, balance.totalMarginBalance);
-
-                return (
-                  <tr
-                    key={pos.symbol}
-                    onClick={() => onSelectPosition && onSelectPosition(pos)}
-                    className="hover:bg-neutral-800/40 transition-colors cursor-pointer"
-                  >
-                    {/* Par y Dirección */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-xs">{pos.symbol}</span>
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            isLong
-                              ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                              : 'bg-rose-950 text-rose-400 border border-rose-800'
-                          }`}
-                        >
-                          {isLong ? 'LONG' : 'SHORT'}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Estrategia Ligada */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5">
-                        {pos.strategyId ? (
-                          <button
-                            type="button"
-                            onClick={() => setLinkPos(pos)}
-                            title={`Estrategia: ${pos.strategyId} - Clic para cambiar`}
-                            className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
-                          >
-                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                            <span>{pos.strategyId}</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setLinkPos(pos)}
-                            className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
-                          >
-                            <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                            <span>Ligar Estrategia</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Gestión de Riesgo Badge */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setAuditPos(pos)}
-                        title="Ver auditoría de riesgo institucional detallada"
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
-                      >
-                        {audit.overallStatus === 'OPTIMAL' ? (
-                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <ShieldAlert className="w-3 h-3" />
-                        )}
-                        <span>{audit.badgeText}</span>
-                      </button>
-                    </td>
-
-                    {/* Apalancamiento Máx 5x */}
-                    <td className="py-3 px-3 font-bold">
-                      <span className="px-1.5 py-0.5 rounded bg-neutral-950 text-amber-300 border border-neutral-700">
-                        {safeLeverage}x
-                      </span>
-                    </td>
-
-                    {/* Margen Isolated */}
-                    <td className="py-3 px-3">
-                      <div className="flex flex-col">
-                        <span className="text-white font-semibold">${(pos.isolatedMargin || 0).toFixed(2)} USDT</span>
-                        <span className="text-[10px] text-blue-400 font-mono">ISOLATED</span>
-                      </div>
-                    </td>
-
-                    {/* Tamaño */}
-                    <td className="py-3 px-3 font-semibold text-neutral-200">
-                      {Math.abs(pos.positionAmt || 0).toFixed(3)} {pos.symbol.replace('USDT', '')}
-                    </td>
-
-                    {/* Precio Entrada */}
-                    <td className="py-3 px-3 text-neutral-300">${(pos.entryPrice || 0).toFixed(2)}</td>
-
-                    {/* Precio Marcado */}
-                    <td className="py-3 px-3 text-amber-400 font-bold">${(pos.markPrice || 0).toFixed(2)}</td>
-
-                    {/* Precio Liquidación */}
-                    <td className="py-3 px-3 text-rose-400 font-bold">
-                      ${(pos.liquidationPrice || 0).toFixed(2)}
-                    </td>
-
-                    {/* PnL No Realizado */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1 font-bold">
-                        <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                          {isProfit ? '+' : ''}${(pos.unRealizedProfit || 0).toFixed(2)}
-                        </span>
-                        <span className={`text-[11px] ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          ({isProfit ? '+' : ''}{(pos.roePercent || 0).toFixed(2)}%)
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* TP / SL Dinámicos */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-neutral-400">
-                          TP: {pos.takeProfit ? `$${pos.takeProfit}` : '-'} | SL:{' '}
-                          {pos.stopLoss ? `$${pos.stopLoss}` : '-'}
-                        </span>
-                        <button
-                          onClick={() => openEditModal(pos)}
-                          className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
-                          title="Editar TP/SL"
-                        >
-                          <Edit2 className="w-3 h-3" />
+                      {onClosePosition && (
+                        <button onClick={(e) => { e.stopPropagation(); onClosePosition(pos.symbol, pos.side); }} className="p-1.5 rounded hover:bg-rose-500/20 text-neutral-400 hover:text-rose-400 transition-colors" title="Cerrar">
+                          <Trash2 size={12} />
                         </button>
-                      </div>
-                    </td>
-
-                    {/* Acción de Emergencia */}
-                    <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <EmergencyCloseButton
-                        symbol={pos.symbol}
-                        positionSize={pos.positionAmt}
-                        entryPrice={pos.entryPrice}
-                        unrealizedPnl={pos.unRealizedProfit}
-                        variant="danger"
-                      />
-                    </td>
-                  </tr>
-                );
-              })
-            )}
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      {/* Edit TP/SL Modal */}
-      {editingPos && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-5 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Editar TP / SL de Posición</h3>
-              <button onClick={() => setEditingPos(null)} className="text-neutral-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="text-xs text-neutral-400">
-              Posición: <strong className="text-white">{editingPos.symbol}</strong> Entrada: $
-              {(editingPos.entryPrice || 0).toFixed(2)}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-xs text-emerald-400 block mb-1 font-semibold">Take Profit (USDT)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={editTp}
-                  onChange={(e) => setEditTp(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-sm font-mono text-emerald-300"
-                  placeholder="Ej: 850.00"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs text-rose-400 block mb-1 font-semibold">Stop Loss (USDT)</label>
-                <input
-                  type="number"
-                  step="any"
-                  value={editSl}
-                  onChange={(e) => setEditSl(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-sm font-mono text-rose-300"
-                  placeholder="Ej: 750.00"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
-              <button
-                onClick={() => setEditingPos(null)}
-                className="px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 text-xs font-semibold"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveTPSL}
-                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
+      <div className="flex items-center justify-between px-3 py-1.5 border-t border-neutral-800 bg-neutral-900/50">
+        <div className="flex items-center gap-2 text-[10px] text-neutral-500">
+          <Shield size={12} className="text-amber-500" />
+          <span>Margen ISOLATED 1x-5x estricto</span>
         </div>
-      )}
-
-      {/* Risk Audit Modal */}
-      <RiskAuditModal
-        isOpen={!!auditPos}
-        onClose={() => setAuditPos(null)}
-        position={auditPos}
-        walletBalance={balance.totalMarginBalance}
-        onOpenLinkStrategy={() => {
-          const current = auditPos;
-          setAuditPos(null);
-          setLinkPos(current);
-        }}
-        onOpenEditTPSL={() => {
-          const current = auditPos;
-          setAuditPos(null);
-          if (current) openEditModal(current);
-        }}
-      />
-
-      {/* Link Strategy Modal */}
-      <LinkStrategyModal
-        isOpen={!!linkPos}
-        onClose={() => setLinkPos(null)}
-        position={linkPos}
-      />
+        <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-500">
+          <span>Total PnL:</span>
+          <span className={`font-bold ${positions.reduce((sum, p) => sum + p.unRealizedProfit, 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+            ${positions.reduce((sum, p) => sum + p.unRealizedProfit, 0).toFixed(2)} USDT
+          </span>
+        </div>
+      </div>
     </div>
   );
 };
 
+export default OpenPositionsTable;
