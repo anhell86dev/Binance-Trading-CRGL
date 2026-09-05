@@ -16,7 +16,7 @@ const navItems = [
   { label: 'Operaciones', path: '/operaciones', icon: 'O' },
   { label: 'Diario', path: '/diario', icon: 'J' },
   { label: 'Riesgo', path: '/riesgo', icon: 'R' },
-  { label: 'Configuracion', path: '/configuracion', icon: 'C' },
+  { label: 'Config', path: '/configuracion', icon: 'C' },
 ];
 
 export function AppSidebar({ collapsed, mobileOpen, onToggle, onMobileClose, onNavigate }: AppSidebarProps) {
