@@ -5,10 +5,7 @@ import {
   Search,
   TrendingDown,
   TrendingUp,
-  Zap,
-  Star,
   SlidersHorizontal,
-  ExternalLink,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { strategyService } from '../services/strategyService';
@@ -90,9 +87,8 @@ export const PairSidebar: React.FC = () => {
     binanceWs.setSymbol(sym);
   };
 
-  // Combine strategy pairs + default pairs avoiding duplicates
   const allSymbols = Array.from(
-    new Set([...strategyPairs, ...DEFAULT_PAIRS.map((p) => p.symbol), currentSymbol])
+    new Set([...strategyPairs, ...DEFAULT_PAIRS.map((pair) => pair.symbol), currentSymbol])
   );
 
   const filteredSymbols = allSymbols.filter((sym) =>
@@ -107,7 +103,6 @@ export const PairSidebar: React.FC = () => {
           isCollapsed ? 'w-16' : 'w-64 sm:w-72'
         }`}
       >
-        {/* Sidebar Header */}
         <div className="p-3 border-b border-neutral-800 flex items-center justify-between gap-2">
           {!isCollapsed && (
             <div className="flex items-center gap-2 overflow-hidden">
@@ -115,9 +110,7 @@ export const PairSidebar: React.FC = () => {
                 <SlidersHorizontal className="w-3.5 h-3.5" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider truncate">
-                  Pares Perpetuos
-                </h3>
+                <h3 className="text-xs font-bold text-white uppercase tracking-wider truncate">Pares Perpetuos</h3>
                 <span className="text-[10px] text-neutral-400 font-mono">USDⓈ-M Futures</span>
               </div>
             </div>
@@ -133,7 +126,6 @@ export const PairSidebar: React.FC = () => {
           </button>
         </div>
 
-        {/* Search Bar (Only shown when expanded) */}
         {!isCollapsed && (
           <div className="p-2.5 border-b border-neutral-800/80">
             <div className="relative flex items-center">
@@ -141,7 +133,7 @@ export const PairSidebar: React.FC = () => {
                 type="text"
                 placeholder="Filtrar par (ZEC, TAO, SOL)..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(event) => setSearchTerm(event.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-lg pl-7 pr-2.5 py-1.5 text-xs font-mono text-white placeholder-neutral-500 focus:outline-none focus:border-amber-500 transition-all"
               />
               <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2 pointer-events-none" />
@@ -149,7 +141,6 @@ export const PairSidebar: React.FC = () => {
           </div>
         )}
 
-        {/* Pair List Container */}
         <div className="flex-1 overflow-y-auto p-1.5 space-y-1 scrollbar-thin scrollbar-thumb-neutral-800">
           {filteredSymbols.map((sym) => {
             const isSelected = sym === currentSymbol;
@@ -172,12 +163,8 @@ export const PairSidebar: React.FC = () => {
                   title={`${sym} - Clic para seleccionar`}
                 >
                   <span className="text-[11px] font-mono font-black tracking-tight">{baseAsset.slice(0, 4)}</span>
-                  {isStrategy && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 absolute top-1.5 right-1.5" />
-                  )}
-                  {isSelected && (
-                    <span className="w-1 h-4 bg-amber-400 rounded-r absolute left-0" />
-                  )}
+                  {isStrategy && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 absolute top-1.5 right-1.5" />}
+                  {isSelected && <span className="w-1 h-4 bg-amber-400 rounded-r absolute left-0" />}
                 </button>
               );
             }
@@ -192,8 +179,9 @@ export const PairSidebar: React.FC = () => {
                     ? 'bg-amber-500/15 border-amber-500/40 text-white shadow-sm'
                     : 'bg-neutral-950/40 hover:bg-neutral-800/70 border-neutral-800/50 text-neutral-300'
                 }`}
+                title={`${sym} - Clic para seleccionar`}
               >
-                <div className="flex items-center gap-2 overflow-hidden">
+                <div className="flex items-center gap-2 overflow-hidden min-w-0">
                   <div
                     className={`w-7 h-7 rounded-md flex items-center justify-center text-xs font-mono font-extrabold shrink-0 border ${
                       isSelected
@@ -203,42 +191,25 @@ export const PairSidebar: React.FC = () => {
                   >
                     {baseAsset.slice(0, 3)}
                   </div>
-                  <div className="truncate">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-mono font-bold tracking-tight text-white">{sym}</span>
-                      {isStrategy && (
-                        <span
-                          className="px-1 py-0.2 rounded text-[9px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                          title="Par configurado en Google Sheets"
-                        >
-                          Estrategia
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-neutral-500 font-sans block truncate">
-                      Perpetuo USDⓈ-M
-                    </span>
+                  <div className="min-w-0 truncate">
+                    <span className="block text-xs font-mono font-bold tracking-tight text-white truncate">{sym}</span>
                   </div>
+                  {isStrategy && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Par configurado en Google Sheets" />}
                 </div>
 
-                {/* Price & % Change Preview */}
                 <div className="text-right font-mono shrink-0 pl-1">
                   {priceInfo ? (
                     <>
                       <div className="text-xs font-bold text-neutral-200">
                         ${priceInfo.price >= 1000 ? priceInfo.price.toFixed(2) : priceInfo.price >= 1 ? priceInfo.price.toFixed(3) : priceInfo.price.toFixed(4)}
                       </div>
-                      <div
-                        className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${
-                          isPositive ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
+                      <div className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
                         {isPositive ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
                         <span>{isPositive ? '+' : ''}{priceInfo.change.toFixed(2)}%</span>
                       </div>
                     </>
                   ) : (
-                    <span className="text-[10px] text-neutral-500">En Vivo</span>
+                    <span className="text-[10px] text-neutral-500">--</span>
                   )}
                 </div>
               </button>
@@ -246,7 +217,6 @@ export const PairSidebar: React.FC = () => {
           })}
         </div>
 
-        {/* Sidebar Footer: Explore All Binance Assets Modal Button */}
         <div className="p-2 border-t border-neutral-800 bg-neutral-950/80">
           <button
             id="sidebar-explore-all-btn"
@@ -262,7 +232,6 @@ export const PairSidebar: React.FC = () => {
         </div>
       </aside>
 
-      {/* Asset Explorer Modal */}
       <AssetSelectorModal
         isOpen={isAssetModalOpen}
         onClose={() => setIsAssetModalOpen(false)}
