@@ -2,6 +2,8 @@ import { useNavigation } from './context/NavigationContext';
 import { AppShell } from './layouts/AppShell';
 import { DashboardHome } from './components/DashboardHome';
 import { TerminalPage } from './components/TerminalPage';
+import { DashboardHomeWithData } from './components/DashboardHomeWithData';
+
 
 function AppContent() {
   const { currentRoute, navigate } = useNavigation();
@@ -9,7 +11,7 @@ function AppContent() {
   const renderContent = () => {
     switch (currentRoute) {
       case '/dashboard':
-        return <DashboardHome />;
+  return <DashboardHomeWithData />;
       case '/terminal':
         return (
           <TerminalPage
