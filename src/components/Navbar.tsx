@@ -26,7 +26,7 @@ import { NetworkMode } from '../types/binance';
 import { SecurityBadge } from './SecurityBadge';
 import { useTheme } from '../context/ThemeContext';
 
-export type NavTab = 'billetera' | 'estrategias' | 'top-operaciones' | 'futuros';
+export type NavTab = 'billetera' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -159,7 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </button>
 
-        {/* Tab 3: Top de Operaciones (Próximas E1 y Ordenadas por R:B) */}
+        {/* Tab 3: Plan de Trabajo (Próximas E1 y Ordenadas por R:B) */}
         <button
           type="button"
           id="nav-tab-top-operaciones"
@@ -171,13 +171,33 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           <Flame className={`w-3.5 h-3.5 ${activeTab === 'top-operaciones' ? 'text-amber-400 animate-pulse' : 'text-neutral-500'}`} />
-          <span>Top de Operaciones</span>
+          <span>Plan de Trabajo</span>
           <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
             E1
           </span>
         </button>
 
-        {/* Tab 4: Futuros */}
+        {/* Tab 4: Gestión de Trades (Bandeja Operativa de Posiciones & Órdenes) */}
+        <button
+          type="button"
+          id="nav-tab-gestion-trades"
+          onClick={() => onSelectTab('gestion-trades')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'gestion-trades'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-xs'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Layers className={`w-3.5 h-3.5 ${activeTab === 'gestion-trades' ? 'text-amber-400' : 'text-neutral-500'}`} />
+          <span>Gestión de Trades</span>
+          {positionsCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {positionsCount}
+            </span>
+          )}
+        </button>
+
+        {/* Tab 5: Futuros */}
         <button
           type="button"
           id="nav-tab-futuros"
@@ -190,11 +210,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <Zap className={`w-3.5 h-3.5 ${activeTab === 'futuros' ? 'text-amber-400' : 'text-neutral-500'}`} />
           <span>Futuros</span>
-          {positionsCount > 0 && (
-            <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              {positionsCount}
-            </span>
-          )}
         </button>
       </nav>
 

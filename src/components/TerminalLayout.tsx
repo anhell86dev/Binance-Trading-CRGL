@@ -11,6 +11,7 @@ import { Navbar, NavTab } from './Navbar';
 import { TradingStrategiesView } from './TradingStrategiesView';
 import { WalletView } from './WalletView';
 import { TopOperacionesView } from './TopOperacionesView';
+import { GestionTradesView } from './GestionTradesView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 
 export default function TerminalLayout() {
@@ -34,7 +35,7 @@ export default function TerminalLayout() {
 
   return (
     <div className="h-screen w-full bg-neutral-950 text-neutral-100 overflow-hidden flex flex-col font-sans select-none selection:bg-amber-500/20 selection:text-amber-300">
-      {/* 1. Header Minimalista con Navegación (Billetera -> Estrategias -> Futuros), Sello de Seguridad y Botón Popup Orden */}
+      {/* 1. Header Minimalista con Navegación (Billetera -> Estrategias -> Plan de Trabajo -> Gestión de Trades -> Futuros), Sello de Seguridad y Botón Popup Orden */}
       <Navbar
         activeTab={activeTab}
         onSelectTab={setActiveTab}
@@ -51,6 +52,7 @@ export default function TerminalLayout() {
           <WalletView
             onGoToTrading={() => setActiveTab('futuros')}
             onOpenOrderModal={() => setIsOrderModalOpen(true)}
+            onGoToGestionTrades={() => setActiveTab('gestion-trades')}
           />
         </main>
       )}
@@ -67,7 +69,7 @@ export default function TerminalLayout() {
         </main>
       )}
 
-      {/* 4. Pestaña 3: Top de Operaciones (Próximas a Activar por E1, Ordenadas por R:B) */}
+      {/* 4. Pestaña 3: Plan de Trabajo (Próximas a Activar por E1, Ordenadas por R:B) */}
       {activeTab === 'top-operaciones' && (
         <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:p-6 bg-neutral-950 h-[calc(100vh-3rem)] w-full">
           <div className="w-full max-w-none mx-auto">
@@ -79,7 +81,19 @@ export default function TerminalLayout() {
         </main>
       )}
 
-      {/* 5. Pestaña 4: Futuros (Terminal de Ejecución Directa) */}
+      {/* 5. Pestaña 4: Gestión de Trades (Bandeja Operativa de Posiciones & Órdenes en Formato Tabla) */}
+      {activeTab === 'gestion-trades' && (
+        <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:p-6 bg-neutral-950 h-[calc(100vh-3rem)] w-full">
+          <div className="w-full max-w-none mx-auto">
+            <GestionTradesView
+              onOpenOrderModal={() => setIsOrderModalOpen(true)}
+              onGoToTrading={() => setActiveTab('futuros')}
+            />
+          </div>
+        </main>
+      )}
+
+      {/* 6. Pestaña 5: Futuros (Terminal de Ejecución Directa) */}
       {activeTab === 'futuros' && (
         <main className="flex-1 p-2 sm:p-3 overflow-hidden h-[calc(100vh-3rem)] flex flex-col">
           <TacticalWorkspace onOpenOrderModal={() => setIsOrderModalOpen(true)} />

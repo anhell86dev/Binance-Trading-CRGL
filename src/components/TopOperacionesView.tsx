@@ -323,7 +323,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-                  <span>Top de Operaciones</span>
+                  <span>Plan de Trabajo</span>
                   <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
                     Próximas a Entrada 1 (E1)
                   </span>
