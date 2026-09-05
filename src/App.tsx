@@ -1,15 +1,16 @@
-import React from 'react';
-import TerminalLayout from './components/TerminalLayout';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { ThemeProvider } from './context/ThemeContext';
+import { AppShell } from './layouts/AppShell';
+import { DashboardHome } from './components/DashboardHome';
 
-export default function App() {
+function App() {
+  const navigate = (path: string) => {
+    console.log('Navegando a:', path);
+  };
+
   return (
-    <ErrorBoundary>
-      <ThemeProvider>
-        <TerminalLayout />
-      </ThemeProvider>
-    </ErrorBoundary>
+    <AppShell onNavigate={navigate}>
+      <DashboardHome />
+    </AppShell>
   );
 }
 
+export default App;
