@@ -1,0 +1,9 @@
+.dashboard-home { display: grid; gap: var(--space-lg); padding: var(--space-lg); min-height: 100%; }
+.page-header { display: grid; gap: var(--space-xs); }
+.page-title { margin: 0; color: var(--text-primary); font-size: clamp(20px, 2.4vw, 28px); font-weight: 800; letter-spacing: -0.02em; }
+.page-subtitle { margin: 0; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-md); }
+.content-placeholder { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-lg); }
+.content-placeholder h2 { margin: 0 0 var(--space-sm); color: var(--text-primary); font-size: 16px; font-weight: 700; }
+.content-placeholder p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+.terminal-wrapper { display: grid; min-height: 100%; }
