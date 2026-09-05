@@ -1,14 +1,10 @@
-import { useState } from 'react';
+import { useNavigation } from './context/NavigationContext';
 import { AppShell } from './layouts/AppShell';
 import { DashboardHome } from './components/DashboardHome';
 import { TerminalPage } from './components/TerminalPage';
 
-function App() {
-  const [currentRoute, setCurrentRoute] = useState('/dashboard');
-
-  const navigate = (path: string) => {
-    setCurrentRoute(path);
-  };
+function AppContent() {
+  const { currentRoute, navigate } = useNavigation();
 
   const renderContent = () => {
     switch (currentRoute) {
@@ -55,6 +51,10 @@ function App() {
   };
 
   return <AppShell onNavigate={navigate}>{renderContent()}</AppShell>;
+}
+
+function App() {
+  return <AppContent />;
 }
 
 export default App;

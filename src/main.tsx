@@ -1,17 +1,13 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
-import App from './App.tsx';
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import { NavigationProvider } from './context/NavigationContext';
+import App from './App';
 import './index.css';
 
-// Safely suppress benign cross-origin "Script error." emitted by third-party iframes/postMessages
-window.addEventListener('error', (event) => {
-  if (event.message === 'Script error.' || event.message?.includes('Script error')) {
-    event.preventDefault();
-  }
-});
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <NavigationProvider>
+      <App />
+    </NavigationProvider>
+  </React.StrictMode>
 );
