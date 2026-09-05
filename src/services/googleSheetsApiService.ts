@@ -5,6 +5,9 @@ import { OpenOrder } from '../types/binance';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 
 const GOOGLE_TOKEN_STORAGE_KEY = 'binance_google_sheets_access_token_v1';
+const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '924421039822-cqfh3bo6omh7mi39t18k6esks76lbd9o.apps.googleusercontent.com';
 
 class GoogleSheetsApiService {
   private accessToken: string | null = null;
@@ -58,12 +61,16 @@ class GoogleSheetsApiService {
    */
   public async requestAccessToken(): Promise<string> {
     return new Promise((resolve, reject) => {
-      // Check if google Identity Services script is available
       if (typeof window === 'undefined') {
         return reject(new Error('Entorno no soportado para OAuth de Google.'));
       }
 
-      // Load GIS script dynamically if not present
+      if (!GOOGLE_CLIENT_ID) {
+        return reject(
+          new Error('Falta VITE_GOOGLE_CLIENT_ID. Configura el OAuth Client ID de Google.')
+        );
+      }
+
       const ensureGisScript = (): Promise<void> => {
         return new Promise((res, rej) => {
           if ((window as any).google?.accounts?.oauth2) {
@@ -87,8 +94,8 @@ class GoogleSheetsApiService {
           }
 
           const tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: '322867373543-ai-studio-applet.apps.googleusercontent.com', // standard client
-            scope: 'https://www.googleapis.com/auth/spreadsheets',
+            client_id: GOOGLE_CLIENT_ID,
+            scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
             callback: (response: any) => {
               if (response.error) {
                 console.error('OAuth GIS Token Error:', response);
@@ -193,12 +200,10 @@ class GoogleSheetsApiService {
     if (!sheetId) throw new Error('ID de Google Sheets inválido.');
 
     try {
-      // 1. Try tab 'Estrategias'
       let rows: string[][] = [];
       try {
         rows = await this.getRangeValues(sheetId, 'Estrategias!A1:Z200');
       } catch {
-        // Fallback to range A1:Z200 on first sheet
         rows = await this.getRangeValues(sheetId, 'A1:Z200');
       }
 
@@ -213,9 +218,8 @@ class GoogleSheetsApiService {
         this.lastSyncError = null;
         this.notify();
         return parsed;
-      } else {
-        throw new Error('No se detectaron columnas válidas de Estrategia en la hoja.');
       }
+      throw new Error('No se detectaron columnas válidas de Estrategia en la hoja.');
     } catch (err: any) {
       this.lastSyncError = err.message || 'Error al leer estrategias via Google API';
       this.notify();
@@ -279,26 +283,15 @@ class GoogleSheetsApiService {
     try {
       await this.apiFetch(
         `${sheetId}/values/${encodeURIComponent(tabName)}!A1:append?valueInputOption=USER_ENTERED`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            values: [formattedRow],
-          }),
-        }
+        { method: 'POST', body: JSON.stringify({ values: [formattedRow] }) }
       );
       return true;
     } catch (err: any) {
       console.error('Error appending order to Google Sheets API:', err);
-      // Attempt without tab prefix if tab fails
       try {
         await this.apiFetch(
           `${sheetId}/values/A1:append?valueInputOption=USER_ENTERED`,
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              values: [formattedRow],
-            }),
-          }
+          { method: 'POST', body: JSON.stringify({ values: [formattedRow] }) }
         );
         return true;
       } catch (innerErr) {
@@ -349,10 +342,7 @@ class GoogleSheetsApiService {
     try {
       await this.apiFetch(
         `${sheetId}/values/${encodeURIComponent(tabName)}!A1?valueInputOption=USER_ENTERED`,
-        {
-          method: 'PUT',
-          body: JSON.stringify({ values }),
-        }
+        { method: 'PUT', body: JSON.stringify({ values }) }
       );
       return true;
     } catch (err: any) {
