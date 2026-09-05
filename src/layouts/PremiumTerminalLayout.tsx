@@ -7,6 +7,7 @@ interface PremiumTerminalLayoutProps {
   marketInfo?: React.ReactNode;
   orderForm?: React.ReactNode;
   positions?: React.ReactNode;
+  className?: string;
 }
 
 export function PremiumTerminalLayout({
@@ -15,12 +16,13 @@ export function PremiumTerminalLayout({
   marketInfo,
   orderForm,
   positions,
+  className = '',
 }: PremiumTerminalLayoutProps) {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
 
   return (
-    <section className={`premium-terminal ${!leftOpen ? 'premium-terminal--left-collapsed' : ''} ${!rightOpen ? 'premium-terminal--right-collapsed' : ''}`}>
+    <section className={`premium-terminal ${className} ${!leftOpen ? 'premium-terminal--left-collapsed' : ''} ${!rightOpen ? 'premium-terminal--right-collapsed' : ''}`}>
       <aside className="premium-terminal__side premium-terminal__side--left">
         <PanelHeader title="Watchlist" onToggle={() => setLeftOpen((value) => !value)} collapsed={!leftOpen} />
         {leftOpen && <div className="premium-terminal__side-content">{watchlist}</div>}
@@ -33,7 +35,7 @@ export function PremiumTerminalLayout({
       </div>
 
       <aside className="premium-terminal__side premium-terminal__side--right">
-        <PanelHeader title="Información del activo" onToggle={() => setRightOpen((value) => !value)} collapsed={!rightOpen} />
+        <PanelHeader title="Informacion del activo" onToggle={() => setRightOpen((value) => !value)} collapsed={!rightOpen} />
         {rightOpen && <div className="premium-terminal__side-content">{marketInfo}</div>}
       </aside>
     </section>
