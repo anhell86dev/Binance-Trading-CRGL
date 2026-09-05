@@ -6,4 +6,53 @@
 .content-placeholder { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-lg); }
 .content-placeholder h2 { margin: 0 0 var(--space-sm); color: var(--text-primary); font-size: 16px; font-weight: 700; }
 .content-placeholder p { margin: 0; color: var(--text-secondary); font-size: 13px; }
-.terminal-wrapper { display: grid; min-height: 100%; }
+.terminal-wrapper { display: grid; min-height: 100%; position: relative; }
+
+/* Mobile tabs para terminal */
+.mobile-terminal-tabs { display: none; }
+
+@media (max-width: 768px) {
+  .mobile-terminal-tabs {
+    display: flex;
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .mobile-tab {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+  }
+
+  .mobile-tab.active {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: #000;
+  }
+
+  .mobile-tab:hover:not(.active) {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-strong);
+  }
+
+  .terminal-wrapper .premium-terminal__chart { min-height: 320px; padding: var(--space-sm); }
+  .terminal-wrapper .premium-terminal__order,
+  .terminal-wrapper .premium-terminal__positions { padding: var(--space-sm); }
+
+  /* Ocultar paneles no activos en movil */
+  .premium-terminal__workspace > div:not(.premium-terminal__chart) {
+    display: none;
+  }
+}
