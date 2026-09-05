@@ -651,9 +651,9 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
         </div>
       )}
 
-      {/* VISTA 2: BENTO TARJETAS (Si el usuario conmuta a vista tarjetas) */}
+      {/* VISTA 2: BENTO TARJETAS RESPONSIVE AL MONITOR (1 col móvil, 2 cols sm/md, 3 cols lg, 4 cols xl, 5 cols 2xl, 6 cols ultrawide) */}
       {viewMode === 'CARDS' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[2200px]:grid-cols-6 gap-3.5 w-full">
           {rankedStrategies.length === 0 ? (
             <div className="col-span-full py-8 text-center text-xs text-neutral-500 font-sans bg-neutral-900/60 rounded-xl border border-neutral-800">
               No hay estrategias activas para mostrar.
@@ -680,7 +680,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
               return (
                 <div
                   key={strat.noEstrategia}
-                  className={`rounded-xl border p-3 flex flex-col gap-2.5 transition-all relative ${
+                  className={`rounded-xl border p-3 flex flex-col gap-2.5 transition-all relative w-full ${
                     isGlow
                       ? 'bg-gradient-to-b from-amber-950/30 via-neutral-900 to-amber-950/20 border-amber-400/80 shadow-[0_0_20px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/50'
                       : isSelected

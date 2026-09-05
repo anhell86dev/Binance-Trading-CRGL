@@ -247,10 +247,13 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
     // Resize observer
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length > 0 && chartInstanceRef.current) {
-        const { width, height } = entries[0].contentRect;
+        const { width: rectWidth, height: rectHeight } = entries[0].contentRect;
+        const targetWidth = Math.max(100, Math.floor(rectWidth));
+        const explicitHeight = typeof height === 'number' ? height : (parseInt(String(height), 10) || 210);
+        const targetHeight = rectHeight > 40 ? Math.floor(rectHeight) : explicitHeight;
         chartInstanceRef.current.applyOptions({
-          width: Math.max(300, width),
-          height: Math.max(300, height),
+          width: targetWidth,
+          height: targetHeight,
         });
       }
     });

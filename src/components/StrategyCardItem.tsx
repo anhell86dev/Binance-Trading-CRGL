@@ -15,6 +15,7 @@ import {
   calculateStrategyRewardToRisk,
   normalizeStrategyStatus,
 } from '../utils/sheetParser';
+import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
 
 interface StrategyCardItemProps {
   strat: GoogleSheetStrategyRow;
@@ -168,19 +169,26 @@ export const StrategyCardItem: React.FC<StrategyCardItemProps> = ({
             </button>
           </div>
 
-          {/* R:B (Risk/Reward): Abajo del botón de detalles */}
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-neutral-400 font-mono">Ratio R:B:</span>
-            <span
-              className={`px-2 py-0.5 rounded font-mono font-bold text-xs border ${
-                rr.ratio >= 2.0
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-neutral-950 text-neutral-300 border-neutral-800'
-              }`}
-              title="Ratio Recompensa / Riesgo"
-            >
-              1:{rr.ratio > 0 ? rr.ratio.toFixed(1) : '-'}
-            </span>
+          {/* R:B (Risk/Reward) y Semáforo de Confluencia de Futuros */}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <StrategyFuturesConfluenceBadge
+              symbol={strat.par}
+              isLong={isLong}
+              compact={true}
+            />
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] text-neutral-400 font-mono">Ratio R:B:</span>
+              <span
+                className={`px-2 py-0.5 rounded font-mono font-bold text-xs border ${
+                  rr.ratio >= 2.0
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-neutral-950 text-neutral-300 border-neutral-800'
+                }`}
+                title="Ratio Recompensa / Riesgo"
+              >
+                1:{rr.ratio > 0 ? rr.ratio.toFixed(1) : '-'}
+              </span>
+            </div>
           </div>
         </div>
       </div>

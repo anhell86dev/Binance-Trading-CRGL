@@ -343,9 +343,9 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
           </div>
         </div>
 
-        {/* VISTA 1: MODO TARJETAS (DISEÑO DE DOS POR FILA CON ASIGNACIÓN DE CAPITAL, GRÁFICO INTEGRADO Y MÉTRICAS) */}
+        {/* VISTA 1: MODO TARJETAS RESPONSIVE AL MONITOR (1 col móvil, 2 cols tablet/laptop, 3 cols desktop amplio/1440p, 4 cols ultrawide) */}
         {catalogViewMode === 'CARDS' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-1">
+          <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 min-[2200px]:grid-cols-4 gap-5 pt-1 w-full">
             {filteredStrategies.length === 0 ? (
               <div className="col-span-full py-16 text-center text-sm text-neutral-400 font-sans bg-neutral-950/80 rounded-xl border border-neutral-800">
                 No se encontraron estrategias activas que coincidan con los filtros aplicados.

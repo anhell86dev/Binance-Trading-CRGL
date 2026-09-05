@@ -54,10 +54,10 @@ export default function TerminalLayout() {
         </main>
       )}
 
-      {/* 3. Pestaña 2: Estrategias (Formato Tablas) */}
+      {/* 3. Pestaña 2: Estrategias (Formato Tablas & Tarjetas Responsive al Monitor) */}
       {activeTab === 'estrategias' && (
-        <main className="flex-1 overflow-y-auto p-3 sm:p-5 bg-neutral-950 h-[calc(100vh-3rem)]">
-          <div className="max-w-7xl mx-auto">
+        <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:p-6 bg-neutral-950 h-[calc(100vh-3rem)] w-full">
+          <div className="w-full max-w-none mx-auto">
             <TradingStrategiesView
               onOpenOrderModal={() => setIsOrderModalOpen(true)}
               onNavigateToFutures={() => setActiveTab('futuros')}
