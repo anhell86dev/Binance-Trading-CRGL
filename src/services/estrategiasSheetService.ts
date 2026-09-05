@@ -1,8 +1,8 @@
 import { googleSheetsApiService } from './googleSheetsApiService';
+import { GoogleSheetStrategyRow } from '../types/strategy';
+import { OpenOrder } from '../types/binance';
 
 const SHEET_ID = '1xu-DaHU8kH0SiEEIG3mW2MHDfk7HXc43S6CttIzmi6s';
-const SHEET_NAME_ESTRATEGIAS = 'Estrategias';
-const SHEET_NAME_ORDENES = 'Ordenes';
 
 export interface EstrategiaRow {
   noEstrategia: string;
@@ -53,21 +53,23 @@ export const estrategiasSheetService = {
     }
 
     try {
-      const rows = await googleSheetsApiService.getSheetData<EstrategiaRow>(SHEET_ID, SHEET_NAME_ESTRATEGIAS);
-      estrategiasCache = rows.map(row => ({
-        noEstrategia: row['No. Estrategia']?.toString() || '',
-        fecha: row['Fecha']?.toString() || '',
-        nombreEstrategia: row['Nombre de Estrategia']?.toString() || '',
-        par: row['Par']?.toString() || '',
-        temporalidad: row['Temporalidad']?.toString() || '',
-        tipoOrden: row['Tipo de Orden']?.toString() || '',
-        indicadoresClave: row['Indicadores Clave']?.toString() || '',
-        reglasEntrada: row['Reglas de Entrada']?.toString() || '',
-        reglasSalida: row['Reglas de Salida / TP']?.toString() || '',
-        gestionRiesgo: row['GestiÃ³n de Riesgo & Stop Loss']?.toString() || '',
-        comentarios: row['Comentarios / Backtesting']?.toString() || '',
-        estado: row['Estado']?.toString() || '',
+      const strategies = await googleSheetsApiService.syncStrategiesViaApi(SHEET_ID);
+      
+      estrategiasCache = strategies.map(row => ({
+        noEstrategia: row.noEstrategia?.toString() || '',
+        fecha: row.fecha?.toString() || '',
+        nombreEstrategia: row.nombreEstrategia?.toString() || '',
+        par: row.par?.toString() || '',
+        temporalidad: row.temporalidad?.toString() || '',
+        tipoOrden: row.tipoOrden?.toString() || '',
+        indicadoresClave: row.indicadoresClave?.toString() || '',
+        reglasEntrada: row.reglasEntrada?.toString() || '',
+        reglasSalida: row.reglasSalida?.toString() || '',
+        gestionRiesgo: row.gestionRiesgo?.toString() || '',
+        comentarios: row.comentarios?.toString() || '',
+        estado: row.estado?.toString() || '',
       }));
+
       lastFetchTime = now;
       return estrategiasCache;
     } catch (error) {
@@ -83,27 +85,29 @@ export const estrategiasSheetService = {
     }
 
     try {
-      const rows = await googleSheetsApiService.getSheetData<OrdenRow>(SHEET_ID, SHEET_NAME_ORDENES);
-      ordenesCache = rows.map(row => ({
-        estrategiaNo: row['Estrategia No.']?.toString() || '',
-        fechaHora: row['Fecha/Hora (UTC)']?.toString() || '',
-        activo: row['Activo']?.toString() || '',
-        mercado: row['Mercado']?.toString() || '',
-        margen: row['Margen']?.toString() || '',
-        apalancamiento: row['Apalancamiento']?.toString() || '',
-        tipo: row['Tipo']?.toString() || '',
-        estrategia: row['Estrategia']?.toString() || '',
-        escenarioPrincipal: row['Escenario Principal']?.toString() || '',
-        entrada1: row['Entrada 1']?.toString() || '',
-        stopLoss: row['Stop-Loss']?.toString() || '',
-        tp1: row['TP1']?.toString() || '',
-        tp2: row['TP2']?.toString() || '',
-        tpFinal: row['TP Final']?.toString() || '',
-        riesgoMax: row['Riesgo MÃ¡x (ROE)']?.toString() || '',
-        reglasEjecucion: row['Reglas de EjecuciÃ³n TÃ¡ctica']?.toString() || '',
-        disciplina: row['Disciplina del Trade']?.toString() || '',
-        estado: row['Estado']?.toString() || '',
+      const orders = await googleSheetsApiService.syncOrdersViaApi(SHEET_ID, 'Ordenes');
+      
+      ordenesCache = orders.map((order: OpenOrder) => ({
+        estrategiaNo: order.strategyId || '',
+        fechaHora: new Date().toISOString(),
+        activo: order.symbol.replace('USDT', '') || '',
+        mercado: 'FUTURES',
+        margen: 'ISOLATED',
+        apalancamiento: `${order.leverage || 1}x`,
+        tipo: order.type,
+        estrategia: `Estrategia ${order.strategyId || '-'}`,
+        escenarioPrincipal: '',
+        entrada1: String(order.price || order.stopPrice || 0),
+        stopLoss: '0',
+        tp1: '0',
+        tp2: '0',
+        tpFinal: '0',
+        riesgoMax: '0%',
+        reglasEjecucion: '',
+        disciplina: '',
+        estado: order.status,
       }));
+
       lastFetchTime = now;
       return ordenesCache;
     } catch (error) {
