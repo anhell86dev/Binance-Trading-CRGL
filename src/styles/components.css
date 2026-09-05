@@ -20,3 +20,20 @@
 .status-badge--warning { color: var(--warning); background: var(--warning-soft); }
 .status-badge--info { color: var(--info); background: var(--info-soft); }
 .status-badge--neutral { color: var(--text-secondary); background: var(--bg-surface-hover); }
+
+/* Loading states */
+.loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-md); padding: var(--space-xl); min-height: 200px; }
+.loading-spinner { width: 40px; height: 40px; border: 3px solid var(--border-subtle); border-top-color: var(--brand); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-message { color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+
+/* Skeleton screens */
+.skeleton-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-md); }
+.skeleton-text { background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-surface-hover) 50%, var(--bg-surface) 75%); border-radius: var(--radius-sm); animation: shimmer 1.5s infinite; }
+@keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: 200px 0; } }
+.skeleton-text--xs { height: 12px; width: 60px; }
+.skeleton-text--sm { height: 14px; width: 120px; }
+.skeleton-text--md { height: 16px; width: 180px; }
+.skeleton-text--lg { height: 24px; width: 200px; }
+.skeleton-card__header { margin-bottom: var(--space-sm); }
+.skeleton-card__value { margin-bottom: var(--space-sm); }
