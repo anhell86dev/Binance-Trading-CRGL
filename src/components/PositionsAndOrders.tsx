@@ -190,7 +190,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Top 3 R:B & Estrategias</span>
+            <span>Ranking R:B & Estrategias</span>
           </button>
 
           <button

@@ -178,7 +178,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
 
   return (
     <div id="trading-strategies-view" className="flex flex-col gap-6">
-      {/* 1. SECCIÓN DESTACADA: TOP 3 ESTRATEGIAS CALCULADAS SOBRE EL CATÁLOGO ACTIVO CON PRECIO LIVE PRIMERO */}
+      {/* 1. SECCIÓN DESTACADA: TABLA COMPLETA DE ESTRATEGIAS ORDENADAS POR R/B DE MAYOR A MENOR CON DESTELLOS EN E1 */}
       <TopStrategiesRiskRewardList
         activeStrategies={activeStrategies}
         onStrategySelected={handleSelectStrategyForExecution}
