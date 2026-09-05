@@ -488,7 +488,7 @@ export function parseCsvToOrders(csvText: string): OpenOrder[] {
       leverage,
       marginType: 'ISOLATED',
       stopPrice,
-      createdTime: Date.now() - (rawRows.length - i) * 60000,
+      createdAt: Date.now() - (rawRows.length - i) * 60000,
       strategyId,
       strategyName: strategyId ? `Estrategia ${strategyId}` : undefined,
     });
@@ -514,7 +514,7 @@ ORD-ZEC-006,2026-09-03,ZEC-20260903-RANGO-V2,ZECUSDT,TAKE_PROFIT_MARKET,SELL,840
 export function ordersToCsv(orders: OpenOrder[]): string {
   const headers = ['ID', 'Fecha', 'Estrategia', 'Par', 'Tipo', 'Lado', 'Precio', 'Cantidad', 'Apalancamiento', 'Margen', 'StopLoss', 'TakeProfit', 'Rol', 'Estado'];
   const rows = orders.map(o => {
-    const dateStr = o.createdTime ? new Date(o.createdTime).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+    const dateStr = o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
     const role = o.clientOrderId?.includes('E1') ? 'E1 (50%)'
       : o.clientOrderId?.includes('E2') ? 'E2 (30%)'
       : o.clientOrderId?.includes('E3') ? 'E3 (20%)'

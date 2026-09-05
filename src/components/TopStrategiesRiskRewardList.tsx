@@ -20,6 +20,7 @@ import { binanceWs } from '../services/binanceWs';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyPriceBar } from './StrategyPriceBar';
+import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
 
 interface TopStrategiesRiskRewardListProps {
   activeStrategies?: GoogleSheetStrategyRow[];
@@ -27,6 +28,241 @@ interface TopStrategiesRiskRewardListProps {
   onOpenDetails?: (strategy: GoogleSheetStrategyRow) => void;
   highlightSymbol?: string;
 }
+
+interface StrategyRowPriceBarProps {
+  livePrice: number;
+  entry1Price: number;
+  slPrice: number;
+  tpPrice: number;
+  diffPct: number;
+  absDiffPct: number;
+  diffDollar: number;
+  isPricePositive: boolean;
+  change24h: number;
+  isLong: boolean;
+  isGlow: boolean;
+  decimalPlaces: number;
+}
+
+const StrategyRowPriceBar: React.FC<StrategyRowPriceBarProps> = ({
+  livePrice,
+  entry1Price,
+  slPrice,
+  tpPrice,
+  diffPct,
+  diffDollar,
+  isPricePositive,
+  change24h,
+  isGlow,
+  decimalPlaces,
+}) => {
+  // Bound calculations for visual scaling
+  const allPoints: number[] = [livePrice, entry1Price];
+  if (slPrice > 0) allPoints.push(slPrice);
+  if (tpPrice > 0) allPoints.push(tpPrice);
+
+  const rawMin = Math.min(...allPoints);
+  const rawMax = Math.max(...allPoints);
+  const span = rawMax - rawMin;
+  const padding = span > 0 ? span * 0.08 : (rawMin > 0 ? rawMin * 0.02 : 1);
+  const minBound = rawMin - padding;
+  const maxBound = rawMax + padding;
+
+  const calcPos = (val: number): number => {
+    if (maxBound <= minBound || !val) return 50;
+    const ratio = (val - minBound) / (maxBound - minBound);
+    return Math.max(4, Math.min(96, ratio * 100));
+  };
+
+  const slX = slPrice > 0 ? calcPos(slPrice) : 0;
+  const e1X = entry1Price > 0 ? calcPos(entry1Price) : 50;
+  const liveX = calcPos(livePrice);
+  const tpX = tpPrice > 0 ? calcPos(tpPrice) : 100;
+
+  const distSlPct = slPrice > 0 && livePrice > 0
+    ? ((slPrice - livePrice) / livePrice) * 100
+    : 0;
+
+  const distTpPct = tpPrice > 0 && livePrice > 0
+    ? ((tpPrice - livePrice) / livePrice) * 100
+    : 0;
+
+  return (
+    <div
+      className={`relative flex flex-col gap-1.5 p-2 rounded-xl transition-all ${
+        isGlow
+          ? 'bg-gradient-to-r from-amber-950/40 via-neutral-900/90 to-amber-950/40 border border-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.25)] ring-1 ring-amber-400/50'
+          : 'bg-neutral-950/80 border border-neutral-800/90 hover:border-neutral-700/90'
+      }`}
+    >
+      {/* 1. FILA SUPERIOR: DATOS DENTRO DE LA BARRA (SL, E1, PRECIO LIVE Y TP) */}
+      <div className="flex items-center justify-between gap-1 text-[10px] font-mono flex-wrap">
+        {/* STOP LOSS */}
+        <div className="flex items-center gap-1 bg-rose-500/10 border border-rose-500/30 px-1.5 py-0.5 rounded text-rose-300">
+          <Shield className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+          <span className="font-semibold text-rose-400">SL:</span>
+          <span className="font-black text-white">${slPrice ? slPrice.toFixed(decimalPlaces) : '-'}</span>
+          {slPrice > 0 && (
+            <span className="text-[9px] text-rose-400/90">({Math.abs(distSlPct).toFixed(1)}%)</span>
+          )}
+        </div>
+
+        {/* ENTRADA 1 (E1) */}
+        <div className="flex items-center gap-1 bg-sky-500/10 border border-sky-500/30 px-1.5 py-0.5 rounded text-sky-300">
+          <Target className="w-2.5 h-2.5 text-sky-400 shrink-0" />
+          <span className="font-semibold text-sky-400">E1:</span>
+          <span className="font-black text-white">${entry1Price ? entry1Price.toFixed(decimalPlaces) : '-'}</span>
+        </div>
+
+        {/* PRECIO LIVE (DESTACADO Y CON BRILLO) */}
+        <div
+          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-mono transition-all ${
+            isGlow
+              ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-neutral-950 font-black shadow-[0_0_10px_rgba(250,204,21,0.8)] animate-pulse'
+              : 'bg-amber-400/20 border border-amber-400/50 text-amber-300 font-bold'
+          }`}
+        >
+          <Radio className={`w-2.5 h-2.5 ${isGlow ? 'text-neutral-950 animate-ping' : 'text-amber-400 animate-pulse'}`} />
+          <span>LIVE: ${livePrice.toFixed(decimalPlaces)}</span>
+          <span
+            className={`text-[9px] font-bold flex items-center ${
+              isGlow
+                ? 'text-neutral-950'
+                : isPricePositive
+                ? 'text-emerald-400'
+                : 'text-rose-400'
+            }`}
+          >
+            {isPricePositive ? <ArrowUpRight className="w-2.5 h-2.5" /> : <ArrowDownRight className="w-2.5 h-2.5" />}
+            {isPricePositive ? '+' : ''}{change24h.toFixed(2)}%
+          </span>
+        </div>
+
+        {/* TAKE PROFIT (TP1) */}
+        <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 px-1.5 py-0.5 rounded text-emerald-300">
+          <Zap className="w-2.5 h-2.5 text-emerald-400 shrink-0 fill-emerald-400/30" />
+          <span className="font-semibold text-emerald-400">TP1:</span>
+          <span className="font-black text-white">${tpPrice ? tpPrice.toFixed(decimalPlaces) : '-'}</span>
+          {tpPrice > 0 && (
+            <span className="text-[9px] text-emerald-400/90">(+{distTpPct.toFixed(1)}%)</span>
+          )}
+        </div>
+      </div>
+
+      {/* 2. BARRA VISUAL DE PRECIO (RIEL CON ZONAS Y MARCADORES EN POSICIÓN) */}
+      <div className="relative h-3.5 w-full bg-neutral-900 rounded-full border border-neutral-800 overflow-hidden flex items-center my-0.5">
+        {/* Zona Peligro hacia SL */}
+        {slPrice > 0 && (
+          <div
+            className="absolute top-0 bottom-0 bg-rose-500/30"
+            style={{
+              left: `${Math.min(slX, Math.min(e1X, liveX))}%`,
+              width: `${Math.max(2, Math.abs(Math.min(e1X, liveX) - slX))}%`,
+            }}
+          />
+        )}
+
+        {/* Corredor Entrada E1 a Live */}
+        <div
+          className={`absolute top-0 bottom-0 ${
+            isGlow
+              ? 'bg-gradient-to-r from-amber-400/50 via-yellow-400/60 to-amber-400/50 animate-pulse'
+              : isPricePositive
+              ? 'bg-gradient-to-r from-sky-500/25 to-amber-500/30'
+              : 'bg-gradient-to-r from-rose-500/25 to-amber-500/30'
+          }`}
+          style={{
+            left: `${Math.min(e1X, liveX)}%`,
+            width: `${Math.max(2, Math.abs(liveX - e1X))}%`,
+          }}
+        />
+
+        {/* Zona Beneficio hacia TP */}
+        {tpPrice > 0 && (
+          <div
+            className="absolute top-0 bottom-0 bg-emerald-500/30"
+            style={{
+              left: `${Math.min(liveX, tpX)}%`,
+              width: `${Math.max(2, Math.abs(tpX - Math.min(liveX, tpX)))}%`,
+            }}
+          />
+        )}
+
+        {/* Marcador Pin SL */}
+        {slPrice > 0 && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-rose-500 border border-neutral-950 ring-1 ring-rose-400 z-10"
+            style={{ left: `${slX}%` }}
+            title={`Stop Loss: $${slPrice.toFixed(decimalPlaces)}`}
+          />
+        )}
+
+        {/* Marcador Pin E1 */}
+        {entry1Price > 0 && (
+          <div
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border border-neutral-950 z-10 ${
+              isGlow
+                ? 'w-3 h-3 bg-amber-400 ring-2 ring-amber-300 animate-ping'
+                : 'w-2.5 h-2.5 bg-sky-400 ring-1 ring-sky-300'
+            }`}
+            style={{ left: `${e1X}%` }}
+            title={`Entrada 1: $${entry1Price.toFixed(decimalPlaces)}`}
+          />
+        )}
+
+        {/* Marcador Aguja Live Price (Brilla y resalta) */}
+        <div
+          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-neutral-950 flex items-center justify-center z-20 ${
+            isGlow
+              ? 'w-4 h-4 bg-amber-300 ring-2 ring-amber-300 shadow-[0_0_12px_rgba(250,204,21,0.9)] animate-pulse'
+              : 'w-3.5 h-3.5 bg-amber-400 ring-1 ring-amber-300 shadow-[0_0_8px_rgba(251,191,36,0.6)]'
+          }`}
+          style={{ left: `${liveX}%` }}
+          title={`Precio Live: $${livePrice.toFixed(decimalPlaces)}`}
+        >
+          <div className="w-1.5 h-1.5 rounded-full bg-neutral-950" />
+        </div>
+
+        {/* Marcador Pin TP */}
+        {tpPrice > 0 && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-emerald-400 border border-neutral-950 ring-1 ring-emerald-300 z-10"
+            style={{ left: `${tpX}%` }}
+            title={`Take Profit 1: $${tpPrice.toFixed(decimalPlaces)}`}
+          />
+        )}
+      </div>
+
+      {/* 3. FILA INFERIOR: PROXIMIDAD A E1 Y RANGO DE RECORRIDO DENTRO DE LA BARRA */}
+      <div className="flex items-center justify-between text-[9px] font-mono text-neutral-400 px-0.5">
+        <span className="text-rose-400/90 font-medium">
+          {slPrice > 0 ? `Riesgo SL: ${Math.abs(distSlPct).toFixed(1)}%` : 'Sin SL'}
+        </span>
+
+        {/* PROXIMIDAD A E1 CON BRILLO */}
+        <span
+          className={`font-bold flex items-center gap-1 ${
+            isGlow
+              ? 'text-amber-300 font-black drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]'
+              : diffPct >= 0
+              ? 'text-sky-300'
+              : 'text-emerald-400'
+          }`}
+        >
+          {isGlow && <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />}
+          <span>
+            {isGlow ? '🎯 EN ZONA E1' : 'Distancia E1'}: {diffPct >= 0 ? '+' : ''}{diffPct.toFixed(2)}%
+            <span className="opacity-80 font-normal ml-0.5">({diffDollar >= 0 ? '+' : ''}{diffDollar.toFixed(decimalPlaces)}$)</span>
+          </span>
+        </span>
+
+        <span className="text-emerald-400/90 font-medium">
+          {tpPrice > 0 ? `Objetivo TP1: +${distTpPct.toFixed(1)}%` : 'Sin TP'}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListProps> = ({
   activeStrategies: propsActiveStrategies,
@@ -181,6 +417,14 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
               <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
               <span>Brillan las próximas a Entrada 1 (E1)</span>
             </span>
+            <span className="text-[10px] font-mono text-emerald-300/90 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1.5">
+              <div className="flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              </div>
+              <span>Semáforo Confluencia Futuros</span>
+            </span>
           </div>
         </div>
 
@@ -230,14 +474,23 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                   <th className="py-2.5 px-3 font-semibold text-center w-12">Rank</th>
                   <th className="py-2.5 px-3 font-semibold">Par</th>
                   <th className="py-2.5 px-3 font-semibold">Tipo</th>
-                  <th className="py-2.5 px-3 font-semibold min-w-[200px]">Estrategia</th>
-                  <th className="py-2.5 px-3 font-semibold bg-amber-500/5 text-amber-300 border-x border-amber-500/20">
-                    Precio Live
+                  <th className="py-2.5 px-3 font-semibold min-w-[180px]">Estrategia</th>
+                  <th className="py-2.5 px-3 font-semibold min-w-[390px] lg:min-w-[460px] text-center bg-neutral-900/60 text-amber-300 border-x border-neutral-800">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <Radio className="w-3 h-3 text-amber-400 animate-pulse" />
+                      <span>Barra de Precio (SL • E1 • Live • TP)</span>
+                    </div>
                   </th>
-                  <th className="py-2.5 px-3 font-semibold">Entrada 1 (E1)</th>
-                  <th className="py-2.5 px-3 font-semibold min-w-[130px]">Proximidad a E1</th>
-                  <th className="py-2.5 px-3 font-semibold">Stop Loss</th>
-                  <th className="py-2.5 px-3 font-semibold">Take Profit</th>
+                  <th className="py-2.5 px-3 font-semibold text-center min-w-[190px] bg-neutral-900/40 text-neutral-300 border-x border-neutral-800">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-neutral-950 border border-neutral-800">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                      </div>
+                      <span>Semáforo Confluencia</span>
+                    </div>
+                  </th>
                   <th className="py-2.5 px-3 font-semibold text-center bg-emerald-500/5 text-emerald-300 border-x border-emerald-500/20">
                     Ratio R:B 🔽
                   </th>
@@ -247,7 +500,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
               <tbody className="divide-y divide-neutral-800/80 font-mono text-[11px]">
                 {rankedStrategies.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-8 text-center text-xs text-neutral-500 font-sans">
+                    <td colSpan={8} className="py-8 text-center text-xs text-neutral-500 font-sans">
                       No hay estrategias activas disponibles en el catálogo.
                     </td>
                   </tr>
@@ -329,70 +582,32 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                           )}
                         </td>
 
-                        {/* PRECIO LIVE (CON EFECTO BRILLO SI CORRESPONDE) */}
-                        <td className="py-2.5 px-3 bg-amber-500/5 border-x border-amber-500/20 font-mono">
-                          <div className="flex flex-col">
-                            <span
-                              className={`font-black text-sm sm:text-base tracking-tight ${
-                                isGlow
-                                  ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(250,204,21,0.7)]'
-                                  : 'text-amber-300'
-                              }`}
-                            >
-                              ${item.livePrice.toFixed(decimalPlaces)}
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold flex items-center gap-0.5 ${
-                                item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'
-                              }`}
-                            >
-                              {item.isPricePositive ? <ArrowUpRight className="w-3 h-3 shrink-0" /> : <ArrowDownRight className="w-3 h-3 shrink-0" />}
-                              <span>{item.isPricePositive ? '+' : ''}{(item.liveData.change24hPercent || 0).toFixed(2)}%</span>
-                            </span>
+                        {/* BARRA DE PRECIO CON TODOS LOS DATOS INCORPORADOS (SL, E1, PRECIO LIVE, PROXIMIDAD, TP) */}
+                        <td className="py-2 px-3 border-x border-neutral-800/80 min-w-[390px] lg:min-w-[460px]">
+                          <StrategyRowPriceBar
+                            livePrice={item.livePrice}
+                            entry1Price={item.entry1Price}
+                            slPrice={item.prices.slPrice || 0}
+                            tpPrice={item.prices.tp1Price || 0}
+                            diffPct={item.diffPct}
+                            absDiffPct={item.absDiffPct}
+                            diffDollar={item.diffDollar}
+                            isPricePositive={item.isPricePositive}
+                            change24h={item.liveData.change24hPercent || 0}
+                            isLong={item.isLong}
+                            isGlow={isGlow}
+                            decimalPlaces={decimalPlaces}
+                          />
+                        </td>
+
+                        {/* SEMÁFORO DE CONFLUENCIA DE FUTUROS */}
+                        <td className="py-2 px-3 border-x border-neutral-800/80 text-center">
+                          <div className="flex items-center justify-center">
+                            <StrategyFuturesConfluenceBadge
+                              symbol={strat.par}
+                              isLong={item.isLong}
+                            />
                           </div>
-                        </td>
-
-                        {/* ENTRADA 1 (E1) */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <div className="flex flex-col">
-                            <span className="font-black text-white text-sm sm:text-base tracking-tight">
-                              ${item.entry1Price.toFixed(decimalPlaces)}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* PROXIMIDAD A E1 (DIF EN % Y DESCRIPCIÓN) */}
-                        <td className="py-2.5 px-3 font-mono">
-                          <div className="flex flex-col">
-                            <span
-                              className={`font-bold text-xs ${
-                                isGlow
-                                  ? 'text-amber-300 font-black drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]'
-                                  : item.diffPct >= 0
-                                  ? 'text-sky-300'
-                                  : 'text-emerald-400'
-                              }`}
-                            >
-                              {item.diffPct >= 0 ? '+' : ''}{item.diffPct.toFixed(2)}% vs E1
-                            </span>
-                            <span className="text-[9px] text-neutral-400 font-sans">
-                              {isGlow
-                                ? '🎯 Zona de Ejecución'
-                                : item.diffDollar > 0
-                                ? `+${item.diffDollar.toFixed(decimalPlaces)} $`
-                                : `${item.diffDollar.toFixed(decimalPlaces)} $`}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* STOP LOSS */}
-                        <td className="py-2.5 px-3 text-rose-400 font-bold font-mono text-xs">
-                          ${item.prices.slPrice ? item.prices.slPrice.toFixed(decimalPlaces) : '-'}
-                        </td>
-
-                        {/* TAKE PROFIT */}
-                        <td className="py-2.5 px-3 text-emerald-400 font-bold font-mono text-xs">
-                          ${item.prices.tp1Price ? item.prices.tp1Price.toFixed(decimalPlaces) : '-'}
                         </td>
 
                         {/* RATIO R:B (ORDENADO DE MAYOR A MENOR) */}
@@ -511,51 +726,32 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                     )}
                   </div>
 
-                  {/* Key Stats Grid: Live Price & E1 */}
-                  <div className="grid grid-cols-2 gap-2 bg-neutral-950 p-2.5 rounded-lg border border-neutral-800/80 font-mono">
-                    <div className="flex flex-col">
-                      <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 uppercase tracking-wider">
-                        <Radio className="w-2.5 h-2.5 text-amber-400 animate-pulse" />
-                        Precio Live
-                      </span>
-                      <span className={`text-base font-black tracking-tight mt-0.5 ${isGlow ? 'text-amber-300 drop-shadow-[0_0_6px_rgba(250,204,21,0.6)]' : 'text-amber-300'}`}>
-                        ${item.livePrice.toFixed(decimalPlaces)}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold flex items-center gap-0.5 mt-0.5 ${
-                          item.isPricePositive ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {item.isPricePositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                        <span>{(item.liveData.change24hPercent || 0).toFixed(2)}%</span>
-                      </span>
-                    </div>
+                  {/* Barra de precio con todos los datos integrados (SL, E1, Live, TP, Distancias) */}
+                  <StrategyRowPriceBar
+                    livePrice={item.livePrice}
+                    entry1Price={item.entry1Price}
+                    slPrice={item.prices.slPrice || 0}
+                    tpPrice={item.prices.tp1Price || 0}
+                    diffPct={item.diffPct}
+                    absDiffPct={item.absDiffPct}
+                    diffDollar={item.diffDollar}
+                    isPricePositive={item.isPricePositive}
+                    change24h={item.liveData.change24hPercent || 0}
+                    isLong={item.isLong}
+                    isGlow={isGlow}
+                    decimalPlaces={decimalPlaces}
+                  />
 
-                    <div className="flex flex-col border-l border-neutral-800 pl-2.5">
-                      <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
-                        Entrada 1 (E1)
-                      </span>
-                      <span className="text-base font-black text-white tracking-tight mt-0.5">
-                        ${item.entry1Price.toFixed(decimalPlaces)}
-                      </span>
-                      <span
-                        className={`text-[10px] font-bold mt-0.5 ${
-                          isGlow ? 'text-amber-300 font-black' : 'text-sky-300'
-                        }`}
-                      >
-                        {item.diffPct >= 0 ? '+' : ''}{item.diffPct.toFixed(2)}% vs E1
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* SL / TP1 */}
-                  <div className="flex items-center justify-between text-xs font-mono px-1 text-neutral-400">
-                    <span className="text-rose-400 font-bold">
-                      SL: ${item.prices.slPrice ? item.prices.slPrice.toFixed(decimalPlaces) : '-'}
+                  {/* Semáforo de Confluencia de Futuros */}
+                  <div className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-neutral-950/80 border border-neutral-800">
+                    <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                      <span>Semáforo:</span>
                     </span>
-                    <span className="text-emerald-400 font-bold">
-                      TP1: ${item.prices.tp1Price ? item.prices.tp1Price.toFixed(decimalPlaces) : '-'}
-                    </span>
+                    <StrategyFuturesConfluenceBadge
+                      symbol={strat.par}
+                      isLong={item.isLong}
+                      compact={false}
+                    />
                   </div>
 
                   {/* Action Buttons */}

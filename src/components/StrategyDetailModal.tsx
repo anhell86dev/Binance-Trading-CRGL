@@ -30,6 +30,7 @@ import { binanceWs } from '../services/binanceWs';
 import { strategyService } from '../services/strategyService';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
 import { StrategyPriceBar } from './StrategyPriceBar';
+import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
 
 interface StrategyDetailModalProps {
   strategy: GoogleSheetStrategyRow;
@@ -61,6 +62,9 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
   const rr = calculateStrategyRewardToRisk(strategy);
   const stageInfo = getTradeProcessStageInfo(strategy.estado || 'Activa');
   const normalizedSymbol = normalizeBinanceSymbol(strategy.par);
+  const isLong =
+    !strategy.tipoDeOrden?.toLowerCase().includes('short') &&
+    !strategy.tipoDeOrden?.toLowerCase().includes('venta');
 
   const e1Dist =
     currentPrice > 0 && parsed.entry1Price > 0
@@ -181,6 +185,23 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
               </div>
               <span className="text-[9px] text-neutral-500 font-sans">Margen Aislado</span>
             </div>
+          </div>
+
+          {/* Semáforo de Confluencia de Futuros */}
+          <div className="bg-neutral-950 p-3 rounded-xl border border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+            <div className="flex flex-col">
+              <span className="text-[10px] font-mono text-neutral-400 uppercase tracking-wider">
+                Semáforo de Confluencia de Futuros
+              </span>
+              <span className="text-[11px] text-neutral-300 font-sans">
+                Evaluación cuantitativa en tiempo real (OI, Taker C/V, Ballenas Top L/S y Funding Rate)
+              </span>
+            </div>
+            <StrategyFuturesConfluenceBadge
+              symbol={strategy.par}
+              isLong={isLong}
+              compact={false}
+            />
           </div>
 
           {/* Real-time Dynamic Strategy Price Bar */}
