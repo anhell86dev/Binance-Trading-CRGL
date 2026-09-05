@@ -10,6 +10,7 @@ import { NotificationToasts } from './NotificationToasts';
 import { Navbar, NavTab } from './Navbar';
 import { TradingStrategiesView } from './TradingStrategiesView';
 import { WalletView } from './WalletView';
+import { TopOperacionesView } from './TopOperacionesView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 
 export default function TerminalLayout() {
@@ -66,7 +67,19 @@ export default function TerminalLayout() {
         </main>
       )}
 
-      {/* 4. Pestaña 3: Futuros (Solo la tarjeta de enmedio, sin catálogo R/B, sin diario, sin riesgo fijo y sin bandeja rápida) */}
+      {/* 4. Pestaña 3: Top de Operaciones (Próximas a Activar por E1, Ordenadas por R:B) */}
+      {activeTab === 'top-operaciones' && (
+        <main className="flex-1 overflow-y-auto p-2 sm:p-4 lg:p-6 bg-neutral-950 h-[calc(100vh-3rem)] w-full">
+          <div className="w-full max-w-none mx-auto">
+            <TopOperacionesView
+              onOpenOrderModal={() => setIsOrderModalOpen(true)}
+              onNavigateToFutures={() => setActiveTab('futuros')}
+            />
+          </div>
+        </main>
+      )}
+
+      {/* 5. Pestaña 4: Futuros (Terminal de Ejecución Directa) */}
       {activeTab === 'futuros' && (
         <main className="flex-1 p-2 sm:p-3 overflow-hidden h-[calc(100vh-3rem)] flex flex-col">
           <TacticalWorkspace onOpenOrderModal={() => setIsOrderModalOpen(true)} />

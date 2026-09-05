@@ -5,6 +5,7 @@ import {
   BarChart2,
   BookOpen,
   ChevronDown,
+  Flame,
   Key,
   Layers,
   PieChart,
@@ -22,7 +23,7 @@ import { notificationService } from '../services/notifications';
 import { NetworkMode } from '../types/binance';
 import { SecurityBadge } from './SecurityBadge';
 
-export type NavTab = 'billetera' | 'estrategias' | 'futuros';
+export type NavTab = 'billetera' | 'estrategias' | 'top-operaciones' | 'futuros';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -154,7 +155,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           </span>
         </button>
 
-        {/* Tab 3: Futuros */}
+        {/* Tab 3: Top de Operaciones (Próximas E1 y Ordenadas por R:B) */}
+        <button
+          type="button"
+          id="nav-tab-top-operaciones"
+          onClick={() => onSelectTab('top-operaciones')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'top-operaciones'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-xs'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Flame className={`w-3.5 h-3.5 ${activeTab === 'top-operaciones' ? 'text-amber-400 animate-pulse' : 'text-neutral-500'}`} />
+          <span>Top Operaciones</span>
+          <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/40">
+            E1
+          </span>
+        </button>
+
+        {/* Tab 4: Futuros */}
         <button
           type="button"
           id="nav-tab-futuros"
