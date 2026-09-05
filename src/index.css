@@ -4,6 +4,7 @@
 @import './styles/components.css';
 @import './styles/responsive.css';
 @import './styles/pages.css';
+@import './styles/terminal-legacy-compat.css';
 
 /* Estilos legacy y componentes existentes */
 .app-container { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }

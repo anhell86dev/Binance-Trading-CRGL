@@ -1,0 +1,109 @@
+/* Compatibility layer scoped to the premium terminal. */
+.terminal-wrapper {
+  --terminal-panel: var(--bg-surface);
+  --terminal-panel-raised: var(--bg-elevated);
+  --terminal-border: var(--border-subtle);
+  --terminal-text: var(--text-primary);
+  --terminal-muted: var(--text-secondary);
+}
+
+.terminal-wrapper button,
+.terminal-wrapper input,
+.terminal-wrapper select,
+.terminal-wrapper textarea { font: inherit; }
+
+.terminal-wrapper .premium-terminal__legacy-content,
+.terminal-wrapper .premium-terminal__legacy-content * { min-width: 0; }
+
+.terminal-wrapper .premium-terminal__legacy-content {
+  color: var(--terminal-text);
+  scrollbar-color: var(--border-strong) var(--terminal-panel);
+}
+
+.terminal-wrapper .premium-terminal__legacy-content button,
+.terminal-wrapper .premium-terminal__legacy-content input,
+.terminal-wrapper .premium-terminal__legacy-content select,
+.terminal-wrapper .premium-terminal__legacy-content textarea {
+  max-width: 100%;
+  border-color: var(--terminal-border);
+  color: var(--terminal-text);
+}
+
+.terminal-wrapper .premium-terminal__legacy-content input,
+.terminal-wrapper .premium-terminal__legacy-content select,
+.terminal-wrapper .premium-terminal__legacy-content textarea {
+  background: var(--terminal-panel-raised);
+  border: 1px solid var(--terminal-border);
+  border-radius: 6px;
+  color: var(--terminal-text);
+}
+
+.terminal-wrapper .premium-terminal__legacy-content input::placeholder,
+.terminal-wrapper .premium-terminal__legacy-content textarea::placeholder { color: var(--text-muted); }
+
+.terminal-wrapper .premium-terminal__legacy-content button {
+  border: 1px solid var(--terminal-border);
+  border-radius: 6px;
+  background: var(--terminal-panel-raised);
+  color: var(--terminal-text);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.terminal-wrapper .premium-terminal__legacy-content button:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-strong);
+}
+
+.terminal-wrapper .premium-terminal__legacy-content [role='button'],
+.terminal-wrapper .premium-terminal__legacy-content .button,
+.terminal-wrapper .premium-terminal__legacy-content .btn {
+  max-width: 100%;
+  color: var(--terminal-text);
+}
+
+/* Side panels: preserve scroll and stop long legacy labels from widening the grid. */
+.terminal-wrapper .premium-terminal__side--left .premium-terminal__legacy-content { padding-right: 2px; }
+.terminal-wrapper .premium-terminal__side--left .premium-terminal__legacy-content button,
+.terminal-wrapper .premium-terminal__side--left .premium-terminal__legacy-content a { max-width: 100%; }
+.terminal-wrapper .premium-terminal__side--left .premium-terminal__legacy-content p,
+.terminal-wrapper .premium-terminal__side--left .premium-terminal__legacy-content span,
+.terminal-wrapper .premium-terminal__side--left .premium-terminal__legacy-content div,
+.terminal-wrapper .premium-terminal__side--right .premium-terminal__legacy-content p,
+.terminal-wrapper .premium-terminal__side--right .premium-terminal__legacy-content span,
+.terminal-wrapper .premium-terminal__side--right .premium-terminal__legacy-content div { overflow-wrap: anywhere; }
+.terminal-wrapper .premium-terminal__side--right .premium-terminal__legacy-content { overflow-x: hidden; }
+
+/* Preserve chart sizing while allowing its own controls and chart frame to scroll if necessary. */
+.terminal-wrapper .premium-terminal__chart .premium-terminal__legacy-content { overflow: auto; }
+.terminal-wrapper .premium-terminal__chart canvas,
+.terminal-wrapper .premium-terminal__chart iframe,
+.terminal-wrapper .premium-terminal__chart svg { display: block; max-width: none; }
+.terminal-wrapper .premium-terminal__chart iframe { width: 100%; min-height: 360px; border: 0; }
+.terminal-wrapper .premium-terminal__chart p,
+.terminal-wrapper .premium-terminal__chart h1,
+.terminal-wrapper .premium-terminal__chart h2,
+.terminal-wrapper .premium-terminal__chart h3,
+.terminal-wrapper .premium-terminal__chart h4,
+.terminal-wrapper .premium-terminal__chart span,
+.terminal-wrapper .premium-terminal__chart div { max-width: 100%; }
+.terminal-wrapper .premium-terminal__chart button { margin: 2px; }
+
+/* Forms and positions remain usable without spilling out of their panels. */
+.terminal-wrapper .premium-terminal__order .premium-terminal__legacy-content { overflow-x: hidden; }
+.terminal-wrapper .premium-terminal__order form,
+.terminal-wrapper .premium-terminal__order fieldset { max-width: 100%; }
+.terminal-wrapper .premium-terminal__order label { color: var(--terminal-muted); }
+.terminal-wrapper .premium-terminal__positions .premium-terminal__legacy-content { overflow-x: auto; overflow-y: visible; }
+.terminal-wrapper .premium-terminal__positions table { min-width: 760px; border-collapse: collapse; }
+.terminal-wrapper .premium-terminal__positions th { position: sticky; top: 0; background: var(--terminal-panel); color: var(--terminal-muted); z-index: 1; }
+.terminal-wrapper .premium-terminal__positions th,
+.terminal-wrapper .premium-terminal__positions td { border-color: var(--terminal-border); white-space: nowrap; }
+
+.terminal-wrapper .premium-terminal__side img,
+.terminal-wrapper .premium-terminal__side svg,
+.terminal-wrapper .premium-terminal__side canvas { max-width: 100%; height: auto; }
+
+@media (max-width: 991px) {
+  .terminal-wrapper .premium-terminal__chart iframe { min-height: 320px; }
+  .terminal-wrapper .premium-terminal__positions table { min-width: 680px; }
+}
