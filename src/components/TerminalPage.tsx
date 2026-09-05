@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PremiumTerminalLayout } from '../layouts/PremiumTerminalLayout';
+import { PremiumTerminalLayout, TerminalMobileTab } from '../layouts/PremiumTerminalLayout';
 
 interface TerminalPageProps {
   watchlist?: React.ReactNode;
@@ -10,33 +10,29 @@ interface TerminalPageProps {
 }
 
 export function TerminalPage({ watchlist, chart, marketInfo, orderForm, positions }: TerminalPageProps) {
-  const [activeTab, setActiveTab] = useState<'chart' | 'order' | 'positions'>('chart');
+  const [activeTab, setActiveTab] = useState<TerminalMobileTab>('chart');
+
+  const tabs: Array<{ id: TerminalMobileTab; label: string }> = [
+    { id: 'chart', label: 'Grafico' },
+    { id: 'order', label: 'Orden' },
+    { id: 'positions', label: 'Posiciones' },
+  ];
 
   return (
     <div className="terminal-wrapper">
-      {/* Mobile tabs - solo visibles en pantallas pequenas */}
-      <div className="mobile-terminal-tabs">
-        <button
-          className={`mobile-tab ${activeTab === 'chart' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chart')}
-          type="button"
-        >
-          Grafico
-        </button>
-        <button
-          className={`mobile-tab ${activeTab === 'order' ? 'active' : ''}`}
-          onClick={() => setActiveTab('order')}
-          type="button"
-        >
-          Orden
-        </button>
-        <button
-          className={`mobile-tab ${activeTab === 'positions' ? 'active' : ''}`}
-          onClick={() => setActiveTab('positions')}
-          type="button"
-        >
-          Posiciones
-        </button>
+      <div className="mobile-terminal-tabs" role="tablist" aria-label="Paneles del terminal">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={`mobile-tab ${activeTab === tab.id ? 'active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       <PremiumTerminalLayout
@@ -45,6 +41,7 @@ export function TerminalPage({ watchlist, chart, marketInfo, orderForm, position
         marketInfo={marketInfo}
         orderForm={orderForm}
         positions={positions}
+        activeMobileTab={activeTab}
       />
     </div>
   );

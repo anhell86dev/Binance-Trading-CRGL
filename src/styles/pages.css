@@ -6,53 +6,44 @@
 .content-placeholder { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-lg); }
 .content-placeholder h2 { margin: 0 0 var(--space-sm); color: var(--text-primary); font-size: 16px; font-weight: 700; }
 .content-placeholder p { margin: 0; color: var(--text-secondary); font-size: 13px; }
-.terminal-wrapper { display: grid; min-height: 100%; position: relative; }
-
-/* Mobile tabs para terminal */
+.terminal-wrapper { display: grid; grid-template-rows: auto minmax(0, 1fr); width: 100%; height: 100%; min-height: 0; overflow: hidden; }
 .mobile-terminal-tabs { display: none; }
 
+@media (max-width: 1199px) {
+  .premium-terminal { grid-template-columns: minmax(190px, 212px) minmax(460px, 1fr) minmax(210px, 232px); }
+  .premium-terminal--left-collapsed { grid-template-columns: 48px minmax(460px, 1fr) minmax(210px, 232px); }
+  .premium-terminal--right-collapsed { grid-template-columns: minmax(190px, 212px) minmax(460px, 1fr) 48px; }
+  .premium-terminal--left-collapsed.premium-terminal--right-collapsed { grid-template-columns: 48px minmax(460px, 1fr) 48px; }
+}
+
+@media (max-width: 991px) {
+  .terminal-wrapper { overflow: auto; }
+  .premium-terminal,
+  .premium-terminal--left-collapsed,
+  .premium-terminal--right-collapsed,
+  .premium-terminal--left-collapsed.premium-terminal--right-collapsed { display: block; height: auto; min-height: 100%; }
+  .premium-terminal__side { display: none; }
+  .premium-terminal__workspace { display: block; min-height: 0; padding: var(--space-sm); overflow: visible; }
+  .premium-terminal__chart,
+  .premium-terminal__order,
+  .premium-terminal__positions { margin-bottom: var(--space-sm); }
+}
+
 @media (max-width: 768px) {
-  .mobile-terminal-tabs {
-    display: flex;
-    gap: var(--space-xs);
-    padding: var(--space-sm);
-    background: var(--bg-surface);
-    border-bottom: 1px solid var(--border-subtle);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-  }
+  .mobile-terminal-tabs { display: flex; gap: var(--space-xs); padding: var(--space-sm); background: var(--bg-surface); border-bottom: 1px solid var(--border-subtle); position: sticky; top: 0; z-index: 10; }
+  .mobile-tab { flex: 1; min-width: 0; padding: var(--space-sm); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 12px; font-weight: 700; cursor: pointer; transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast); }
+  .mobile-tab.active { background: var(--brand); border-color: var(--brand); color: #111; }
+  .mobile-tab:hover:not(.active) { background: var(--bg-surface-hover); border-color: var(--border-strong); }
+  .premium-terminal__chart { min-height: 320px; padding: var(--space-xs); }
+  .premium-terminal__order,
+  .premium-terminal__positions { padding: var(--space-xs); }
+  .premium-terminal__mobile-panel { display: none; }
+  .premium-terminal--mobile-chart .premium-terminal__mobile-panel--chart,
+  .premium-terminal--mobile-order .premium-terminal__mobile-panel--order,
+  .premium-terminal--mobile-positions .premium-terminal__mobile-panel--positions { display: block; }
+}
 
-  .mobile-tab {
-    flex: 1;
-    padding: var(--space-sm) var(--space-md);
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all var(--transition-fast);
-  }
-
-  .mobile-tab.active {
-    background: var(--brand);
-    border-color: var(--brand);
-    color: #000;
-  }
-
-  .mobile-tab:hover:not(.active) {
-    background: var(--bg-surface-hover);
-    border-color: var(--border-strong);
-  }
-
-  .terminal-wrapper .premium-terminal__chart { min-height: 320px; padding: var(--space-sm); }
-  .terminal-wrapper .premium-terminal__order,
-  .terminal-wrapper .premium-terminal__positions { padding: var(--space-sm); }
-
-  /* Ocultar paneles no activos en movil */
-  .premium-terminal__workspace > div:not(.premium-terminal__chart) {
-    display: none;
-  }
+@media (max-width: 640px) {
+  .dashboard-home { padding: var(--space-md); gap: var(--space-md); }
+  .kpi-grid { grid-template-columns: 1fr; }
 }
