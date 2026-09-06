@@ -148,6 +148,7 @@ class LivePriceService {
             }
           });
           if (updatedCount > 0) {
+            binanceWs.updatePositionsWithLivePrices((sym: string) => this.getPrice(sym));
             this.notify();
           }
         }

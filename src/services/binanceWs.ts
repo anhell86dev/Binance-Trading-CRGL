@@ -2382,6 +2382,25 @@ class BinanceWsEngine {
     }
   }
 
+  /**
+   * Updates all active positions with real-time live market prices
+   */
+  public updatePositionsWithLivePrices(getPriceFn: (symbol: string) => number) {
+    if (!this.positions || this.positions.length === 0) return;
+    let changed = false;
+    this.positions.forEach((pos) => {
+      const liveP = getPriceFn(pos.symbol);
+      if (liveP && liveP > 0 && Math.abs((pos.markPrice || 0) - liveP) > 0.000001) {
+        pos.markPrice = liveP;
+        changed = true;
+      }
+    });
+    if (changed) {
+      this.recalculateAccountStats();
+      this.notify();
+    }
+  }
+
   public setSimulatedBalance(newBalance: Partial<AccountBalance>) {
     this.balance = {
       ...this.balance,

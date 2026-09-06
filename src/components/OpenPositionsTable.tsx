@@ -18,6 +18,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
+import { livePriceService } from '../services/livePriceService';
 import { OpenOrder, PositionRisk } from '../types/binance';
 import { EmergencyCloseButton } from './EmergencyCloseButton';
 import { auditPositionRisk } from '../utils/riskAuditor';
@@ -37,6 +38,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [openOrders, setOpenOrders] = useState<OpenOrder[]>(() => binanceWs.getOpenOrders());
   const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
+  const [, setPriceTick] = useState<number>(Date.now());
   const mode = binanceWs.getMode();
 
   // Stable fixed order of position symbols so positions NEVER jump or re-order automatically
@@ -118,7 +120,15 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         });
       }
     });
-    return () => unsub();
+
+    const unsubLivePrices = livePriceService.subscribe(() => {
+      setPriceTick(Date.now());
+    });
+
+    return () => {
+      unsub();
+      unsubLivePrices();
+    };
   }, []);
 
   // Compute positions strictly in fixed stable order
@@ -248,7 +258,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
               <th className="py-3 px-4">Margen</th>
               <th className="py-3 px-4">Tamaño</th>
               <th className="py-3 px-4">Precio Entrada</th>
-              <th className="py-3 px-4">Precio Marcado</th>
+              <th className="py-3 px-4">Precio de Mercado</th>
               <th className="py-3 px-4">Precio Liq.</th>
               <th className="py-3 px-4">PnL No Realizado</th>
               <th className="py-3 px-4">TP / SL</th>
@@ -294,11 +304,39 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             ) : (
               fixedPositions.map((pos) => {
                 const isLong = pos.positionAmt > 0;
-                const pnl = pos.unRealizedProfit || 0;
+                const livePrice = livePriceService.getPrice(pos.symbol);
+                const currentMarketPrice = (livePrice && livePrice > 0)
+                  ? livePrice
+                  : ((binanceWs.getTicker().symbol === pos.symbol && binanceWs.getTicker().lastPrice > 0)
+                    ? binanceWs.getTicker().lastPrice
+                    : (pos.markPrice > 0 ? pos.markPrice : pos.entryPrice));
+
+                const effectiveMarketPrice = currentMarketPrice > 0 ? currentMarketPrice : (pos.entryPrice || 0);
+                const qty = Math.abs(pos.positionAmt || 0);
+
+                // Calculate exact live PnL and ROE dynamically with the real market price
+                const calculatedPnl = (pos.entryPrice > 0 && effectiveMarketPrice > 0 && qty > 0)
+                  ? (isLong
+                      ? (effectiveMarketPrice - pos.entryPrice) * qty
+                      : (pos.entryPrice - effectiveMarketPrice) * qty)
+                  : (pos.unRealizedProfit || 0);
+
+                const pnl = Number(calculatedPnl.toFixed(2));
                 const isProfit = pnl >= 0;
-                const roe = pos.roePercent || 0;
+                const margin = pos.isolatedMargin > 0
+                  ? pos.isolatedMargin
+                  : ((qty * (pos.entryPrice || effectiveMarketPrice)) / Math.max(1, pos.leverage || 2));
+                const roe = margin > 0 ? (pnl / margin) * 100 : (pos.roePercent || 0);
                 const safeLeverage = Math.min(5, Math.max(1, pos.leverage || 2));
                 const { tpValue, slValue, tpOrder, slOrder } = getEffectiveTPSL(pos);
+
+                const formatPrice = (price: number): string => {
+                  if (!price || isNaN(price)) return '0.00';
+                  if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                  if (price >= 1) return price.toFixed(2);
+                  if (price >= 0.01) return price.toFixed(4);
+                  return price.toFixed(6);
+                };
 
                 return (
                   <React.Fragment key={pos.symbol}>
@@ -434,14 +472,20 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                     </td>
 
                     {/* Precio Entrada */}
-                    <td className="py-3 px-3 text-neutral-300">${(pos.entryPrice || 0).toFixed(2)}</td>
+                    <td className="py-3 px-3 text-neutral-300 font-mono">${formatPrice(pos.entryPrice || 0)}</td>
 
-                    {/* Precio Marcado */}
-                    <td className="py-3 px-3 text-amber-400 font-bold">${(pos.markPrice || 0).toFixed(2)}</td>
+                    {/* Precio de Mercado */}
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-1.5 font-mono">
+                        <span className="text-amber-400 font-bold text-xs">
+                          ${formatPrice(effectiveMarketPrice)}
+                        </span>
+                      </div>
+                    </td>
 
                     {/* Precio Liquidación */}
-                    <td className="py-3 px-3 text-rose-400 font-bold">
-                      ${(pos.liquidationPrice || 0).toFixed(2)}
+                    <td className="py-3 px-3 text-rose-400 font-bold font-mono">
+                      ${pos.liquidationPrice > 0 ? formatPrice(pos.liquidationPrice) : '0.00'}
                     </td>
 
                     {/* PnL No Realizado */}
