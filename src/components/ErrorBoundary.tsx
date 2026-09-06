@@ -1,74 +1,53 @@
-import React, { ErrorInfo, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from 'react';
 
-interface Props {
+interface ErrorBoundaryProps {
   children: ReactNode;
 }
 
-interface State {
+interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
-  errorInfo: ErrorInfo | null;
 }
 
-export class ErrorBoundary extends React.Component<Props, State> {
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-      errorInfo: null,
-    };
+export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+  };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
   }
 
-  public static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error, errorInfo: null };
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Application render error:', error, errorInfo);
   }
 
-  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error caught by ErrorBoundary:', error, errorInfo);
-    this.setState({ errorInfo });
-  }
-
-  private handleReset = () => {
-    localStorage.removeItem('binance_futures_strategies_v5');
-    localStorage.removeItem('binance_futures_strategies_v4');
-    localStorage.removeItem('binance_futures_strategies_v3');
-    localStorage.removeItem('binance_futures_strategies_v2');
+  handleReload = () => {
     window.location.reload();
   };
 
-  public render() {
+  render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-neutral-950 text-neutral-100 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-neutral-900 border border-neutral-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="w-12 h-12 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-
-            <div>
-              <h2 className="text-lg font-bold text-white">Terminal Protegido</h2>
-              <p className="text-xs text-neutral-400 mt-1">
-                La aplicación capturó un fallo inesperado de renderizado y protegió la pantalla. Puedes restaurar el terminal para cargar los datos limpios de Google Sheets.
-              </p>
-            </div>
-
-            {this.state.error && (
-              <div className="bg-neutral-950 p-3 rounded border border-neutral-800 font-mono text-[11px] text-rose-300 max-h-32 overflow-y-auto">
-                {this.state.error.message}
-              </div>
-            )}
-
+        <main style={{ minHeight: '100vh', background: '#080c14', color: '#f8fafc', padding: '32px', fontFamily: 'system-ui, sans-serif' }}>
+          <section style={{ maxWidth: '760px', margin: '40px auto', border: '1px solid #7f1d1d', borderRadius: '12px', padding: '24px', background: '#1c1014' }}>
+            <h1 style={{ marginTop: 0, color: '#fca5a5' }}>La aplicación encontró un error</h1>
+            <p style={{ color: '#fecaca' }}>
+              El bundle de producción produjo una excepción durante la inicialización. Recarga la página y, si persiste, copia el detalle técnico.
+            </p>
+            <pre style={{ whiteSpace: 'pre-wrap', overflowX: 'auto', background: '#0f172a', padding: '16px', borderRadius: '8px', color: '#fda4af' }}>
+              {this.state.error?.stack || this.state.error?.message || 'Error desconocido'}
+            </pre>
             <button
-              onClick={this.handleReset}
-              className="w-full py-2.5 px-4 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-lg"
+              type="button"
+              onClick={this.handleReload}
+              style={{ border: 0, borderRadius: '8px', padding: '10px 16px', background: '#2563eb', color: 'white', cursor: 'pointer', fontWeight: 600 }}
             >
-              <RefreshCw className="w-4 h-4" />
-              <span>Restaurar y Recargar Terminal</span>
+              Recargar aplicación
             </button>
-          </div>
-        </div>
+          </section>
+        </main>
       );
     }
 
