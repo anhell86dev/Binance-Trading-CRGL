@@ -33,6 +33,8 @@ import {
   LogOut,
   Settings,
   Calculator,
+  Globe,
+  Building2,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
@@ -210,6 +212,16 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
           badgeColor: 'bg-rose-600 text-white font-bold',
           category: 'Mercado',
           description: 'Gráfico interactivo TradingView, libro de órdenes y ejecución',
+        },
+        {
+          id: 'mercados' as NavTab,
+          label: 'Mercados & Pares (Futuros / TradFi)',
+          shortLabel: 'Mercados',
+          icon: Globe,
+          badge: 'TRADFI',
+          badgeColor: 'bg-blue-600 text-white font-bold',
+          category: 'Explorador',
+          description: 'Todos los pares de Futuros USDT y activos TradFi (Oro, Forex, RWA, Bonos)',
         },
       ],
     },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { binanceWs } from '../services/binanceWs';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { TacticalWorkspace } from './TacticalWorkspace';
 import { FuturesOrderModal } from './FuturesOrderModal';
@@ -10,6 +11,7 @@ import { TradingStrategiesView } from './TradingStrategiesView';
 import { WalletView } from './WalletView';
 import { TopOperacionesView } from './TopOperacionesView';
 import { GestionTradesView } from './GestionTradesView';
+import { MarketsView } from './MarketsView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 import { PnlSimulatorModal } from './PnlSimulatorModal';
 import { AdminLTELayout } from './AdminLTELayout';
@@ -75,7 +77,24 @@ export default function TerminalLayout() {
         </div>
       )}
 
-      {/* 4. Pestaña: Estrategias Google Sheets */}
+      {/* 4. Pestaña: Mercados & Pares (Futuros USDT & TradFi) */}
+      {activeTab === 'mercados' && (
+        <div className="w-full h-full p-2 sm:p-4 lg:p-6 overflow-y-auto">
+          <MarketsView
+            onNavigateToFutures={(symbol) => {
+              setActiveTab('futuros');
+            }}
+            onOpenOrderModal={(symbol) => {
+              if (symbol) {
+                binanceWs.setSymbol(symbol);
+              }
+              setIsOrderModalOpen(true);
+            }}
+          />
+        </div>
+      )}
+
+      {/* 5. Pestaña: Estrategias Google Sheets */}
       {activeTab === 'estrategias' && (
         <div className="w-full h-full p-2 sm:p-4 lg:p-6 overflow-y-auto">
           <TradingStrategiesView

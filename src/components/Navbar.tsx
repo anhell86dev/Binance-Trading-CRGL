@@ -15,6 +15,7 @@ import {
   Sun,
   Moon,
   TrendingUp,
+  Globe,
   Volume2,
   VolumeX,
   Wallet,
@@ -26,7 +27,7 @@ import { NetworkMode } from '../types/binance';
 import { SecurityBadge } from './SecurityBadge';
 import { useTheme } from '../context/ThemeContext';
 
-export type NavTab = 'billetera' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros';
+export type NavTab = 'billetera' | 'mercados' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -141,7 +142,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span>Billetera</span>
         </button>
 
-        {/* Tab 2: Estrategias */}
+        {/* Tab 2: Mercados & Pares (Futuros & TradFi) */}
+        <button
+          type="button"
+          id="nav-tab-mercados"
+          onClick={() => onSelectTab('mercados')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'mercados'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-xs'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Globe className={`w-3.5 h-3.5 ${activeTab === 'mercados' ? 'text-amber-400' : 'text-neutral-500'}`} />
+          <span>Mercados</span>
+          <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 font-bold border border-blue-500/30">
+            TradFi
+          </span>
+        </button>
+
+        {/* Tab 3: Estrategias */}
         <button
           type="button"
           id="nav-tab-estrategias"
