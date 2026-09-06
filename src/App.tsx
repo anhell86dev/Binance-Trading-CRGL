@@ -1,15 +1,17 @@
-import React from 'react';
-import TerminalLayout from './components/TerminalLayout';
-import { ErrorBoundary } from './components/ErrorBoundary';
-import { ThemeProvider } from './context/ThemeContext';
+import ErrorBoundary from './components/ErrorBoundary';
+import { AdminLTELayout } from './layouts/AdminLTELayout';
 
-export default function App() {
+function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <TerminalLayout />
-      </ThemeProvider>
+      <AdminLTELayout activePath="/dashboard" onNavigate={() => undefined}>
+        <main style={{ padding: '24px' }}>
+          <h1>Diagnóstico: layout cargado</h1>
+          <p>AdminLTELayout y ErrorBoundary se inicializaron sin cargar las vistas.</p>
+        </main>
+      </AdminLTELayout>
     </ErrorBoundary>
   );
 }
 
+export default App;
