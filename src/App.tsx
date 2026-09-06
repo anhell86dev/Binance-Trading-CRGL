@@ -1,46 +1,51 @@
 import { useNavigation } from './context/NavigationContext';
-import { AdminLTELayout } from './layouts/AdminLTELayout'; // 👈 CAMBIO 1
+import { AdminLTELayout } from './layouts/AdminLTELayout';
 import { DashboardHomeWithData } from './components/DashboardHomeWithData';
-import { TerminalView } from './views/TerminalView';
-import { EstrategiasView } from './views/EstrategiasView';
-import { PortafolioView } from './views/PortafolioView';
-import { OperacionesView } from './views/OperacionesView';
-import { DiarioView } from './views/DiarioView';
-import { RiesgoView } from './views/RiesgoView';
-import { ConfiguracionView } from './views/ConfiguracionView';
+import { TradingStrategiesView } from './components/TradingStrategiesView';
+import { TopOperacionesView } from './components/TopOperacionesView';
+import { GestionTradesView } from './components/GestionTradesView';
+import { FuturesHubPage } from './components/FuturesHubPage';
+import { WalletView } from './components/WalletView';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function AppContent() {
   const { currentRoute, navigate } = useNavigation();
 
   const renderContent = () => {
     switch (currentRoute) {
-      case '/dashboard':
-        return <DashboardHomeWithData />;
-      case '/terminal':
-        return <TerminalView />;
       case '/estrategias':
-        return <EstrategiasView />;
-      case '/portafolio':
-        return <PortafolioView />;
+        return <TradingStrategiesView />;
       case '/operaciones':
-        return <OperacionesView />;
-      case '/diario':
-        return <DiarioView />;
-      case '/riesgo':
-        return <RiesgoView />;
-      case '/configuracion':
-        return <ConfiguracionView />;
+      case '/plan-trabajo':
+        return <TopOperacionesView />;
+      case '/gestion':
+      case '/gestion-trades':
+        return <GestionTradesView />;
+      case '/futuros':
+      case '/terminal':
+        return <FuturesHubPage />;
+      case '/portafolio':
+      case '/billetera':
+        return <WalletView />;
+      case '/dashboard':
       default:
         return <DashboardHomeWithData />;
     }
   };
 
-  // 👈 CAMBIO 2: AdminLTELayout en vez de AppShell
-  return <AdminLTELayout activePath={currentRoute} onNavigate={navigate}>{renderContent()}</AdminLTELayout>;
+  return (
+    <AdminLTELayout activePath={currentRoute} onNavigate={navigate}>
+      {renderContent()}
+    </AdminLTELayout>
+  );
 }
 
 function App() {
-  return <AppContent />;
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
+  );
 }
 
 export default App;
