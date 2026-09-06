@@ -1,50 +1,23 @@
-import { useNavigation } from './context/NavigationContext';
-import { AdminLTELayout } from './layouts/AdminLTELayout';
-import { DashboardHomeWithData } from './components/DashboardHomeWithData';
-import { TradingStrategiesView } from './components/TradingStrategiesView';
-import { TopOperacionesView } from './components/TopOperacionesView';
-import { GestionTradesView } from './components/GestionTradesView';
-import { FuturesHubPage } from './components/FuturesHubPage';
-import { WalletView } from './components/WalletView';
-import ErrorBoundary from './components/ErrorBoundary';
-
-function AppContent() {
-  const { currentRoute, navigate } = useNavigation();
-
-  const renderContent = () => {
-    switch (currentRoute) {
-      case '/estrategias':
-        return <TradingStrategiesView />;
-      case '/operaciones':
-      case '/plan-trabajo':
-        return <TopOperacionesView />;
-      case '/gestion':
-      case '/gestion-trades':
-        return <GestionTradesView />;
-      case '/futuros':
-      case '/terminal':
-        return <FuturesHubPage />;
-      case '/portafolio':
-      case '/billetera':
-        return <WalletView />;
-      case '/dashboard':
-      default:
-        return <DashboardHomeWithData />;
-    }
-  };
-
-  return (
-    <AdminLTELayout activePath={currentRoute} onNavigate={navigate}>
-      {renderContent()}
-    </AdminLTELayout>
-  );
-}
-
 function App() {
   return (
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
+    <main
+      style={{
+        minHeight: '100vh',
+        display: 'grid',
+        placeItems: 'center',
+        padding: '24px',
+        background: '#0b0f14',
+        color: '#ffffff',
+        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      }}
+    >
+      <section style={{ maxWidth: '640px', textAlign: 'center' }}>
+        <h1 style={{ marginBottom: '12px' }}>Binance USDⓈ-M Futures Terminal</h1>
+        <p style={{ margin: 0, color: '#aab7c4' }}>
+          El arranque mínimo de React funciona correctamente.
+        </p>
+      </section>
+    </main>
   );
 }
 
