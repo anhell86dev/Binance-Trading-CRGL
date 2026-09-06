@@ -1,5 +1,5 @@
 import { useNavigation } from './context/NavigationContext';
-import { AppShell } from './layouts/AppShell';
+import { AdminLTELayout } from './layouts/AdminLTELayout'; // 👈 CAMBIO 1
 import { DashboardHomeWithData } from './components/DashboardHomeWithData';
 import { TerminalView } from './views/TerminalView';
 import { EstrategiasView } from './views/EstrategiasView';
@@ -35,7 +35,8 @@ function AppContent() {
     }
   };
 
-  return <AppShell onNavigate={navigate}>{renderContent()}</AppShell>;
+  // 👈 CAMBIO 2: AdminLTELayout en vez de AppShell
+  return <AdminLTELayout activePath={currentRoute} onNavigate={navigate}>{renderContent()}</AdminLTELayout>;
 }
 
 function App() {
