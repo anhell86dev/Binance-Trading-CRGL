@@ -9,14 +9,18 @@ import { livePriceService } from './livePriceService';
 
 export type MarketCategory =
   | 'all'
+  | 'best_trading'
   | 'futures'
+  | 'scalping'
+  | 'swing_safe'
   | 'tradfi'
   | 'metals'
   | 'forex'
   | 'rwa'
+  | 'high_liquidity'
+  | 'high_volatility'
   | 'gainers'
-  | 'losers'
-  | 'high_volume';
+  | 'losers';
 
 export type TradFiType =
   | 'metals_commodities'
@@ -24,6 +28,34 @@ export type TradFiType =
   | 'rwa_treasury'
   | 'institutional_credit'
   | 'synthetic_tradfi';
+
+export type LiquidityTier = 'ultra' | 'high' | 'medium' | 'low';
+export type VolatilityTier = 'low' | 'moderate' | 'high' | 'extreme';
+export type TradeabilityRating = 'optimal' | 'good' | 'moderate' | 'caution';
+export type ExecutionSpeed = 'instant' | 'fast' | 'moderate' | 'caution';
+
+export type MarketSortOption =
+  | 'tradeability_desc'
+  | 'liquidity_desc'
+  | 'volatility_desc'
+  | 'volatility_asc'
+  | 'volume_desc'
+  | 'volume_asc'
+  | 'change_desc'
+  | 'change_asc'
+  | 'price_desc'
+  | 'price_asc'
+  | 'name_asc';
+
+export interface MarketFilterOptions {
+  category: MarketCategory;
+  searchQuery: string;
+  sortBy: MarketSortOption;
+  minLiquidityTier?: LiquidityTier | 'all';
+  volatilityTierFilter?: VolatilityTier | 'all' | 'moderate_high';
+  fastExecutionOnly?: boolean;
+  minTradeabilityScore?: number;
+}
 
 export interface MarketPair {
   symbol: string;
@@ -47,6 +79,27 @@ export interface MarketPair {
   maxLeverageSafe: number;
   sparkline: number[];
   lastUpdated: number;
+
+  // --- LIQUIDITY METRICS ---
+  liquidityTier: LiquidityTier;
+  liquidityScore: number; // 0 - 100
+  liquidityLabel: string;
+  estimatedSlippage: string; // e.g. "< 0.01%", "< 0.05%", "~ 0.20%"
+  executionSpeed: ExecutionSpeed;
+  executionLabel: string;
+
+  // --- VOLATILITY METRICS ---
+  volatilityPercent24h: number; // 24h High/Low amplitude %
+  volatilityTier: VolatilityTier;
+  volatilityScore: number; // 0 - 100
+  volatilityLabel: string;
+
+  // --- TRADING SUITABILITY (ALTA LIQUIDEZ + VOLATILIDAD MODERADA/ALTA) ---
+  tradeabilityScore: number; // 0 - 100
+  tradeabilityRating: TradeabilityRating;
+  tradeabilityLabel: string;
+  isIdealForTrading: boolean; // True if high/ultra liquidity + moderate/high volatility
+  tradingAdvantage: string; // e.g. "Entrada y salida instantánea, excelente recorrido intradía"
 }
 
 // Well-known categorized TradFi, Metals, Forex & RWA assets on Binance
@@ -363,12 +416,184 @@ class MarketsService {
     });
   }
 
+  public static calculateMetrics(data: {
+    lastPrice: number;
+    change24hPercent: number;
+    high24h: number;
+    low24h: number;
+    quoteVolume24h: number;
+    tradesCount?: number;
+    isFuturesContract?: boolean;
+  }) {
+    const quoteVolume = data.quoteVolume24h || 0;
+    const price = data.lastPrice || 1;
+    const high = data.high24h > 0 ? data.high24h : price * 1.02;
+    const low = data.low24h > 0 ? data.low24h : price * 0.98;
+
+    // 1. LIQUIDITY CALCULATION
+    // Tier 1: > $500M USDT (Ultra Alta - Mega Cap)
+    // Tier 2: $100M - $500M USDT (Alta - Scalping y Day Trading ideal)
+    // Tier 3: $20M - $100M USDT (Media - Aceptable)
+    // Tier 4: < $20M USDT (Baja - Peligro Slippage)
+    let liquidityTier: LiquidityTier = 'low';
+    let liquidityLabel = 'Baja Liquidez';
+    let estimatedSlippage = '> 0.25% (Riesgo)';
+    let executionSpeed: ExecutionSpeed = 'caution';
+    let executionLabel = 'Precaución Slippage';
+    let liquidityScore = 20;
+
+    if (quoteVolume >= 500_000_000) {
+      liquidityTier = 'ultra';
+      liquidityLabel = 'Ultra Alta (Tier 1)';
+      estimatedSlippage = '< 0.01%';
+      executionSpeed = 'instant';
+      executionLabel = 'Instantánea (< 0.01s)';
+      liquidityScore = 95 + Math.min(5, (quoteVolume - 500_000_000) / 1_000_000_000);
+    } else if (quoteVolume >= 100_000_000) {
+      liquidityTier = 'high';
+      liquidityLabel = 'Alta (Tier 2)';
+      estimatedSlippage = '< 0.04%';
+      executionSpeed = 'fast';
+      executionLabel = 'Muy Rápida (< 0.05s)';
+      liquidityScore = 80 + ((quoteVolume - 100_000_000) / 400_000_000) * 15;
+    } else if (quoteVolume >= 20_000_000) {
+      liquidityTier = 'medium';
+      liquidityLabel = 'Media (Tier 3)';
+      estimatedSlippage = '~ 0.10%';
+      executionSpeed = 'moderate';
+      executionLabel = 'Moderada';
+      liquidityScore = 55 + ((quoteVolume - 20_000_000) / 80_000_000) * 24;
+    } else {
+      liquidityTier = 'low';
+      liquidityLabel = 'Baja (Tier 4)';
+      estimatedSlippage = '> 0.25%';
+      executionSpeed = 'caution';
+      executionLabel = 'Peligro Slippage';
+      liquidityScore = Math.max(10, Math.min(50, (quoteVolume / 20_000_000) * 50));
+    }
+
+    // 2. VOLATILITY CALCULATION (24h Amplitude %)
+    let volatilityPercent24h = 0;
+    if (low > 0 && high >= low) {
+      volatilityPercent24h = ((high - low) / low) * 100;
+    } else {
+      volatilityPercent24h = Math.abs(data.change24hPercent) * 1.4;
+    }
+    volatilityPercent24h = Number(volatilityPercent24h.toFixed(2));
+
+    let volatilityTier: VolatilityTier = 'moderate';
+    let volatilityLabel = 'Moderada';
+    let volatilityScore = 50;
+
+    if (volatilityPercent24h >= 15.0) {
+      volatilityTier = 'extreme';
+      volatilityLabel = 'Extrema (> 15%)';
+      volatilityScore = 95;
+    } else if (volatilityPercent24h >= 7.0) {
+      volatilityTier = 'high';
+      volatilityLabel = 'Alta (7% - 15%)';
+      volatilityScore = 80 + ((volatilityPercent24h - 7) / 8) * 15;
+    } else if (volatilityPercent24h >= 3.0) {
+      volatilityTier = 'moderate';
+      volatilityLabel = 'Moderada (3% - 7%)';
+      volatilityScore = 55 + ((volatilityPercent24h - 3) / 4) * 24;
+    } else {
+      volatilityTier = 'low';
+      volatilityLabel = 'Baja (< 3%)';
+      volatilityScore = Math.max(15, (volatilityPercent24h / 3) * 50);
+    }
+
+    // 3. TRADING SUITABILITY SCORE (0 - 100)
+    // "Para hacer trading, se deben operar criptomonedas con alta liquidez y volatilidad moderada o alta que faciliten la entrada y salida rápida de posiciones."
+    // - High Liquidity component (Weight: 55%)
+    // - Ideal Volatility component (Weight: 45%): optimal between 4% and 12% amplitude
+    let volFitScore = 50;
+    if (volatilityPercent24h >= 4.0 && volatilityPercent24h <= 12.0) {
+      volFitScore = 100; // Perfect sweet spot!
+    } else if (volatilityPercent24h > 12.0 && volatilityPercent24h <= 18.0) {
+      volFitScore = 85; // High momentum, manageable risk
+    } else if (volatilityPercent24h > 18.0) {
+      volFitScore = 65; // Dangerous spikes
+    } else if (volatilityPercent24h >= 2.5 && volatilityPercent24h < 4.0) {
+      volFitScore = 75; // Decent for swing
+    } else {
+      volFitScore = 35; // Too sluggish for active trading
+    }
+
+    const tradeabilityScore = Math.round(liquidityScore * 0.55 + volFitScore * 0.45);
+
+    let tradeabilityRating: TradeabilityRating = 'moderate';
+    let tradeabilityLabel = 'Regular';
+    let isIdealForTrading = false;
+    let tradingAdvantage = 'Posición estándar con volatilidad controlada';
+
+    if (
+      tradeabilityScore >= 78 &&
+      (liquidityTier === 'ultra' || liquidityTier === 'high') &&
+      (volatilityTier === 'moderate' || volatilityTier === 'high' || volatilityTier === 'extreme')
+    ) {
+      tradeabilityRating = 'optimal';
+      tradeabilityLabel = 'Óptimo para Trading';
+      isIdealForTrading = true;
+      tradingAdvantage = '🔥 Máxima liquidez con excelente recorrido. Entrada y salida ultra rápida sin slippage.';
+    } else if (tradeabilityScore >= 65 && liquidityTier !== 'low') {
+      tradeabilityRating = 'good';
+      tradeabilityLabel = 'Bueno para Trading';
+      isIdealForTrading = true;
+      tradingAdvantage = '⚡ Buena profundidad y volatilidad propicia para capturar movimientos intradía.';
+    } else if (tradeabilityScore >= 50) {
+      tradeabilityRating = 'moderate';
+      tradeabilityLabel = 'Moderado / Swing';
+      isIdealForTrading = false;
+      tradingAdvantage = '🛡️ Movimientos lentos o liquidez media. Adecuado para swing trading de mayor plazo.';
+    } else {
+      tradeabilityRating = 'caution';
+      tradeabilityLabel = 'Precaución (Baja Liquidez)';
+      isIdealForTrading = false;
+      tradingAdvantage = '⚠️ Riesgo de deslizamiento (slippage) al entrar o salir rápidamente de la posición.';
+    }
+
+    return {
+      liquidityTier,
+      liquidityScore: Math.round(liquidityScore),
+      liquidityLabel,
+      estimatedSlippage,
+      executionSpeed,
+      executionLabel,
+      volatilityPercent24h,
+      volatilityTier,
+      volatilityScore: Math.round(volatilityScore),
+      volatilityLabel,
+      tradeabilityScore,
+      tradeabilityRating,
+      tradeabilityLabel,
+      isIdealForTrading,
+      tradingAdvantage,
+    };
+  }
+
   private initializeCatalog() {
     // 1. Load TradFi catalog
     Object.entries(TRADFI_CATALOG).forEach(([symbol, info]) => {
       const baseAsset = symbol.replace(/(USDT|USD|BTC|ETH)$/, '');
       const quoteAsset = symbol.slice(baseAsset.length);
       const isFutures = info.isFutures;
+      const defaultPrice = info.defaultPrice;
+      const defaultChange = info.defaultChange;
+      const high24h = defaultPrice * 1.025;
+      const low24h = defaultPrice * 0.975;
+      const volume24h = 1540000;
+      const quoteVolume24h = 1540000 * defaultPrice;
+
+      const metrics = MarketsService.calculateMetrics({
+        lastPrice: defaultPrice,
+        change24hPercent: defaultChange,
+        high24h,
+        low24h,
+        quoteVolume24h,
+        tradesCount: 18450,
+        isFuturesContract: isFutures,
+      });
 
       this.pairs.set(symbol, {
         symbol,
@@ -380,18 +605,19 @@ class MarketsService {
         tradFiBadge: info.badge,
         tradFiDescription: info.description,
         sectorTag: info.sector,
-        lastPrice: info.defaultPrice,
-        change24hPercent: info.defaultChange,
-        high24h: info.defaultPrice * 1.025,
-        low24h: info.defaultPrice * 0.975,
-        volume24h: 1540000,
-        quoteVolume24h: 1540000 * info.defaultPrice,
+        lastPrice: defaultPrice,
+        change24hPercent: defaultChange,
+        high24h,
+        low24h,
+        volume24h,
+        quoteVolume24h,
         tradesCount: 18450,
         isFuturesContract: isFutures,
         isTradFi: true,
         maxLeverageSafe: 5,
         sparkline: this.generateSparkline(info.defaultPrice, info.defaultChange),
         lastUpdated: Date.now(),
+        ...metrics,
       });
     });
 
@@ -402,6 +628,21 @@ class MarketsService {
         const pData = livePriceService.getPriceData(symbol);
         const price = pData.price > 0 ? pData.price : 10.0;
         const change = pData.change24hPercent || 1.5;
+        const high24h = price * (1 + Math.abs(change) * 0.01 + 0.02);
+        const low24h = price * (1 - Math.abs(change) * 0.01 - 0.02);
+        const isMega = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'].includes(symbol);
+        const quoteVolume24h = isMega ? 850_000_000 : 120_000_000;
+        const volume24h = quoteVolume24h / price;
+
+        const metrics = MarketsService.calculateMetrics({
+          lastPrice: price,
+          change24hPercent: change,
+          high24h,
+          low24h,
+          quoteVolume24h,
+          tradesCount: 45000,
+          isFuturesContract: true,
+        });
 
         this.pairs.set(symbol, {
           symbol,
@@ -412,16 +653,17 @@ class MarketsService {
           sectorTag: 'Cripto Futuros USDT-M',
           lastPrice: price,
           change24hPercent: change,
-          high24h: price * (1 + Math.abs(change) * 0.01 + 0.01),
-          low24h: price * (1 - Math.abs(change) * 0.01 - 0.01),
-          volume24h: 850000,
-          quoteVolume24h: 850000 * price,
-          tradesCount: 32000,
+          high24h,
+          low24h,
+          volume24h,
+          quoteVolume24h,
+          tradesCount: 45000,
           isFuturesContract: true,
           isTradFi: false,
           maxLeverageSafe: 5,
           sparkline: this.generateSparkline(price, change),
           lastUpdated: Date.now(),
+          ...metrics,
         });
       }
     });
@@ -475,6 +717,18 @@ class MarketsService {
             if (isNaN(lastPrice) || lastPrice <= 0) return;
 
             const existing = this.pairs.get(sym);
+            const isFutures = true;
+
+            const metrics = MarketsService.calculateMetrics({
+              lastPrice,
+              change24hPercent: isNaN(changePercent) ? 0 : changePercent,
+              high24h: high24h > 0 ? high24h : lastPrice * 1.02,
+              low24h: low24h > 0 ? low24h : lastPrice * 0.98,
+              quoteVolume24h,
+              tradesCount,
+              isFuturesContract: isFutures,
+            });
+
             if (existing) {
               existing.lastPrice = lastPrice;
               existing.change24hPercent = isNaN(changePercent) ? 0 : changePercent;
@@ -486,6 +740,9 @@ class MarketsService {
               existing.isFuturesContract = true;
               existing.lastUpdated = Date.now();
               existing.sparkline = this.generateSparkline(lastPrice, changePercent);
+
+              // Apply updated metrics
+              Object.assign(existing, metrics);
               modified = true;
             } else if (sym.endsWith('USDT')) {
               // Add newly discovered USDT-M futures contract
@@ -515,6 +772,7 @@ class MarketsService {
                 maxLeverageSafe: 5,
                 sparkline: this.generateSparkline(lastPrice, changePercent),
                 lastUpdated: Date.now(),
+                ...metrics,
               });
               modified = true;
             }
@@ -541,6 +799,16 @@ class MarketsService {
       if (live > 0 && Math.abs(live - pair.lastPrice) > 0.000001) {
         pair.lastPrice = live;
         pair.lastUpdated = Date.now();
+        const metrics = MarketsService.calculateMetrics({
+          lastPrice: live,
+          change24hPercent: pair.change24hPercent,
+          high24h: Math.max(pair.high24h, live),
+          low24h: Math.min(pair.low24h, live),
+          quoteVolume24h: pair.quoteVolume24h,
+          tradesCount: pair.tradesCount,
+          isFuturesContract: pair.isFuturesContract,
+        });
+        Object.assign(pair, metrics);
         changed = true;
       }
     });
@@ -557,15 +825,31 @@ class MarketsService {
     return this.pairs.get(symbol.toUpperCase());
   }
 
-  public getFilteredPairs(options: {
-    category: MarketCategory;
-    searchQuery: string;
-    sortBy: 'volume_desc' | 'volume_asc' | 'change_desc' | 'change_asc' | 'price_desc' | 'price_asc' | 'name_asc';
-  }): MarketPair[] {
+  public getFilteredPairs(options: MarketFilterOptions): MarketPair[] {
     let list = Array.from(this.pairs.values());
 
-    // 1. Filter by category
+    // 1. Filter by category preset
     switch (options.category) {
+      case 'best_trading':
+        // Top trading criterion: High/Ultra liquidity + Moderate/High volatility for fast entry/exit
+        list = list.filter((p) => p.isIdealForTrading || p.tradeabilityScore >= 70);
+        break;
+      case 'scalping':
+        // Scalping: High/Ultra liquidity + High volatility (> 6.5%)
+        list = list.filter(
+          (p) =>
+            (p.liquidityTier === 'ultra' || p.liquidityTier === 'high') &&
+            (p.volatilityTier === 'high' || p.volatilityTier === 'extreme' || p.volatilityPercent24h >= 6.5)
+        );
+        break;
+      case 'swing_safe':
+        // Swing safe: High liquidity + Moderate volatility (3-7%)
+        list = list.filter(
+          (p) =>
+            (p.liquidityTier === 'ultra' || p.liquidityTier === 'high') &&
+            (p.volatilityTier === 'moderate' || (p.volatilityPercent24h >= 2.5 && p.volatilityPercent24h <= 7.0))
+        );
+        break;
       case 'futures':
         list = list.filter((p) => p.isFuturesContract);
         break;
@@ -586,21 +870,54 @@ class MarketsService {
             p.tradFiType === 'synthetic_tradfi'
         );
         break;
+      case 'high_liquidity':
+        list = list.filter((p) => p.liquidityTier === 'ultra' || p.liquidityTier === 'high' || p.quoteVolume24h >= 100_000_000);
+        break;
+      case 'high_volatility':
+        list = list.filter((p) => p.volatilityTier === 'high' || p.volatilityTier === 'extreme' || p.volatilityPercent24h >= 7.0);
+        break;
       case 'gainers':
         list = list.filter((p) => p.change24hPercent > 0);
         break;
       case 'losers':
         list = list.filter((p) => p.change24hPercent < 0);
         break;
-      case 'high_volume':
-        list = list.filter((p) => p.quoteVolume24h > 10000000);
-        break;
       case 'all':
       default:
         break;
     }
 
-    // 2. Search query filter
+    // 2. Custom Granular Filter: Liquidity Tier
+    if (options.minLiquidityTier && options.minLiquidityTier !== 'all') {
+      if (options.minLiquidityTier === 'ultra') {
+        list = list.filter((p) => p.liquidityTier === 'ultra');
+      } else if (options.minLiquidityTier === 'high') {
+        list = list.filter((p) => p.liquidityTier === 'ultra' || p.liquidityTier === 'high');
+      } else if (options.minLiquidityTier === 'medium') {
+        list = list.filter((p) => p.liquidityTier !== 'low');
+      }
+    }
+
+    // 3. Custom Granular Filter: Volatility Tier
+    if (options.volatilityTierFilter && options.volatilityTierFilter !== 'all') {
+      if (options.volatilityTierFilter === 'moderate_high') {
+        list = list.filter((p) => p.volatilityTier === 'moderate' || p.volatilityTier === 'high');
+      } else {
+        list = list.filter((p) => p.volatilityTier === options.volatilityTierFilter);
+      }
+    }
+
+    // 4. Custom Granular Filter: Fast Execution only (instant or fast)
+    if (options.fastExecutionOnly) {
+      list = list.filter((p) => p.executionSpeed === 'instant' || p.executionSpeed === 'fast');
+    }
+
+    // 5. Custom Granular Filter: Minimum Tradeability Score
+    if (options.minTradeabilityScore && options.minTradeabilityScore > 0) {
+      list = list.filter((p) => p.tradeabilityScore >= options.minTradeabilityScore!);
+    }
+
+    // 6. Search query filter
     if (options.searchQuery.trim()) {
       const q = options.searchQuery.trim().toLowerCase();
       list = list.filter(
@@ -610,13 +927,24 @@ class MarketsService {
           p.baseAsset.toLowerCase().includes(q) ||
           p.sectorTag.toLowerCase().includes(q) ||
           (p.tradFiBadge && p.tradFiBadge.toLowerCase().includes(q)) ||
-          (p.tradFiDescription && p.tradFiDescription.toLowerCase().includes(q))
+          (p.tradFiDescription && p.tradFiDescription.toLowerCase().includes(q)) ||
+          p.liquidityLabel.toLowerCase().includes(q) ||
+          p.volatilityLabel.toLowerCase().includes(q) ||
+          p.tradeabilityLabel.toLowerCase().includes(q)
       );
     }
 
-    // 3. Sorting
+    // 7. Sorting
     list.sort((a, b) => {
       switch (options.sortBy) {
+        case 'tradeability_desc':
+          return (b.tradeabilityScore || 0) - (a.tradeabilityScore || 0);
+        case 'liquidity_desc':
+          return (b.quoteVolume24h || 0) - (a.quoteVolume24h || 0);
+        case 'volatility_desc':
+          return (b.volatilityPercent24h || 0) - (a.volatilityPercent24h || 0);
+        case 'volatility_asc':
+          return (a.volatilityPercent24h || 0) - (b.volatilityPercent24h || 0);
         case 'volume_desc':
           return (b.quoteVolume24h || 0) - (a.quoteVolume24h || 0);
         case 'volume_asc':
@@ -632,7 +960,7 @@ class MarketsService {
         case 'name_asc':
           return a.symbol.localeCompare(b.symbol);
         default:
-          return (b.quoteVolume24h || 0) - (a.quoteVolume24h || 0);
+          return (b.tradeabilityScore || 0) - (a.tradeabilityScore || 0);
       }
     });
 
@@ -652,11 +980,18 @@ class MarketsService {
         p.tradFiType === 'synthetic_tradfi'
     ).length;
 
+    const idealTradingCount = all.filter((p) => p.isIdealForTrading).length;
+    const highLiquidityCount = all.filter((p) => p.liquidityTier === 'ultra' || p.liquidityTier === 'high').length;
+    const highVolatilityCount = all.filter((p) => p.volatilityTier === 'high' || p.volatilityTier === 'extreme').length;
+
     const totalVolumeUsdt = all.reduce((sum, p) => sum + (p.quoteVolume24h || 0), 0);
 
     const sortedByGain = [...all].sort((a, b) => b.change24hPercent - a.change24hPercent);
     const topGainer = sortedByGain[0] || null;
     const topLoser = sortedByGain[sortedByGain.length - 1] || null;
+
+    const sortedByTradeability = [...all].sort((a, b) => b.tradeabilityScore - a.tradeabilityScore);
+    const topTradeOpportunity = sortedByTradeability[0] || null;
 
     return {
       totalPairs: all.length,
@@ -665,9 +1000,13 @@ class MarketsService {
       metalsCount,
       forexCount,
       rwaCount,
+      idealTradingCount,
+      highLiquidityCount,
+      highVolatilityCount,
       totalVolumeUsdt,
       topGainer,
       topLoser,
+      topTradeOpportunity,
       lastFetchTime: this.lastFetchTime,
     };
   }
