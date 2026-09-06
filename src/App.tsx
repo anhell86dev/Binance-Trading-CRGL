@@ -1,15 +1,26 @@
 import ErrorBoundary from './components/ErrorBoundary';
-import { AdminLTELayout } from './layouts/AdminLTELayout';
 
 function App() {
   return (
     <ErrorBoundary>
-      <AdminLTELayout activePath="/dashboard" onNavigate={() => undefined}>
-        <main style={{ padding: '24px' }}>
-          <h1>Diagnóstico: layout cargado</h1>
-          <p>AdminLTELayout y ErrorBoundary se inicializaron sin cargar las vistas.</p>
-        </main>
-      </AdminLTELayout>
+      <main
+        style={{
+          minHeight: '100vh',
+          display: 'grid',
+          placeItems: 'center',
+          padding: '24px',
+          background: '#0b0f14',
+          color: '#ffffff',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        }}
+      >
+        <section style={{ maxWidth: '640px', textAlign: 'center' }}>
+          <h1 style={{ marginBottom: '12px' }}>Diagnóstico: ErrorBoundary cargado</h1>
+          <p style={{ margin: 0, color: '#aab7c4' }}>
+            La aplicación se inició sin cargar vistas ni layout.
+          </p>
+        </section>
+      </main>
     </ErrorBoundary>
   );
 }
