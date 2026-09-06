@@ -45,6 +45,7 @@ import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { TOP_3_STRATEGIES_CATALOG } from '../services/strategyAutofillService';
 import { TRADING_DISCIPLINES } from './TradingDisciplinesModal';
 import { TacticalPriceMilestoneLine } from './TacticalPriceMilestoneLine';
+import { TacticalPairVolatilityCard } from './TacticalPairVolatilityCard';
 
 interface StrategyPositionTrackerProps {
   position: PositionRisk;
@@ -1058,6 +1059,16 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
               )}
             </div>
           </div>
+
+          {/* Histórico Reciente de Volatilidad en Vivo del Par */}
+          <TacticalPairVolatilityCard
+            symbol={position.symbol}
+            isLong={isLong}
+            markPrice={markPrice}
+            entryPrice={entryPrice}
+            slPrice={slPrice}
+            tp1Price={tp1Price}
+          />
         </div>
       )}
 
