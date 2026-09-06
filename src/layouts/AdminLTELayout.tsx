@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLTESidebar } from './AdminLTESidebar';
 import { AdminLTEHeader } from './AdminLTEHeader';
 
@@ -14,9 +14,9 @@ export function AdminLTELayout({
   onNavigate,
 }: AdminLTELayoutProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
 
-  // Load preferences from localStorage
   useEffect(() => {
     const savedSidebarState = localStorage.getItem('adminlte-sidebar-collapsed');
     const savedTheme = localStorage.getItem('adminlte-theme');
@@ -30,56 +30,47 @@ export function AdminLTELayout({
     }
   }, []);
 
-  // Save preferences to localStorage
   useEffect(() => {
     localStorage.setItem('adminlte-sidebar-collapsed', String(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
 
   useEffect(() => {
     localStorage.setItem('adminlte-theme', isDarkMode ? 'dark' : 'light');
-    
-    // Apply theme class to document
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', isDarkMode);
   }, [isDarkMode]);
 
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [activePath]);
 
-  const toggleTheme = () => {
-    setIsDarkMode(!isDarkMode);
-  };
+  const toggleSidebar = () => setIsSidebarCollapsed((value) => !value);
+  const toggleTheme = () => setIsDarkMode((value) => !value);
+  const openMobileMenu = () => setIsMobileOpen(true);
+  const closeMobileMenu = () => setIsMobileOpen(false);
 
   return (
-    <div className={`min-h-screen bg-gray-950 ${isDarkMode ? 'dark' : ''}`}>
-      {/* Sidebar */}
+    <div className={`min-h-screen bg-gray-950 text-gray-100 ${isDarkMode ? 'dark' : ''}`}>
       <AdminLTESidebar
         isCollapsed={isSidebarCollapsed}
         onToggle={toggleSidebar}
         activePath={activePath}
         onNavigate={onNavigate}
+        isMobileOpen={isMobileOpen}
+        onCloseMobile={closeMobileMenu}
       />
 
-      {/* Header */}
       <AdminLTEHeader
-        onToggleSidebar={toggleSidebar}
+        onToggleSidebar={openMobileMenu}
         isDarkMode={isDarkMode}
         onToggleTheme={toggleTheme}
       />
 
-      {/* Main Content Area */}
       <main
-        className={`
-          transition-all duration-300 ease-in-out
-          ${isSidebarCollapsed ? 'ml-[70px]' : 'ml-64'}
-        `}
+        className={`min-h-[calc(100vh-3.5rem)] pt-14 transition-[margin] duration-300 ease-in-out ${
+          isSidebarCollapsed ? 'lg:ml-[70px]' : 'lg:ml-64'
+        }`}
       >
-        {/* Content */}
-        <div className="p-6">
+        <div className="min-h-[calc(100vh-3.5rem)] p-4 sm:p-6">
           {children}
         </div>
       </main>
