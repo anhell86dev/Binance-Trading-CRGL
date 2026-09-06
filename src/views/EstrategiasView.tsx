@@ -11,31 +11,29 @@ export function EstrategiasView() {
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        // Prueba directa a la API
-   
+ useEffect(() => {
+  async function load() {
+    try {
+      const [est, ord] = await Promise.all([
+        estrategiasSheetService.fetchEstrategias(),
+        estrategiasSheetService.fetchOrdenes(),
+      ]);
 
-        const [est, ord] = await Promise.all([
-          estrategiasSheetService.fetchEstrategias(),
-          estrategiasSheetService.fetchOrdenes(),
-        ]);
+      console.log('estrategias cargadas:', est.length);
+      console.log('ordenes cargadas:', ord.length);
 
-        console.log('estrategias cargadas:', est.length);
-        console.log('ordenes cargadas:', ord.length);
-
-        setEstrategias(est);
-        setOrdenes(ord);
-      } catch (err: any) {
-        console.error('Error cargando estrategias:', err);
-        setError(err?.message || String(err));
-      } finally {
-        setLoading(false);
-      }
+      setEstrategias(est);
+      setOrdenes(ord);
+    } catch (err: any) {
+      console.error('Error cargando estrategias:', err);
+      setError(err?.message || String(err));
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, []);
+  }
+
+  load();
+}, []);
 
   function getTotalOrdenes() {
     return ordenes.length;
