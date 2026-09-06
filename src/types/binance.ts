@@ -127,6 +127,19 @@ export interface PositionRisk {
   strategyStatus?: string;
 }
 
+export const BINANCE_EXPIRY_REASONS: Record<string, string> = {
+  '0': 'Sin motivo específico (Normal)',
+  '1': 'Cancelada para prevenir auto-negociación (Self-Trade)',
+  '2': 'Orden IOC no se pudo llenar completamente',
+  '3': 'Orden IOC cancelada para evitar auto-negociación',
+  '4': 'Cancelada por orden Reduce-Only de mayor prioridad o reversión de posición',
+  '5': 'Expirada debido a liquidación de la cuenta',
+  '6': 'Expirada porque no se cumplió la condición GTE',
+  '7': 'Cancelada por desliste del símbolo',
+  '8': 'Orden inicial expiró tras dispararse orden de stop',
+  '9': 'Orden a mercado no se pudo llenar completamente',
+};
+
 export interface AccountBalance {
   totalWalletBalance: number;
   totalUnrealizedProfit: number;
@@ -147,6 +160,8 @@ export interface OpenOrder {
   avgPrice?: number;
   origQty: number;
   executedQty: number;
+  lastFilledQty?: number; // l
+  lastFilledPrice?: number; // L
   status: OrderExecutionStatus;
   executionType?: ExecutionType;
   timeInForce: TimeInForce;
@@ -154,6 +169,9 @@ export interface OpenOrder {
   positionSide?: 'BOTH' | 'LONG' | 'SHORT';
   isReduceOnly?: boolean;
   isCloseAll?: boolean;
+  isMaker?: boolean; // m
+  modifyId?: string; // M
+  tradeId?: number; // t
   leverage: number; // 1 to 5
   marginType: 'ISOLATED';
   stopPrice?: number;

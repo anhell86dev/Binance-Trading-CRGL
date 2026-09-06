@@ -3275,6 +3275,8 @@ class BinanceWsEngine {
           avgPrice: avgPrice > 0 ? avgPrice : undefined,
           origQty,
           executedQty,
+          lastFilledQty: lastFilledQty > 0 ? lastFilledQty : undefined,
+          lastFilledPrice: lastFilledPrice > 0 ? lastFilledPrice : undefined,
           status,
           executionType,
           timeInForce: tif,
@@ -3282,6 +3284,9 @@ class BinanceWsEngine {
           positionSide,
           isReduceOnly,
           isCloseAll,
+          isMaker: Boolean(o.m),
+          modifyId: o.M ? String(o.M) : undefined,
+          tradeId: o.t ? Number(o.t) : undefined,
           leverage: existingIdx >= 0 ? this.openOrders[existingIdx].leverage : 2,
           marginType: 'ISOLATED',
           stopPrice: stopPrice > 0 ? stopPrice : undefined,
@@ -3304,6 +3309,15 @@ class BinanceWsEngine {
           this.openOrders[existingIdx] = updatedOrder;
         } else {
           this.openOrders.unshift(updatedOrder);
+        }
+
+        if (executionType === 'AMENDMENT') {
+          notificationService.notify(
+            'SYSTEM',
+            `Orden Modificada: ${symbol}`,
+            `Orden ${orderId} actualizada (ModID: ${o.M || 'N/A'}) | Precio: $${price.toFixed(2)} | Cantidad: ${origQty}`,
+            'normal'
+          );
         }
 
         // If execution is TRADE on partially filled order, record partial trade fill

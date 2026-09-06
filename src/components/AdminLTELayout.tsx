@@ -32,6 +32,7 @@ import {
   TrendingDown,
   LogOut,
   Settings,
+  Calculator,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
@@ -64,6 +65,7 @@ interface AdminLTELayoutProps {
   onOpenApiModal: () => void;
   onOpenOrderModal: () => void;
   onOpenDisciplinesModal: () => void;
+  onOpenPnlSimulator?: () => void;
   onOpenConsole: () => void;
   isConsoleOpen?: boolean;
   children: React.ReactNode;
@@ -75,6 +77,7 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
   onOpenApiModal,
   onOpenOrderModal,
   onOpenDisciplinesModal,
+  onOpenPnlSimulator,
   onOpenConsole,
   isConsoleOpen = false,
   children,
@@ -236,8 +239,20 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
       ],
     },
     {
-      title: 'SISTEMA & CONFIGURACIÓN',
+      title: 'SISTEMA & HERRAMIENTAS',
       items: [
+        {
+          id: 'pnl-simulator' as const,
+          label: 'Simulador de PnL & ROE',
+          shortLabel: 'Simulador',
+          icon: Calculator,
+          badge: '1-5x',
+          badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40',
+          category: 'Cálculo',
+          isAction: true,
+          action: onOpenPnlSimulator,
+          description: 'Cálculo instantáneo de PnL esperado, margen, comisiones y liquidación',
+        },
         {
           id: 'disciplinas' as const,
           label: 'Protocolo de Disciplinas',
@@ -686,6 +701,20 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
             >
               {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
             </button>
+
+            {/* PnL Simulator Button */}
+            {onOpenPnlSimulator && (
+              <button
+                type="button"
+                id="adminlte-btn-pnl-simulator"
+                onClick={onOpenPnlSimulator}
+                className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Abrir Simulador de PnL y Retorno (ROE)"
+              >
+                <Calculator className="w-4 h-4 text-emerald-400" />
+                <span className="hidden md:inline">Simulador PnL</span>
+              </button>
+            )}
 
             {/* Console Button */}
             <button

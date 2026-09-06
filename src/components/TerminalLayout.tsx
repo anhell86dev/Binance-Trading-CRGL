@@ -11,6 +11,7 @@ import { WalletView } from './WalletView';
 import { TopOperacionesView } from './TopOperacionesView';
 import { GestionTradesView } from './GestionTradesView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
+import { PnlSimulatorModal } from './PnlSimulatorModal';
 import { AdminLTELayout } from './AdminLTELayout';
 
 export default function TerminalLayout() {
@@ -20,6 +21,7 @@ export default function TerminalLayout() {
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isDisciplinesModalOpen, setIsDisciplinesModalOpen] = useState(false);
+  const [isPnlSimulatorOpen, setIsPnlSimulatorOpen] = useState(false);
 
   useEffect(() => {
     // Escucha solicitudes automáticas de apertura de modal (ej. Autoejecutar de estrategia)
@@ -39,6 +41,7 @@ export default function TerminalLayout() {
       onOpenApiModal={() => setIsApiModalOpen(true)}
       onOpenOrderModal={() => setIsOrderModalOpen(true)}
       onOpenDisciplinesModal={() => setIsDisciplinesModalOpen(true)}
+      onOpenPnlSimulator={() => setIsPnlSimulatorOpen(true)}
       onOpenConsole={() => setIsConsoleOpen(true)}
       isConsoleOpen={isConsoleOpen}
     >
@@ -100,6 +103,10 @@ export default function TerminalLayout() {
       <TradingDisciplinesModal
         isOpen={isDisciplinesModalOpen}
         onClose={() => setIsDisciplinesModalOpen(false)}
+      />
+      <PnlSimulatorModal
+        isOpen={isPnlSimulatorOpen}
+        onClose={() => setIsPnlSimulatorOpen(false)}
       />
       {isApiModalOpen && <ApiKeyModal onClose={() => setIsApiModalOpen(false)} />}
       {isConsoleOpen && <WebSocketConsole onClose={() => setIsConsoleOpen(false)} />}

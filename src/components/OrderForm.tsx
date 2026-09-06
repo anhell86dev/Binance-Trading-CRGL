@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
+  Calculator,
   ChevronDown,
   ExternalLink,
   Layers,
@@ -24,6 +25,7 @@ import { LeverageSliderMax5x } from './LeverageSliderMax5x';
 import { IsolatedMarginLock } from './IsolatedMarginLock';
 import { RiskManagementInputs } from './RiskManagementInputs';
 import { LiquidationPreview } from './LiquidationPreview';
+import { PnlSimulatorModal } from './PnlSimulatorModal';
 import { strategyAutofillService, AutofillPayload } from '../services/strategyAutofillService';
 
 export interface OrderFormProps {
@@ -65,6 +67,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({ isModal = false, onClose, 
   const [loadedStrategyNotice, setLoadedStrategyNotice] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSimulatorModalOpen, setIsSimulatorModalOpen] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -589,6 +592,17 @@ export const OrderForm: React.FC<OrderFormProps> = ({ isModal = false, onClose, 
           marginType="ISOLATED"
         />
 
+        {/* Quick PnL Simulator Trigger */}
+        <button
+          type="button"
+          onClick={() => setIsSimulatorModalOpen(true)}
+          className="w-full py-1.5 px-3 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-800/60 hover:border-emerald-500/70 text-emerald-300 hover:text-emerald-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+          title="Abrir el simulador interactivo de PnL y ROE"
+        >
+          <Calculator className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Simulador de PnL & Retorno (1-5x)</span>
+        </button>
+
         {/* Order Cost & Margin Calculation Overview */}
         <div className="bg-neutral-950 p-2.5 rounded-lg border border-neutral-800 text-xs font-mono flex flex-col gap-1">
           <div className="flex justify-between text-neutral-400">
@@ -652,6 +666,18 @@ export const OrderForm: React.FC<OrderFormProps> = ({ isModal = false, onClose, 
         onClose={() => setIsAssetModalOpen(false)}
         onSelectSymbol={handleSelectSymbol}
         currentSymbol={ticker.symbol}
+      />
+
+      {/* PnL Simulator Modal */}
+      <PnlSimulatorModal
+        isOpen={isSimulatorModalOpen}
+        onClose={() => setIsSimulatorModalOpen(false)}
+        initialSymbol={ticker.symbol}
+        initialSide={side}
+        initialEntryPrice={parseFloat(price) || ticker.lastPrice}
+        initialExitPrice={tpPrice ? parseFloat(tpPrice) : undefined}
+        initialQuantity={parseFloat(quantity) || undefined}
+        initialLeverage={leverage}
       />
     </div>
   );
