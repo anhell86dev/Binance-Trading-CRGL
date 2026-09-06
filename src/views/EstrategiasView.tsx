@@ -15,12 +15,7 @@ export function EstrategiasView() {
     async function load() {
       try {
         // Prueba directa a la API
-        const rawEstrategias = await googleSheetsApiService.getSheetData(
-          SHEET_ID,
-          'Estrategias',
-          'A1:Z500'
-        );
-        console.log('rawEstrategias:', rawEstrategias);
+   
 
         const [est, ord] = await Promise.all([
           estrategiasSheetService.fetchEstrategias(),
