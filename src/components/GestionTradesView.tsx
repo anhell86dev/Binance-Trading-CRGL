@@ -335,10 +335,10 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
             )}
           </div>
           <div className={`text-base sm:text-lg font-bold font-mono mt-1 ${totalUnrealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {totalUnrealizedPnl >= 0 ? '+' : ''}${totalUnrealizedPnl.toFixed(2)}
+            {totalUnrealizedPnl >= 0 ? '+' : '-'}${Math.abs(totalUnrealizedPnl).toFixed(2)}
           </div>
           <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-            {totalIsolatedMargin > 0 ? `${((totalUnrealizedPnl / totalIsolatedMargin) * 100).toFixed(2)}% ROE` : 'Sin posiciones'}
+            {totalIsolatedMargin > 0 ? `${totalUnrealizedPnl >= 0 ? '+' : '-'}${Math.abs((totalUnrealizedPnl / totalIsolatedMargin) * 100).toFixed(2)}% ROE` : 'Sin posiciones'}
           </div>
         </div>
 

@@ -35,19 +35,19 @@ import { SheetAlertRow } from '../types/strategy';
 import { StrategyCreator } from './StrategyCreator';
 import { DiarioEstrategias } from './DiarioEstrategias';
 import { OpenPositionsTable } from './OpenPositionsTable';
-import { TradingStrategiesView } from './TradingStrategiesView';
 import { auditOrderRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 
 interface PositionsAndOrdersProps {
-  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies' | 'disciplines';
+  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines';
   onOpenOrderModal?: () => void;
 }
 
 export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions', onOpenOrderModal }) => {
-  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'strategies' | 'disciplines'>(defaultTab);
+  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines'>(defaultTab);
+  const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional'>('all');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
   const [history, setHistory] = useState<TradeHistoryItem[]>(binanceWs.getTradeHistory());
@@ -181,19 +181,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           </button>
 
           <button
-            id="tab-strategies-btn"
-            onClick={() => setTab('strategies')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
-              tab === 'strategies'
-                ? 'border-amber-400 text-white bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Ranking R:B & Estrategias</span>
-          </button>
-
-          <button
             id="tab-orders-btn"
             onClick={() => setTab('orders')}
             className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
@@ -288,182 +275,300 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
         </div>
       )}
 
-      {/* Tab: Top 3 R:B & Estrategias */}
-      {tab === 'strategies' && (
-        <div className="p-3 overflow-y-auto">
-          <TradingStrategiesView />
-        </div>
-      )}
-
       {/* Tab 2: Órdenes Abiertas */}
-      {tab === 'orders' && (
-        <div className="overflow-x-auto min-h-[220px]">
-          {orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
-              <Layers className="w-10 h-10 text-neutral-600 mb-3" />
-              <p className="font-semibold text-neutral-200 text-sm">No hay órdenes abiertas en Binance</p>
-              <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
-                Crea órdenes Límite, Escalonadas o autoriza una estrategia desde el Creador de Google Sheets para despacharlas a Binance.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+      {tab === 'orders' && (() => {
+        const conditionalOrders = orders.filter(ord =>
+          ord.type === 'STOP_MARKET' ||
+          (ord.type as string) === 'STOP' ||
+          ord.type === 'TAKE_PROFIT_MARKET' ||
+          (ord.type as string) === 'TAKE_PROFIT' ||
+          ord.type === 'TRAILING_STOP_MARKET' ||
+          ord.clientOrderId?.includes('TP-') ||
+          ord.clientOrderId?.includes('SL-') ||
+          ord.clientOrderId?.includes('CLS-') ||
+          Boolean((ord as any).reduceOnly) ||
+          (ord.stopPrice && ord.stopPrice > 0)
+        );
+        const limitOrders = orders.filter(ord => !conditionalOrders.includes(ord));
+
+        const displayedOrders = orderFilter === 'limit'
+          ? limitOrders
+          : orderFilter === 'conditional'
+          ? conditionalOrders
+          : orders;
+
+        return (
+          <div className="flex flex-col w-full min-h-[260px]">
+            {/* Subfiltros de Órdenes */}
+            <div className="flex flex-wrap items-center justify-between px-3 py-2 bg-neutral-950/90 border-b border-neutral-800 gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
-                  onClick={() => setTab('alerts')}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                  onClick={() => setOrderFilter('all')}
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                    orderFilter === 'all'
+                      ? 'bg-amber-500 text-neutral-950 font-bold'
+                      : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
+                  }`}
                 >
-                  <Bell className="w-3.5 h-3.5" />
-                  Ver Alertas
+                  <span>Todas</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono">
+                    {orders.length}
+                  </span>
                 </button>
-                {mode === 'simulation' && (
-                  <button
-                    onClick={() => binanceWs.loadSimulationDemoData()}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors"
-                  >
-                    Cargar Órdenes Demo
-                  </button>
-                )}
+                <button
+                  onClick={() => setOrderFilter('conditional')}
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                    orderFilter === 'conditional'
+                      ? 'bg-amber-500 text-neutral-950 font-bold'
+                      : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Shield className="w-3 h-3" />
+                  <span>Por Condición / TP & SL</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono">
+                    {conditionalOrders.length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setOrderFilter('limit')}
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                    orderFilter === 'limit'
+                      ? 'bg-amber-500 text-neutral-950 font-bold'
+                      : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <span>Límite Tradicional</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono">
+                    {limitOrders.length}
+                  </span>
+                </button>
               </div>
+
+              {conditionalOrders.length > 0 && (
+                <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 font-bold text-[11px]">
+                    TPs: {conditionalOrders.filter(o => o.clientOrderId?.includes('TP-') || o.type?.includes('TAKE_PROFIT')).length}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-400 font-bold text-[11px]">
+                    SLs: {conditionalOrders.filter(o => o.clientOrderId?.includes('SL-') || o.type?.includes('STOP')).length}
+                  </span>
+                </div>
+              )}
             </div>
-          ) : (
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
-                <tr>
-                  <th className="py-2.5 px-3">ID / Fecha</th>
-                  <th className="py-2.5 px-3">Símbolo</th>
-                  <th className="py-2.5 px-3">Estrategia Ligada</th>
-                  <th className="py-2.5 px-3">Gestión de Riesgo</th>
-                  <th className="py-2.5 px-3">Tipo</th>
-                  <th className="py-2.5 px-3">Lado</th>
-                  <th className="py-2.5 px-3">Precio</th>
-                  <th className="py-2.5 px-3">Cantidad</th>
-                  <th className="py-2.5 px-3">Apalancamiento</th>
-                  <th className="py-2.5 px-3">Margen</th>
-                  <th className="py-2.5 px-3 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800/60">
-                {orders.map(ord => {
-                  const isProtective =
-                    ord.type === 'STOP_MARKET' ||
-                    (ord.type as string) === 'STOP' ||
-                    ord.type === 'TAKE_PROFIT_MARKET' ||
-                    (ord.type as string) === 'TAKE_PROFIT' ||
-                    ord.type === 'TRAILING_STOP_MARKET' ||
-                    ord.clientOrderId?.includes('TP-') ||
-                    ord.clientOrderId?.includes('SL-') ||
-                    ord.clientOrderId?.includes('CLS-') ||
-                    Boolean((ord as any).reduceOnly);
 
-                  const orderPrice = ord.price > 0 ? ord.price : (ord.stopPrice || 0);
-                  const remainingQty = Math.max(0, ord.origQty - (ord.executedQty || 0));
-                  const posMatch = positions.find(p => p.symbol === ord.symbol);
-                  const lev = ord.leverage && ord.leverage > 0 ? ord.leverage : (posMatch?.leverage || 3);
-                  const orderMargin = isProtective ? 0 : ((orderPrice * remainingQty) / lev);
-                  const audit = auditOrderRisk(ord, balance.totalMarginBalance, orderPrice);
-
-                  return (
-                    <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
-                      <td className="py-3 px-3 text-neutral-400">
-                        <div>{ord.orderId.substring(0, 14)}...</div>
-                        <div className="text-[10px] text-neutral-500">
-                          {new Date(ord.createdAt).toLocaleTimeString()}
-                        </div>
-                      </td>
-                      <td className="py-3 px-3 font-bold text-white">{ord.symbol}</td>
-                      
-                      {/* Estrategia Ligada */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          {ord.strategyId ? (
-                            <button
-                              type="button"
-                              onClick={() => setLinkOrder(ord)}
-                              title={`Estrategia: ${ord.strategyId} - Clic para reasignar`}
-                              className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
-                            >
-                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                              <span>{ord.strategyId}</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setLinkOrder(ord)}
-                              className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
-                            >
-                              <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                              <span>Ligar Estrategia</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Gestión de Riesgo Badge */}
-                      <td className="py-3 px-3">
-                        <button
-                          type="button"
-                          onClick={() => setAuditOrder(ord)}
-                          title="Ver auditoría de riesgo institucional detallada"
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
-                        >
-                          {audit.overallStatus === 'OPTIMAL' ? (
-                            <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                          ) : (
-                            <ShieldAlert className="w-3 h-3" />
-                          )}
-                          <span>{audit.badgeText}</span>
-                        </button>
-                      </td>
-
-                      <td className="py-3 px-3">
-                        <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-amber-300 font-semibold text-[10px]">
-                          {ord.type === 'TRAILING_STOP_MARKET'
-                            ? `TRAILING (${ord.callbackRate}%)`
-                            : ord.parentScaledId
-                            ? 'ESCALONADA'
-                            : ord.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3">
-                        <span
-                          className={`font-bold ${
-                            ord.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
-                          }`}
-                        >
-                          {ord.side === 'BUY' ? 'COMPRA' : 'VENTA'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-3 text-neutral-200">
-                        {ord.price > 0 ? `$${ord.price.toFixed(2)}` : 'Mercado / Trigger'}
-                      </td>
-                      <td className="py-3 px-3 text-neutral-300">{ord.origQty}</td>
-                      <td className="py-3 px-3 font-bold text-amber-300">
-                        {lev}x
-                      </td>
-                      <td className="py-3 px-3 font-semibold text-neutral-200">
-                        {isProtective ? (
-                          <span className="text-emerald-400 font-medium">
-                            $0.00 <span className="text-[10px] text-neutral-400 font-sans font-normal">(Protección)</span>
-                          </span>
-                        ) : (
-                          <span>${orderMargin.toFixed(2)} USDT</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-3 text-right">
-                        <button
-                          onClick={() => binanceWs.cancelOrder(ord.orderId)}
-                          className="px-2 py-1 rounded bg-neutral-800 hover:bg-rose-950 hover:text-rose-300 text-neutral-400 text-xs transition-colors"
-                          title="Cancelar Orden"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
+            <div className="overflow-x-auto flex-1">
+              {displayedOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
+                  <Layers className="w-10 h-10 text-neutral-600 mb-3" />
+                  <p className="font-semibold text-neutral-200 text-sm">
+                    {orderFilter === 'conditional'
+                      ? 'No hay órdenes condicionales de protección (TP / SL)'
+                      : orderFilter === 'limit'
+                      ? 'No hay órdenes límite activas'
+                      : 'No hay órdenes abiertas en Binance'}
+                  </p>
+                  <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
+                    {orderFilter === 'conditional'
+                      ? 'Configura un Take Profit o Stop Loss desde la tabla de Posiciones Activas para proteger tu capital con órdenes condicionales.'
+                      : 'Crea órdenes desde el modal de Nueva Orden o despacha estrategias automáticas.'}
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                    <button
+                      onClick={() => setTab('positions')}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                    >
+                      Ver Posiciones y Configurar TP/SL
+                    </button>
+                    {mode === 'simulation' && (
+                      <button
+                        onClick={() => binanceWs.loadSimulationDemoData()}
+                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition-colors"
+                      >
+                        Recargar Órdenes Demo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
+                    <tr>
+                      <th className="py-2.5 px-3">ID / Fecha</th>
+                      <th className="py-2.5 px-3">Símbolo</th>
+                      <th className="py-2.5 px-3">Estrategia Ligada</th>
+                      <th className="py-2.5 px-3">Gestión de Riesgo</th>
+                      <th className="py-2.5 px-3">Tipo de Orden</th>
+                      <th className="py-2.5 px-3">Lado</th>
+                      <th className="py-2.5 px-3">Precio / Condición Activación</th>
+                      <th className="py-2.5 px-3">Cantidad</th>
+                      <th className="py-2.5 px-3">Apal.</th>
+                      <th className="py-2.5 px-3">Margen</th>
+                      <th className="py-2.5 px-3 text-right">Acción</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60">
+                    {displayedOrders.map(ord => {
+                      const isTP =
+                        ord.type === 'TAKE_PROFIT_MARKET' ||
+                        (ord.type as string) === 'TAKE_PROFIT' ||
+                        ord.clientOrderId?.includes('TP-');
+
+                      const isSL =
+                        ord.type === 'STOP_MARKET' ||
+                        (ord.type as string) === 'STOP' ||
+                        ord.clientOrderId?.includes('SL-');
+
+                      const isTrailing = ord.type === 'TRAILING_STOP_MARKET';
+                      const isConditional = isTP || isSL || isTrailing || (ord.stopPrice && ord.stopPrice > 0);
+                      const isProtective = isConditional || Boolean((ord as any).reduceOnly);
+
+                      const orderPrice = ord.price > 0 ? ord.price : (ord.stopPrice || 0);
+                      const remainingQty = Math.max(0, ord.origQty - (ord.executedQty || 0));
+                      const posMatch = positions.find(p => p.symbol === ord.symbol);
+                      const lev = ord.leverage && ord.leverage > 0 ? ord.leverage : (posMatch?.leverage || 3);
+                      const orderMargin = isProtective ? 0 : ((orderPrice * remainingQty) / lev);
+                      const audit = auditOrderRisk(ord, balance.totalMarginBalance, orderPrice);
+
+                      return (
+                        <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
+                          <td className="py-3 px-3 text-neutral-400">
+                            <div>{ord.orderId.substring(0, 14)}...</div>
+                            <div className="text-[10px] text-neutral-500">
+                              {new Date(ord.createdAt).toLocaleTimeString()}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 font-bold text-white">{ord.symbol}</td>
+                          
+                          {/* Estrategia Ligada */}
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5">
+                              {ord.strategyId ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkOrder(ord)}
+                                  title={`Estrategia: ${ord.strategyId} - Clic para reasignar`}
+                                  className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
+                                >
+                                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                  <span>{ord.strategyId}</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkOrder(ord)}
+                                  className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
+                                >
+                                  <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                                  <span>Ligar Estrategia</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Gestión de Riesgo Badge */}
+                          <td className="py-3 px-3">
+                            <button
+                              type="button"
+                              onClick={() => setAuditOrder(ord)}
+                              title="Ver auditoría de riesgo institucional detallada"
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
+                            >
+                              {audit.overallStatus === 'OPTIMAL' ? (
+                                <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                              ) : (
+                                <ShieldAlert className="w-3 h-3" />
+                              )}
+                              <span>{audit.badgeText}</span>
+                            </button>
+                          </td>
+
+                          {/* Tipo de Orden con badges descriptivos */}
+                          <td className="py-3 px-3">
+                            {isTP ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 font-bold text-[10px]">
+                                TAKE PROFIT (TP)
+                              </span>
+                            ) : isSL ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-800/80 text-rose-400 font-bold text-[10px]">
+                                STOP LOSS (SL)
+                              </span>
+                            ) : isTrailing ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/80 text-blue-400 font-bold text-[10px]">
+                                TRAILING ({ord.callbackRate}%)
+                              </span>
+                            ) : ord.parentScaledId ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/80 text-purple-400 font-bold text-[10px]">
+                                ESCALONADA
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 text-amber-300 font-bold text-[10px]">
+                                LÍMITE
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Lado */}
+                          <td className="py-3 px-3">
+                            <span
+                              className={`font-bold ${
+                                ord.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
+                              }`}
+                            >
+                              {ord.side === 'BUY' ? 'COMPRA' : 'VENTA'}
+                            </span>
+                          </td>
+
+                          {/* Precio / Condición de Activación */}
+                          <td className="py-3 px-3 font-mono">
+                            {isConditional ? (
+                              <div className="flex flex-col">
+                                <span className="font-bold text-amber-300 text-xs">
+                                  Trigger: ${(ord.stopPrice || orderPrice).toFixed(2)}
+                                </span>
+                                <span className="text-[10px] text-neutral-400">
+                                  Ejec: {ord.price > 0 ? `$${ord.price.toFixed(2)}` : 'A Mercado'}
+                                  {posMatch && ' (Protege Posición)'}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="font-semibold text-neutral-200 text-xs">
+                                ${ord.price.toFixed(2)}
+                              </div>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-neutral-300">{ord.origQty}</td>
+                          <td className="py-3 px-3 font-bold text-amber-300">
+                            {lev}x
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-neutral-200">
+                            {isProtective ? (
+                              <span className="text-emerald-400 font-medium">
+                                $0.00 <span className="text-[10px] text-neutral-400 font-sans font-normal">(Protección)</span>
+                              </span>
+                            ) : (
+                              <span>${orderMargin.toFixed(2)} USDT</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <button
+                              onClick={() => binanceWs.cancelOrder(ord.orderId)}
+                              className="px-2 py-1 rounded bg-neutral-800 hover:bg-rose-950 hover:text-rose-300 text-neutral-400 text-xs transition-colors"
+                              title="Cancelar Orden"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tab: Disciplinas del Trade */}
       {tab === 'disciplines' && (

@@ -15,7 +15,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
-import { PositionRisk } from '../types/binance';
+import { OpenOrder, PositionRisk } from '../types/binance';
 import { EmergencyCloseButton } from './EmergencyCloseButton';
 import { auditPositionRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
@@ -29,6 +29,7 @@ interface OpenPositionsTableProps {
 
 export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelectPosition, onOpenOrderModal }) => {
   const [positions, setPositions] = useState<PositionRisk[]>(() => binanceWs.getPositions());
+  const [openOrders, setOpenOrders] = useState<OpenOrder[]>(() => binanceWs.getOpenOrders());
   const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
   const mode = binanceWs.getMode();
@@ -45,6 +46,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
       setPositions(binanceWs.getPositions());
+      setOpenOrders(binanceWs.getOpenOrders());
       setBalance(binanceWs.getBalance());
       setIsSyncing(binanceWs.getIsSyncingData());
     });
@@ -59,17 +61,48 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     }
   };
 
-  const openEditModal = (pos: PositionRisk) => {
-    setEditingPos(pos);
-    setEditTp(pos.takeProfit ? pos.takeProfit.toString() : '');
-    setEditSl(pos.stopLoss ? pos.stopLoss.toString() : '');
+  const getEffectiveTPSL = (pos: PositionRisk) => {
+    const isLong = pos.positionAmt > 0;
+    const matchingOrders = openOrders.filter(
+      o => o.symbol === pos.symbol && o.status !== 'CANCELED' && o.status !== 'EXPIRED' && o.status !== 'FILLED'
+    );
+
+    const tpOrder = matchingOrders.find(o => {
+      const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
+      if (!isCloseSide) return false;
+      const typeStr = String(o.type || '').toUpperCase();
+      if (typeStr.includes('TAKE_PROFIT') || o.clientOrderId?.includes('TP-')) return true;
+      const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
+      return trig > 0 && (isLong ? trig > pos.entryPrice : trig < pos.entryPrice);
+    });
+
+    const slOrder = matchingOrders.find(o => {
+      const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
+      if (!isCloseSide) return false;
+      const typeStr = String(o.type || '').toUpperCase();
+      if (typeStr.includes('STOP') || o.clientOrderId?.includes('SL-')) return true;
+      const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
+      return trig > 0 && (isLong ? trig < pos.entryPrice : trig > pos.entryPrice);
+    });
+
+    const tpValue = pos.takeProfit || (tpOrder ? (tpOrder.stopPrice > 0 ? tpOrder.stopPrice : tpOrder.price) : undefined);
+    const slValue = pos.stopLoss || (slOrder ? (slOrder.stopPrice > 0 ? slOrder.stopPrice : slOrder.price) : undefined);
+
+    return { tpValue, slValue, tpOrder, slOrder };
   };
 
-  const handleSaveTPSL = () => {
+  const openEditModal = (pos: PositionRisk) => {
+    setEditingPos(pos);
+    const { tpValue, slValue } = getEffectiveTPSL(pos);
+    setEditTp(tpValue ? tpValue.toString() : '');
+    setEditSl(slValue ? slValue.toString() : '');
+  };
+
+  const handleSaveTPSL = async () => {
     if (!editingPos) return;
-    const tp = editTp ? parseFloat(editTp) : undefined;
-    const sl = editSl ? parseFloat(editSl) : undefined;
-    binanceWs.updatePositionTPSL(editingPos.symbol, tp, sl);
+    const tp = editTp && parseFloat(editTp) > 0 ? parseFloat(editTp) : undefined;
+    const sl = editSl && parseFloat(editSl) > 0 ? parseFloat(editSl) : undefined;
+    await binanceWs.updatePositionTPSL(editingPos.symbol, tp, sl);
     setEditingPos(null);
   };
 
@@ -161,9 +194,12 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             ) : (
               positions.map((pos) => {
                 const isLong = pos.positionAmt > 0;
-                const isProfit = pos.unRealizedProfit >= 0;
+                const pnl = pos.unRealizedProfit || 0;
+                const isProfit = pnl >= 0;
+                const roe = pos.roePercent || 0;
                 const safeLeverage = Math.min(5, Math.max(1, pos.leverage || 2));
                 const audit = auditPositionRisk(pos, balance.totalMarginBalance);
+                const { tpValue, slValue, tpOrder, slOrder } = getEffectiveTPSL(pos);
 
                 return (
                   <tr
@@ -262,28 +298,50 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                     </td>
 
                     {/* PnL No Realizado */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1 font-bold">
-                        <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                          {isProfit ? '+' : ''}${(pos.unRealizedProfit || 0).toFixed(2)}
+                    <td className="py-3 px-3 font-mono">
+                      <div className="flex flex-col">
+                        <span className={`font-bold text-xs ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
                         </span>
-                        <span className={`text-[11px] ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          ({isProfit ? '+' : ''}{(pos.roePercent || 0).toFixed(2)}%)
+                        <span className={`text-[10px] font-semibold ${isProfit ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                          {isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE
                         </span>
                       </div>
                     </td>
 
                     {/* TP / SL Dinámicos */}
                     <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-neutral-400">
-                          TP: {pos.takeProfit ? `$${pos.takeProfit}` : '-'} | SL:{' '}
-                          {pos.stopLoss ? `$${pos.stopLoss}` : '-'}
-                        </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {tpValue ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-[11px] font-mono">
+                            <span className="text-emerald-300 font-bold">TP:</span> ${tpValue.toFixed(2)}
+                            {tpOrder && (
+                              <span className="text-[9px] px-1 py-0.2 bg-emerald-800/60 text-emerald-200 rounded font-sans" title="Orden condicional activa en Binance">
+                                Cond.
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-neutral-500 italic">Sin TP</span>
+                        )}
+
+                        {slValue ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-400 text-[11px] font-mono">
+                            <span className="text-rose-300 font-bold">SL:</span> ${slValue.toFixed(2)}
+                            {slOrder && (
+                              <span className="text-[9px] px-1 py-0.2 bg-rose-800/60 text-rose-200 rounded font-sans" title="Orden condicional activa en Binance">
+                                Cond.
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-neutral-500 italic">Sin SL</span>
+                        )}
+
                         <button
                           onClick={() => openEditModal(pos)}
-                          className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
-                          title="Editar TP/SL"
+                          className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors ml-0.5"
+                          title="Configurar / Editar TP y SL (Órdenes Condicionales)"
                         >
                           <Edit2 className="w-3 h-3" />
                         </button>
@@ -311,57 +369,91 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       {/* Edit TP/SL Modal */}
       {editingPos && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-5 w-full max-w-sm flex flex-col gap-4 shadow-2xl">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl p-5 w-full max-w-md flex flex-col gap-4 shadow-2xl">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <h3 className="text-sm font-bold text-white">Editar TP / SL de Posición</h3>
+              <div>
+                <h3 className="text-sm font-bold text-white">Configurar TP / SL (Órdenes Condicionales)</h3>
+                <p className="text-[11px] text-neutral-400 mt-0.5">
+                  Protección de posición mediante órdenes de condición en Binance
+                </p>
+              </div>
               <button onClick={() => setEditingPos(null)} className="text-neutral-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="text-xs text-neutral-400">
-              Posición: <strong className="text-white">{editingPos.symbol}</strong> Entrada: $
-              {(editingPos.entryPrice || 0).toFixed(2)}
+            <div className="p-2.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs text-neutral-300 flex items-center justify-between font-mono">
+              <div>
+                <span className="text-neutral-500">Par:</span> <strong className="text-white">{editingPos.symbol}</strong> ({editingPos.positionAmt > 0 ? 'LONG' : 'SHORT'})
+              </div>
+              <div>
+                <span className="text-neutral-500">Entrada:</span> <strong className="text-amber-400">${(editingPos.entryPrice || 0).toFixed(2)}</strong>
+              </div>
+              <div>
+                <span className="text-neutral-500">Tamaño:</span> <strong className="text-neutral-200">{Math.abs(editingPos.positionAmt || 0).toFixed(3)}</strong>
+              </div>
             </div>
 
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-xs text-emerald-400 block mb-1 font-semibold">Take Profit (USDT)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                    <span>Take Profit (TP) - Precio de Activación</span>
+                  </label>
+                  {editTp && parseFloat(editTp) > 0 && (
+                    <span className="text-[11px] font-mono text-emerald-300">
+                      Est. PnL: +${Math.abs((parseFloat(editTp) - editingPos.entryPrice) * editingPos.positionAmt).toFixed(2)} USDT
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   step="any"
                   value={editTp}
                   onChange={(e) => setEditTp(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-sm font-mono text-emerald-300"
-                  placeholder="Ej: 850.00"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-sm font-mono text-emerald-300 focus:border-emerald-500 focus:outline-none"
+                  placeholder="Ej: 850.00 (Dejar vacío para desactivar)"
                 />
               </div>
 
               <div>
-                <label className="text-xs text-rose-400 block mb-1 font-semibold">Stop Loss (USDT)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-rose-400 font-semibold flex items-center gap-1">
+                    <span>Stop Loss (SL) - Precio de Activación</span>
+                  </label>
+                  {editSl && parseFloat(editSl) > 0 && (
+                    <span className="text-[11px] font-mono text-rose-300">
+                      Est. PnL: -${Math.abs((editingPos.entryPrice - parseFloat(editSl)) * Math.abs(editingPos.positionAmt)).toFixed(2)} USDT
+                    </span>
+                  )}
+                </div>
                 <input
                   type="number"
                   step="any"
                   value={editSl}
                   onChange={(e) => setEditSl(e.target.value)}
-                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2 text-sm font-mono text-rose-300"
-                  placeholder="Ej: 750.00"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg p-2.5 text-sm font-mono text-rose-300 focus:border-rose-500 focus:outline-none"
+                  placeholder="Ej: 750.00 (Dejar vacío para desactivar)"
                 />
               </div>
+            </div>
+
+            <div className="bg-neutral-950/80 rounded-lg p-2.5 border border-neutral-800/80 text-[11px] text-neutral-400 leading-relaxed">
+              <span className="text-amber-400 font-semibold">ℹ️ Nota de Sincronización:</span> Las órdenes TP y SL se colocan como órdenes condicionales de protección (Take Profit Market y Stop Market) y serán visibles de inmediato en la pestaña <strong className="text-white">Órdenes Abiertas</strong> bajo el filtro por condición.
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-neutral-800">
               <button
                 onClick={() => setEditingPos(null)}
-                className="px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 text-xs font-semibold"
+                className="px-3.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveTPSL}
-                className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold"
+                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold transition-colors"
               >
-                Guardar
+                Guardar y Activar Órdenes
               </button>
             </div>
           </div>

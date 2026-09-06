@@ -1650,20 +1650,105 @@ class BinanceWsEngine {
   }
 
   /**
-   * Update TP / SL on active position
+   * Update TP / SL on active position and register conditional orders
    */
-  public updatePositionTPSL(symbol: string, tpPrice?: number, slPrice?: number) {
+  public async updatePositionTPSL(symbol: string, tpPrice?: number, slPrice?: number): Promise<void> {
     const pos = this.positions.find(p => p.symbol === symbol);
-    if (pos) {
-      pos.takeProfit = tpPrice;
-      pos.stopLoss = slPrice;
-      notificationService.notify(
-        'SYSTEM',
-        'TP/SL Dinámicos Actualizados',
-        `${symbol} TP: ${tpPrice ? `$${tpPrice}` : 'Desactivado'} | SL: ${slPrice ? `$${slPrice}` : 'Desactivado'}`
-      );
-      this.notify();
+    if (!pos) return;
+
+    pos.takeProfit = tpPrice;
+    pos.stopLoss = slPrice;
+
+    const isLong = pos.positionAmt > 0;
+    const closeSide = isLong ? 'SELL' : 'BUY';
+    const qty = Math.abs(pos.positionAmt);
+
+    // Filter out old TP/SL conditional orders for this symbol
+    this.openOrders = this.openOrders.filter(
+      o => !(o.symbol === symbol && (o.clientOrderId?.includes('TP-') || o.clientOrderId?.includes('SL-') || o.type === 'TAKE_PROFIT_MARKET' || o.type === 'STOP_MARKET'))
+    );
+
+    // Register TP conditional order
+    if (tpPrice && tpPrice > 0) {
+      const tpOrder: OpenOrder = {
+        orderId: `TP-${Date.now()}`,
+        clientOrderId: `TP-${symbol}-MARKET`,
+        symbol,
+        side: closeSide,
+        type: 'TAKE_PROFIT_MARKET',
+        price: 0,
+        stopPrice: tpPrice,
+        origQty: qty,
+        executedQty: 0,
+        status: 'NEW',
+        timeInForce: 'GTC',
+        leverage: pos.leverage || 2,
+        marginType: 'ISOLATED',
+        createdAt: Date.now(),
+      };
+      this.openOrders.push(tpOrder);
+
+      if (this.mode !== 'simulation' && this.credentials.apiKey) {
+        try {
+          await this.sendWsRequest('order.place', {
+            symbol,
+            side: closeSide,
+            type: 'TAKE_PROFIT_MARKET',
+            stopPrice: formatDecimal(tpPrice, 2),
+            closePosition: 'true',
+            workingType: 'MARK_PRICE',
+          }, true);
+        } catch (err: any) {
+          console.warn('Error colocando TP en Binance:', err);
+        }
+      }
     }
+
+    // Register SL conditional order
+    if (slPrice && slPrice > 0) {
+      const slOrder: OpenOrder = {
+        orderId: `SL-${Date.now()}`,
+        clientOrderId: `SL-${symbol}-STOP`,
+        symbol,
+        side: closeSide,
+        type: 'STOP_MARKET',
+        price: 0,
+        stopPrice: slPrice,
+        origQty: qty,
+        executedQty: 0,
+        status: 'NEW',
+        timeInForce: 'GTC',
+        leverage: pos.leverage || 2,
+        marginType: 'ISOLATED',
+        createdAt: Date.now(),
+      };
+      this.openOrders.push(slOrder);
+
+      if (this.mode !== 'simulation' && this.credentials.apiKey) {
+        try {
+          await this.sendWsRequest('order.place', {
+            symbol,
+            side: closeSide,
+            type: 'STOP_MARKET',
+            stopPrice: formatDecimal(slPrice, 2),
+            closePosition: 'true',
+            workingType: 'MARK_PRICE',
+          }, true);
+        } catch (err: any) {
+          console.warn('Error colocando SL en Binance:', err);
+        }
+      }
+    }
+
+    notificationService.notify(
+      'SYSTEM',
+      'TP/SL Condicionales Actualizados',
+      `${symbol} TP: ${tpPrice ? `$${tpPrice}` : 'Desactivado'} | SL: ${slPrice ? `$${slPrice}` : 'Desactivado'} (Órdenes Condicionales)`,
+      'normal'
+    );
+    this.recalculateAccountStats();
+    this.persistState();
+    this.notify();
   }
 
   // --- VOLATILITY ALERTS ENGINE ---
@@ -1986,6 +2071,56 @@ class BinanceWsEngine {
   }
 
   /**
+   * Synchronizes positions with active Take Profit and Stop Loss conditional orders
+   */
+  public syncPositionsWithConditionalOrders() {
+    if (!this.positions || this.positions.length === 0) return;
+
+    this.positions.forEach(pos => {
+      const activeOrders = this.openOrders.filter(
+        o => o.symbol === pos.symbol && o.status !== 'CANCELED' && o.status !== 'EXPIRED' && o.status !== 'FILLED'
+      );
+
+      const isLong = pos.positionAmt > 0;
+
+      // Find Take Profit conditional order
+      const tpOrder = activeOrders.find(o => {
+        const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
+        if (!isCloseSide) return false;
+        const typeStr = String(o.type || '').toUpperCase();
+        const isTpType = typeStr.includes('TAKE_PROFIT') || (o.clientOrderId && o.clientOrderId.includes('TP-'));
+        if (isTpType) return true;
+        const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
+        if (trig > 0 && pos.entryPrice > 0) {
+          return isLong ? trig > pos.entryPrice : trig < pos.entryPrice;
+        }
+        return false;
+      });
+
+      // Find Stop Loss conditional order
+      const slOrder = activeOrders.find(o => {
+        const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
+        if (!isCloseSide) return false;
+        const typeStr = String(o.type || '').toUpperCase();
+        const isSlType = typeStr.includes('STOP') || (o.clientOrderId && o.clientOrderId.includes('SL-'));
+        if (isSlType) return true;
+        const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
+        if (trig > 0 && pos.entryPrice > 0) {
+          return isLong ? trig < pos.entryPrice : trig > pos.entryPrice;
+        }
+        return false;
+      });
+
+      if (tpOrder) {
+        pos.takeProfit = tpOrder.stopPrice && tpOrder.stopPrice > 0 ? tpOrder.stopPrice : tpOrder.price;
+      }
+      if (slOrder) {
+        pos.stopLoss = slOrder.stopPrice && slOrder.stopPrice > 0 ? slOrder.stopPrice : slOrder.price;
+      }
+    });
+  }
+
+  /**
    * Recalculate account balance, margin ratio, unrealized profits
    * Enforces: Margen Disponible = Balance Total del Margen - órdenes abiertas - Posiciones Activas
    */
@@ -1993,24 +2128,54 @@ class BinanceWsEngine {
     let totalUnrealized = 0;
     let totalIsolatedMarginUsed = 0;
 
+    // Sync TP/SL from any open conditional orders
+    this.syncPositionsWithConditionalOrders();
+
     if (this.positions.length > 0) {
       this.positions.forEach(pos => {
-        const mark = this.ticker.lastPrice > 0 ? this.ticker.lastPrice : pos.markPrice;
-        pos.markPrice = mark;
-        const pnl =
-          pos.positionAmt > 0
-            ? (mark - pos.entryPrice) * pos.positionAmt
-            : (pos.entryPrice - mark) * Math.abs(pos.positionAmt);
+        // ONLY update markPrice from this.ticker if the ticker symbol MATCHES the position symbol!
+        if (this.ticker && this.ticker.symbol === pos.symbol) {
+          const livePrice = this.ticker.markPrice > 0 ? this.ticker.markPrice : this.ticker.lastPrice;
+          if (livePrice > 0) {
+            pos.markPrice = livePrice;
+          }
+        }
 
-        pos.unRealizedProfit = Number(pnl.toFixed(2));
+        const mark = pos.markPrice > 0 ? pos.markPrice : (pos.entryPrice > 0 ? pos.entryPrice : 0);
+
+        // In simulation mode OR if we have live ticker for this specific symbol:
+        // recalculate exact PnL with mark price
+        if (this.mode === 'simulation' || (this.ticker && this.ticker.symbol === pos.symbol && mark > 0 && pos.entryPrice > 0)) {
+          if (mark > 0 && pos.entryPrice > 0) {
+            const pnl =
+              pos.positionAmt > 0
+                ? (mark - pos.entryPrice) * pos.positionAmt
+                : (pos.entryPrice - mark) * Math.abs(pos.positionAmt);
+            pos.unRealizedProfit = Number(pnl.toFixed(2));
+          }
+        } else if (pos.unRealizedProfit === undefined || isNaN(pos.unRealizedProfit)) {
+          // If unRealizedProfit is missing or NaN, calculate from mark and entry
+          if (mark > 0 && pos.entryPrice > 0) {
+            const pnl =
+              pos.positionAmt > 0
+                ? (mark - pos.entryPrice) * pos.positionAmt
+                : (pos.entryPrice - mark) * Math.abs(pos.positionAmt);
+            pos.unRealizedProfit = Number(pnl.toFixed(2));
+          } else {
+            pos.unRealizedProfit = 0;
+          }
+        }
+
         const iso = pos.isolatedMargin > 0
           ? pos.isolatedMargin
-          : (Math.abs(pos.positionAmt) * pos.entryPrice) / Math.max(1, pos.leverage || 2);
+          : (Math.abs(pos.positionAmt) * (pos.entryPrice > 0 ? pos.entryPrice : mark)) / Math.max(1, pos.leverage || 2);
         pos.isolatedMargin = Number(iso.toFixed(2));
-        pos.roePercent = Number(((pnl / Math.max(1, pos.isolatedMargin)) * 100).toFixed(2));
-        pos.notional = Number((Math.abs(pos.positionAmt) * mark).toFixed(2));
+        pos.roePercent = pos.isolatedMargin > 0
+          ? Number(((pos.unRealizedProfit / pos.isolatedMargin) * 100).toFixed(2))
+          : 0;
+        pos.notional = Number((Math.abs(pos.positionAmt) * (mark > 0 ? mark : pos.entryPrice)).toFixed(2));
 
-        totalUnrealized += pnl;
+        totalUnrealized += pos.unRealizedProfit;
         totalIsolatedMarginUsed += pos.isolatedMargin;
       });
     }
@@ -2417,12 +2582,13 @@ class BinanceWsEngine {
           const amt = parseFloat(p.positionAmt || p.size || '0');
           const entry = parseFloat(p.entryPrice || '0');
           const mark = parseFloat(p.markPrice || p.entryPrice || '0');
-          const unPnl = parseFloat(p.unrealizedProfit || p.unRealizedProfit || '0');
+          const unPnl = parseFloat(p.unrealizedProfit || p.unRealizedProfit || p.unrealized_pnl || p.up || '0');
           const liq = parseFloat(p.liquidationPrice || '0');
           const lev = Math.min(5, Math.max(1, parseInt(p.leverage || '2', 10)));
           const isoMargin = parseFloat(p.isolatedMargin || p.positionInitialMargin || '0');
           const notional = parseFloat(p.notional || (Math.abs(amt) * (mark || entry)).toString());
           const roe = isoMargin > 0 ? (unPnl / isoMargin) * 100 : 0;
+          const existingPos = this.positions.find(pos => pos.symbol === p.symbol);
 
           return {
             symbol: p.symbol,
@@ -2436,11 +2602,16 @@ class BinanceWsEngine {
             isolatedMargin: Number(isoMargin.toFixed(2)),
             notional: Number(notional.toFixed(2)),
             roePercent: Number(roe.toFixed(2)),
+            takeProfit: existingPos?.takeProfit,
+            stopLoss: existingPos?.stopLoss,
+            strategyId: existingPos?.strategyId,
+            strategyName: existingPos?.strategyName,
             updatedAt: Date.now(),
           };
         });
 
       this.positions = activePositions;
+      this.syncPositionsWithConditionalOrders();
       this.recalculateAccountStats();
       this.notify();
       return activePositions;
@@ -2902,11 +3073,12 @@ class BinanceWsEngine {
     this.openOrders = [
       {
         orderId: `ORD-${Date.now()}-1`,
-        clientOrderId: `TP-${symbol}-LIMIT`,
+        clientOrderId: `TP-${symbol}-MARKET`,
         symbol,
         side: 'SELL',
-        type: 'LIMIT',
-        price: Number((entryPrice * 1.05).toFixed(2)),
+        type: 'TAKE_PROFIT_MARKET',
+        price: 0,
+        stopPrice: Number((entryPrice * 1.05).toFixed(2)),
         origQty: qty,
         executedQty: 0,
         status: 'NEW',
