@@ -252,8 +252,8 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           </button>
         </div>
 
-        <div className="flex items-center gap-2 pb-2">
-          {tab === 'orders' && orders.length > 0 && (
+        {tab === 'orders' && orders.length > 0 && (
+          <div className="flex items-center gap-2 pb-2">
             <button
               onClick={() => binanceWs.cancelAllOrders()}
               className="text-[11px] font-semibold text-rose-400 hover:text-rose-300 px-2 py-1 rounded bg-rose-950/40 border border-rose-900 flex items-center gap-1 transition-colors"
@@ -261,24 +261,8 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
               <XCircle className="w-3.5 h-3.5" />
               Cancelar Todas
             </button>
-          )}
-
-          <button
-            id="sync-account-data-btn"
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="text-[11px] font-medium text-neutral-300 hover:text-white px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title={lastSyncTime > 0 ? `Última sincronización: ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Sincronizar cuenta Binance'}
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-amber-400' : 'text-neutral-400'}`} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
-            {lastSyncTime > 0 && (
-              <span className="text-[10px] text-neutral-500 font-mono hidden sm:inline">
-                {new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-            )}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Sync Warning Banner if error */}
@@ -289,7 +273,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
             <span>Aviso de sincronización Binance: {lastSyncError}</span>
           </div>
           <button
-            onClick={handleManualSync}
+            onClick={() => binanceWs.syncAllAccountData()}
             className="text-[11px] text-rose-300 hover:underline font-semibold"
           >
             Reintentar
@@ -322,14 +306,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                 Crea órdenes Límite, Escalonadas o autoriza una estrategia desde el Creador de Google Sheets para despacharlas a Binance.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-                <button
-                  onClick={handleManualSync}
-                  disabled={isSyncing}
-                  className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-neutral-700"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  Sincronizar Órdenes
-                </button>
                 <button
                   onClick={() => setTab('alerts')}
                   className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
@@ -606,26 +582,18 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
               <Clock className="w-10 h-10 text-neutral-600 mb-3" />
               <p className="font-semibold text-neutral-200 text-sm">Aún no hay ejecuciones registradas</p>
               <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
-                Consulta los trades y ejecuciones recientes de tu cuenta de Binance haciendo clic en Sincronizar Historial.
+                Los trades y ejecuciones de tu cuenta de Binance se reflejan en tiempo real.
               </p>
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-                <button
-                  onClick={handleManualSync}
-                  disabled={isSyncing}
-                  className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-neutral-700"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  Sincronizar Historial con Binance
-                </button>
-                {mode === 'simulation' && (
+              {mode === 'simulation' && (
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
                   <button
                     onClick={() => binanceWs.loadSimulationDemoData()}
                     className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors"
                   >
                     Cargar Trades Demo
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           ) : (
             <table className="w-full text-left text-xs font-mono">

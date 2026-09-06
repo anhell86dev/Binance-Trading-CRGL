@@ -51,10 +51,6 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     return () => unsub();
   }, []);
 
-  const handleManualSync = async () => {
-    await binanceWs.syncAllAccountData();
-  };
-
   const handleOpenOrder = () => {
     if (onOpenOrderModal) {
       onOpenOrderModal();
@@ -103,15 +99,6 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
           >
             <Zap className="w-3 h-3 fill-neutral-950" />
             <span>Nueva Orden</span>
-          </button>
-          <button
-            onClick={handleManualSync}
-            disabled={isSyncing}
-            className="text-[11px] font-medium text-neutral-300 hover:text-white px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 flex items-center gap-1.5 transition-colors disabled:opacity-50"
-            title="Sincronizar posiciones en vivo con la API de Binance"
-          >
-            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-amber-400' : 'text-neutral-400'}`} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
           </button>
         </div>
       </div>
@@ -167,14 +154,6 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                           Cargar Posición Demo
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={handleManualSync}
-                        disabled={isSyncing}
-                        className="px-3.5 py-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 text-xs font-semibold font-sans transition-colors"
-                      >
-                        Sincronizar Binance
-                      </button>
                     </div>
                   </div>
                 </td>

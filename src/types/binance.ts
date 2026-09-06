@@ -1,5 +1,7 @@
 export type NetworkMode = 'testnet' | 'production' | 'simulation';
 
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'authenticated' | 'error';
+
 export type OrderSide = 'BUY' | 'SELL';
 
 export type OrderType =

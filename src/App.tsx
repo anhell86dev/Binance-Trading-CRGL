@@ -1,12 +1,15 @@
-import { ErrorBoundary } from './components/ErrorBoundary';
+import React from 'react';
 import TerminalLayout from './components/TerminalLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ThemeProvider } from './context/ThemeContext';
 
-function App() {
+export default function App() {
   return (
     <ErrorBoundary>
-      <TerminalLayout />
+      <ThemeProvider>
+        <TerminalLayout />
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }
 
-export default App;

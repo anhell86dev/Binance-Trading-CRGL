@@ -88,6 +88,8 @@ export default function TerminalLayout() {
             <GestionTradesView
               onOpenOrderModal={() => setIsOrderModalOpen(true)}
               onGoToTrading={() => setActiveTab('futuros')}
+              onOpenApiModal={() => setIsApiModalOpen(true)}
+              onOpenConsole={() => setIsConsoleOpen(true)}
             />
           </div>
         </main>
