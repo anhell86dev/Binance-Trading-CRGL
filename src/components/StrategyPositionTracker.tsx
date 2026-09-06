@@ -44,6 +44,7 @@ import { notificationService } from '../services/notifications';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { TOP_3_STRATEGIES_CATALOG } from '../services/strategyAutofillService';
 import { TRADING_DISCIPLINES } from './TradingDisciplinesModal';
+import { TacticalPriceMilestoneLine } from './TacticalPriceMilestoneLine';
 
 interface StrategyPositionTrackerProps {
   position: PositionRisk;
@@ -752,190 +753,31 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
         </div>
       )}
 
-      {/* 3. Hoja de Ruta Visual de Niveles de Precio (Price Milestone Ladder) */}
-      <div className="bg-neutral-950/80 border border-neutral-800 rounded-lg p-3">
-        <div className="flex items-center justify-between text-[11px] text-neutral-400 mb-2">
-          <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
-            <Layers className="w-3.5 h-3.5 text-amber-400" />
-            Niveles Tácticos & Distancias en Vivo
-          </span>
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-neutral-400">
-              Mark Price:{' '}
-              <strong className="text-white font-bold text-xs">${fmt(markPrice)}</strong>
-            </span>
-            <span
-              className={`font-mono font-bold text-xs ${
-                position.unRealizedProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'
-              }`}
-            >
-              ROE: {(position.roePercent ?? ((position.unRealizedProfit / (position.isolatedMargin || 1)) * 100)).toFixed(2)}% (
-              {position.unRealizedProfit >= 0 ? '+' : ''}${position.unRealizedProfit.toFixed(2)} USDT)
-            </span>
-          </div>
-        </div>
-
-        {/* Milestone Steps Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
-          {/* Stop Loss */}
-          <div
-            className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
-              isSlHit
-                ? 'bg-rose-950/80 border-rose-600 text-rose-200 ring-1 ring-rose-500'
-                : 'bg-neutral-900 border-neutral-800 text-neutral-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-400 flex items-center gap-1">
-                <ShieldAlert className="w-3 h-3 text-rose-400" />
-                Stop Loss
-              </span>
-              {isSlHit ? (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-rose-900 text-rose-200 font-bold animate-pulse">
-                  IMPACTADO
-                </span>
-              ) : isSlAtBreakEven ? (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900 text-emerald-200 font-bold">
-                  BREAK-EVEN
-                </span>
-              ) : null}
-            </div>
-            <div className="text-xs font-mono font-bold text-white mt-1">
-              ${fmt(slPrice)}
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-              {slPrice ? `${fmt(pctToSl)}% dist.` : 'No fijado'}
-            </div>
-          </div>
-
-          {/* Entrada 3 (E3) */}
-          <div
-            className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
-              isE3Hit
-                ? 'bg-purple-950/60 border-purple-600 text-purple-200 ring-1 ring-purple-500'
-                : 'bg-neutral-900 border-neutral-800 text-neutral-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1">
-                <Layers className="w-3 h-3 text-purple-400" />
-                Entrada 3 (E3)
-              </span>
-              {isE3Hit && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-purple-900 text-purple-200 font-bold">
-                  TOCADO
-                </span>
-              )}
-            </div>
-            <div className="text-xs font-mono font-bold text-white mt-1">
-              {entry3Price ? `$${fmt(entry3Price)}` : 'N/A'}
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-              {entry3Price ? `${fmt(pctToE3)}% (20% cuota)` : 'Sin E3'}
-            </div>
-          </div>
-
-          {/* Entrada 2 (E2) */}
-          <div
-            className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
-              isE2Hit
-                ? 'bg-amber-950/60 border-amber-600 text-amber-200 ring-1 ring-amber-500'
-                : 'bg-neutral-900 border-neutral-800 text-neutral-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1">
-                <RotateCcw className="w-3 h-3 text-amber-400" />
-                Entrada 2 (E2)
-              </span>
-              {isE2Hit && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-amber-900 text-amber-200 font-bold">
-                  TOCADO
-                </span>
-              )}
-            </div>
-            <div className="text-xs font-mono font-bold text-white mt-1">
-              {entry2Price ? `$${fmt(entry2Price)}` : 'N/A'}
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-              {entry2Price ? `${fmt(pctToE2)}% (30% cuota)` : 'Sin E2'}
-            </div>
-          </div>
-
-          {/* Entrada 1 / Promedio Entrada */}
-          <div className="p-2 rounded-lg border border-neutral-800 bg-neutral-900 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 flex items-center gap-1">
-                <Play className="w-3 h-3 text-sky-400" />
-                Entrada Promedio
-              </span>
-              <span className="text-[9px] px-1 py-0.2 rounded bg-sky-950 text-sky-300 border border-sky-800 font-bold">
-                ACTIVA
-              </span>
-            </div>
-            <div className="text-xs font-mono font-bold text-white mt-1">
-              ${fmt(entryPrice)}
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-              E1 inicial: ${fmt(entry1Price)}
-            </div>
-          </div>
-
-          {/* Take Profit 1 (TP1) */}
-          <div
-            className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
-              isTp1Hit
-                ? 'bg-emerald-950/70 border-emerald-600 text-emerald-200 ring-1 ring-emerald-500'
-                : 'bg-neutral-900 border-neutral-800 text-neutral-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1">
-                <Target className="w-3 h-3 text-emerald-400" />
-                Take Profit 1
-              </span>
-              {isTp1Hit && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900 text-emerald-200 font-bold">
-                  ALCANZADO
-                </span>
-              )}
-            </div>
-            <div className="text-xs font-mono font-bold text-white mt-1">
-              ${fmt(tp1Price)}
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-              {tp1Price ? `${fmt(pctToTp1)}% dist. (50%)` : 'No fijado'}
-            </div>
-          </div>
-
-          {/* Take Profit 2 (TP2) */}
-          <div
-            className={`p-2 rounded-lg border flex flex-col justify-between transition-colors ${
-              isTp2Hit
-                ? 'bg-emerald-950/70 border-emerald-500 text-emerald-200 ring-1 ring-emerald-400'
-                : 'bg-neutral-900 border-neutral-800 text-neutral-400'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-emerald-300" />
-                Take Profit 2
-              </span>
-              {isTp2Hit && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-emerald-900 text-emerald-200 font-bold">
-                  ALCANZADO
-                </span>
-              )}
-            </div>
-            <div className="text-xs font-mono font-bold text-white mt-1">
-              ${fmt(tp2Price || tpFinalPrice)}
-            </div>
-            <div className="text-[10px] text-neutral-500 font-mono mt-0.5">
-              {tp2Price ? `${fmt(pctToTp2)}% dist. (30-50%)` : 'Objetivo final'}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* 3. Hoja de Ruta Visual de Niveles de Precio - Línea Gráfica Táctica en Vivo */}
+      <TacticalPriceMilestoneLine
+        position={position}
+        isLong={isLong}
+        markPrice={markPrice}
+        entryPrice={entryPrice}
+        entry1Price={entry1Price}
+        entry2Price={entry2Price}
+        entry3Price={entry3Price}
+        slPrice={slPrice}
+        tp1Price={tp1Price}
+        tp2Price={tp2Price}
+        isSlHit={isSlHit}
+        isSlAtBreakEven={isSlAtBreakEven}
+        isTp1Hit={isTp1Hit}
+        isTp2Hit={isTp2Hit}
+        isE2Hit={isE2Hit}
+        isE3Hit={isE3Hit}
+        pctToSl={pctToSl}
+        pctToE2={pctToE2}
+        pctToE3={pctToE3}
+        pctToTp1={pctToTp1}
+        pctToTp2={pctToTp2}
+        fmt={fmt}
+      />
 
       {/* 4. CONTENIDO PRINCIPAL SEGÚN TAB SELECCIONADA */}
 
@@ -1215,141 +1057,6 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
                 </>
               )}
             </div>
-          </div>
-
-          {/* Tarjeta de Órdenes Condicionales Activas en Binance para este Trade */}
-          <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-3.5 flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-bold text-white">
-                  Órdenes Condicionales en Binance ({position.symbol})
-                </span>
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-mono bg-neutral-800 text-amber-300">
-                  {posConditionalOrders.length} activas
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab('condicionales')}
-                className="text-[11px] text-amber-400 hover:text-amber-300 hover:underline font-semibold flex items-center gap-1"
-              >
-                <span>Administrar / Crear</span>
-                <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-
-            {posConditionalOrders.length === 0 ? (
-              <div className="p-3 rounded-lg bg-rose-950/20 border border-rose-900/40 text-rose-300 text-xs flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                  <span>
-                    No hay órdenes condicionales de protección (SL / TP / Trailing) activas en Binance para este trade.
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {slPrice > 0 && (
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => handlePlaceCustomSl(slPrice)}
-                      className="px-2 py-1 rounded bg-rose-900 hover:bg-rose-800 text-white font-bold text-[10px] flex items-center gap-1 transition-colors"
-                    >
-                      <span>Colocar SL (${fmt(slPrice)})</span>
-                    </button>
-                  )}
-                  {tp1Price > 0 && (
-                    <button
-                      type="button"
-                      disabled={isUpdating}
-                      onClick={() => handlePlaceCustomTp(tp1Price)}
-                      className="px-2 py-1 rounded bg-emerald-900 hover:bg-emerald-800 text-white font-bold text-[10px] flex items-center gap-1 transition-colors"
-                    >
-                      <span>Colocar TP1 (${fmt(tp1Price)})</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={isUpdating}
-                    onClick={() => handlePlaceTrailingStop(1.5)}
-                    className="px-2 py-1 rounded bg-blue-900 hover:bg-blue-800 text-white font-bold text-[10px] flex items-center gap-1 transition-colors"
-                  >
-                    <span>Trailing 1.5%</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {posConditionalOrders.map((ord) => {
-                  const isTP =
-                    ord.type === 'TAKE_PROFIT_MARKET' ||
-                    (ord.type as string) === 'TAKE_PROFIT' ||
-                    ord.clientOrderId?.includes('TP-');
-                  const isSL =
-                    ord.type === 'STOP_MARKET' ||
-                    (ord.type as string) === 'STOP' ||
-                    ord.clientOrderId?.includes('SL-');
-                  const isTS =
-                    ord.type === 'TRAILING_STOP_MARKET' ||
-                    ord.clientOrderId?.includes('TS-') ||
-                    Boolean(ord.callbackRate);
-
-                  const trigPrice = ord.stopPrice && ord.stopPrice > 0 ? ord.stopPrice : ord.price;
-                  const distPct =
-                    markPrice > 0 && trigPrice > 0
-                      ? ((trigPrice - markPrice) / markPrice) * 100
-                      : 0;
-
-                  return (
-                    <div
-                      key={ord.orderId}
-                      className={`p-2 rounded-lg border flex items-center justify-between gap-2 ${
-                        isTP
-                          ? 'bg-emerald-950/40 border-emerald-800/70 text-emerald-300'
-                          : isSL
-                          ? 'bg-rose-950/40 border-rose-800/70 text-rose-300'
-                          : 'bg-sky-950/40 border-sky-800/70 text-sky-300'
-                      }`}
-                    >
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold font-mono uppercase">
-                            {isTP ? '🟢 TAKE PROFIT' : isSL ? '🔴 STOP LOSS' : '🔵 TRAILING STOP'}
-                          </span>
-                          <span className="text-[9px] px-1 rounded bg-neutral-900 text-neutral-300 font-mono">
-                            {ord.type}
-                          </span>
-                        </div>
-                        <div className="text-xs font-mono font-bold text-white mt-0.5">
-                          {isTS ? (
-                            <span>Callback: {ord.callbackRate || 1.5}%</span>
-                          ) : (
-                            <span>Gatillo: ${fmt(trigPrice)}</span>
-                          )}
-                          <span className="text-[10px] text-neutral-400 font-normal ml-1.5">
-                            ({distPct >= 0 ? '+' : ''}
-                            {distPct.toFixed(2)}%)
-                          </span>
-                        </div>
-                        <div className="text-[10px] text-neutral-400 font-mono">
-                          Cant: {ord.origQty} {position.symbol.replace('USDT', '')} • Reduce-Only
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        disabled={isUpdating}
-                        onClick={() => handleCancelSingleOrder(ord.orderId)}
-                        title="Cancelar esta orden condicional en Binance"
-                        className="p-1 rounded bg-neutral-900 hover:bg-rose-900/60 text-neutral-400 hover:text-rose-300 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       )}

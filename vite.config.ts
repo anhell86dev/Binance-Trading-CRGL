@@ -37,10 +37,46 @@ function googleSheetsProxyPlugin(): Plugin {
   };
 }
 
+function diarioBitcoinProxyPlugin(): Plugin {
+  return {
+    name: 'diariobitcoin-proxy',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !req.url.startsWith('/api/diariobitcoin')) {
+          return next();
+        }
+        try {
+          const endpoint = req.url.replace(/^\/api\/diariobitcoin/, '') || '/';
+          const targetUrl = `https://www.diariobitcoin.com${endpoint}`;
+          const response = await fetch(targetUrl, {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Accept: 'application/json, text/xml, text/plain, */*',
+              Referer: 'https://www.diariobitcoin.com/',
+            },
+          });
+          res.statusCode = response.status;
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
+          res.setHeader('Content-Type', contentType);
+          const buffer = await response.arrayBuffer();
+          res.end(Buffer.from(buffer));
+        } catch (err: any) {
+          res.statusCode = 502;
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: err?.message || 'Error proxying DiarioBitcoin request' }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
     base: './',
-    plugins: [react(), tailwindcss(), googleSheetsProxyPlugin()],
+    plugins: [react(), tailwindcss(), googleSheetsProxyPlugin(), diarioBitcoinProxyPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -49,17 +85,6 @@ export default defineConfig(() => {
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
-      proxy: {
-        '/api/diariobitcoin': {
-          target: 'https://www.diariobitcoin.com',
-          changeOrigin: true,
-          rewrite: (p) => p.replace(/^\/api\/diariobitcoin/, ''),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://www.diariobitcoin.com/',
-          },
-        },
-      },
     },
   };
 });
