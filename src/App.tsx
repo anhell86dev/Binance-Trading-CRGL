@@ -6,7 +6,7 @@ import { TopOperacionesView } from './components/TopOperacionesView';
 import { GestionTradesView } from './components/GestionTradesView';
 import { FuturesHubPage } from './components/FuturesHubPage';
 import { WalletView } from './components/WalletView';
-import { ErrorBoundary } from './components/ErrorBoundary';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function AppContent() {
   const { currentRoute, navigate } = useNavigation();
