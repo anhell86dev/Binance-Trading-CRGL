@@ -24,7 +24,9 @@ import {
   Zap,
 } from 'lucide-react';
 import { binanceWs, BINANCE_ENDPOINTS } from '../services/binanceWs';
+import { binanceWalletApiService } from '../services/binanceWalletApiService';
 import { ApiCredentials, NetworkMode, ConnectionStatus, RateLimitStatus } from '../types/binance';
+import { BinanceUnifiedAccountProfile } from '../types/binanceWalletApi';
 
 interface ApiKeyModalProps {
   onClose: () => void;
@@ -46,15 +48,24 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onClose }) => {
   const [rateLimits, setRateLimits] = useState<RateLimitStatus[]>(() => binanceWs.getRateLimits());
   const [latency, setLatency] = useState<number>(() => binanceWs.getLastLatencyMs() || 24);
   const [isUserDataConnected, setIsUserDataConnected] = useState<boolean>(() => binanceWs.getIsUserDataConnected());
+  const [openApiProfile, setOpenApiProfile] = useState<BinanceUnifiedAccountProfile>(() =>
+    binanceWalletApiService.getCachedProfile()
+  );
 
   useEffect(() => {
-    const unsub = binanceWs.subscribe(() => {
+    const unsubWs = binanceWs.subscribe(() => {
       setConnectionStatus(binanceWs.getConnectionStatus());
       setRateLimits(binanceWs.getRateLimits());
       setLatency(binanceWs.getLastLatencyMs() || 24);
       setIsUserDataConnected(binanceWs.getIsUserDataConnected());
     });
-    return () => unsub();
+    const unsubWallet = binanceWalletApiService.subscribe((p) => {
+      setOpenApiProfile(p);
+    });
+    return () => {
+      unsubWs();
+      unsubWallet();
+    };
   }, []);
 
   const handleSaveAndConnect = async (e: React.FormEvent) => {
@@ -525,6 +536,52 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ onClose }) => {
               <p className="text-[11px] text-neutral-300 leading-relaxed">
                 Al canalizar los flujos continuos de mercado hacia <strong>WebSocket Streams</strong>, la aplicación consume menos del 1% del límite permitido por Binance ({reqWeight.limit} de peso/minuto), reservando la capacidad de la API REST exclusivamente para envíos de órdenes de alta prioridad sin riesgo de error <code>429 Too Many Requests</code> o bloqueos IP.
               </p>
+            </div>
+
+            {/* OpenAPI 3.0.2 Schema Validation Section */}
+            <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-3">
+              <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <Key className="w-4 h-4 text-amber-400" />
+                  <span className="font-bold text-white text-xs">Esquema OpenAPI 3.0.2 (/sapi/v1/account/*)</span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                  VIP {openApiProfile.accountInfo.vipLevel} • Status: {openApiProfile.accountStatus.data}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] font-mono">
+                <div className="p-2 rounded bg-neutral-900 border border-neutral-800 flex justify-between items-center">
+                  <span className="text-neutral-400">Futures:</span>
+                  <span className={openApiProfile.apiRestrictions.enableFutures ? 'text-emerald-400 font-bold' : 'text-rose-400'}>
+                    {openApiProfile.apiRestrictions.enableFutures ? 'HABILITADO' : 'NO'}
+                  </span>
+                </div>
+                <div className="p-2 rounded bg-neutral-900 border border-neutral-800 flex justify-between items-center">
+                  <span className="text-neutral-400">Reading:</span>
+                  <span className={openApiProfile.apiRestrictions.enableReading ? 'text-emerald-400 font-bold' : 'text-rose-400'}>
+                    {openApiProfile.apiRestrictions.enableReading ? 'HABILITADO' : 'NO'}
+                  </span>
+                </div>
+                <div className="p-2 rounded bg-neutral-900 border border-neutral-800 flex justify-between items-center">
+                  <span className="text-neutral-400">IP Restrict:</span>
+                  <span className="text-neutral-300">
+                    {openApiProfile.apiRestrictions.ipRestrict ? 'SÍ' : 'NO'}
+                  </span>
+                </div>
+                <div className="p-2 rounded bg-neutral-900 border border-neutral-800 flex justify-between items-center">
+                  <span className="text-neutral-400">GCR Limit:</span>
+                  <span className="text-sky-300">{openApiProfile.apiTradingStatus.data.triggerCondition.GCR} ms</span>
+                </div>
+                <div className="p-2 rounded bg-neutral-900 border border-neutral-800 flex justify-between items-center">
+                  <span className="text-neutral-400">IFER Limit:</span>
+                  <span className="text-sky-300">{openApiProfile.apiTradingStatus.data.triggerCondition.IFER}</span>
+                </div>
+                <div className="p-2 rounded bg-neutral-900 border border-neutral-800 flex justify-between items-center">
+                  <span className="text-neutral-400">UFR Limit:</span>
+                  <span className="text-sky-300">{openApiProfile.apiTradingStatus.data.triggerCondition.UFR}</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
