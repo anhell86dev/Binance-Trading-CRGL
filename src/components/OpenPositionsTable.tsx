@@ -89,18 +89,24 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         const preserved = prevOrder.filter((sym) => activeSymbols.has(sym));
         const existingSet = new Set(preserved);
         const added = curPositions.map((p) => p.symbol).filter((sym) => !existingSet.has(sym));
+        if (added.length === 0 && preserved.length === prevOrder.length) {
+          return prevOrder;
+        }
         return [...preserved, ...added];
       });
 
       // Auto-expand any position that has a strategy attached if not yet expanded
       setExpandedSymbols((prev) => {
+        let changed = false;
         const next = new Set(prev);
         curPositions.forEach((p) => {
-          if (p.strategyId) {
+          const stratId = p.strategyId || binanceWs.getLinkedStrategyForSymbol(p.symbol)?.strategyId;
+          if (stratId && !prev.has(p.symbol)) {
             next.add(p.symbol);
+            changed = true;
           }
         });
-        return next;
+        return changed ? next : prev;
       });
     });
     return () => unsub();
@@ -293,26 +299,29 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                     {/* Estrategia Ligada & Hitos */}
                     <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {pos.strategyId ? (
-                          <button
-                            type="button"
-                            onClick={() => setLinkPos(pos)}
-                            title={`Estrategia: ${pos.strategyId} - Clic para cambiar`}
-                            className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
-                          >
-                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                            <span>{pos.strategyId}</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setLinkPos(pos)}
-                            className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                          >
-                            <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                            <span>Ligar Estrategia</span>
-                          </button>
-                        )}
+                        {(() => {
+                          const effStratId = pos.strategyId || binanceWs.getLinkedStrategyForSymbol(pos.symbol)?.strategyId;
+                          return effStratId ? (
+                            <button
+                              type="button"
+                              onClick={() => setLinkPos(pos)}
+                              title={`Estrategia: ${effStratId} - Clic para cambiar`}
+                              className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                              <span>{effStratId}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setLinkPos(pos)}
+                              className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                              <span>Ligar Estrategia</span>
+                            </button>
+                          );
+                        })()}
 
                         <button
                           type="button"

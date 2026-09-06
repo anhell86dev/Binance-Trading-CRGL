@@ -218,14 +218,24 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Sello de Seguridad Transparente (<SecurityBadge/>) */}
         <SecurityBadge />
 
-        {/* Latency badge */}
-        <div
-          title="Latencia de WebSocket con Binance Futures"
-          className="hidden xl:flex items-center gap-1 px-2 py-1 rounded bg-neutral-950 border border-neutral-800 font-mono text-[11px] text-neutral-400"
+        {/* Dual Hybrid Connection Status Button */}
+        <button
+          type="button"
+          onClick={onOpenApiModal}
+          title="Conexión Híbrida Binance: WebSocket Streams (Tiempo Real) + API REST (Ejecución bajo demanda)"
+          className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-850 border border-neutral-800 text-xs font-mono transition-all text-neutral-200"
         >
-          <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-          <span className="text-emerald-400 font-bold">{latency}ms</span>
-        </div>
+          <div className="flex items-center gap-1 text-[10px] text-amber-400 font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>WS</span>
+          </div>
+          <span className="text-neutral-600">|</span>
+          <div className="flex items-center gap-1 text-[10px] text-sky-400 font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+            <span>REST</span>
+          </div>
+          <span className="text-[10px] text-neutral-400 ml-0.5">{latency}ms</span>
+        </button>
 
         {/* Network Mode Chooser */}
         <div className="relative" ref={dropdownRef}>

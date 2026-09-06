@@ -143,6 +143,7 @@ class BinanceWsEngine {
   private positions: PositionRisk[] = [];
   private openOrders: OpenOrder[] = [];
   private tradeHistory: TradeHistoryItem[] = [];
+  private linkedStrategiesBySymbol: Record<string, { strategyId?: string; strategyName?: string }> = {};
   private alerts: VolatilityAlert[] = [];
   private wsLogs: WsLogFrame[] = [];
 
@@ -260,6 +261,10 @@ class BinanceWsEngine {
       if (savedAlerts) {
         this.alerts = JSON.parse(savedAlerts);
       }
+      const savedSymbolStrategies = localStorage.getItem('binance_fapi_symbol_strategies');
+      if (savedSymbolStrategies) {
+        this.linkedStrategiesBySymbol = JSON.parse(savedSymbolStrategies);
+      }
 
       // If there are 0 open positions, remove any orphaned reduce-only / TP / SL orders
       if (this.positions.length === 0) {
@@ -267,6 +272,17 @@ class BinanceWsEngine {
           o => !(o.type === 'STOP_MARKET' || o.type === 'TAKE_PROFIT_MARKET' || o.clientOrderId?.includes('TP-') || o.clientOrderId?.includes('SL-'))
         );
       }
+
+      // Restore linked strategies into positions if missing
+      this.positions.forEach(pos => {
+        if (!pos.strategyId) {
+          const saved = this.getLinkedStrategyForSymbol(pos.symbol);
+          if (saved && saved.strategyId) {
+            pos.strategyId = saved.strategyId;
+            pos.strategyName = saved.strategyName;
+          }
+        }
+      });
 
       // Enforce the calculation: Margen Disponible = Balance Total - Órdenes Abiertas - Posiciones Activas
       this.recalculateAccountStats();
@@ -283,6 +299,7 @@ class BinanceWsEngine {
       localStorage.setItem('binance_fapi_positions', JSON.stringify(this.positions));
       localStorage.setItem('binance_fapi_balance', JSON.stringify(this.balance));
       localStorage.setItem('binance_fapi_alerts', JSON.stringify(this.alerts));
+      localStorage.setItem('binance_fapi_symbol_strategies', JSON.stringify(this.linkedStrategiesBySymbol));
     } catch {}
   }
 
@@ -1092,24 +1109,43 @@ class BinanceWsEngine {
   }
 
   /**
-   * Link an active position to a strategy
+   * Get permanently remembered strategy for a symbol
+   */
+  public getLinkedStrategyForSymbol(symbol: string): { strategyId?: string; strategyName?: string } | undefined {
+    if (!symbol) return undefined;
+    const cleanSym = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+    return this.linkedStrategiesBySymbol[symbol] || this.linkedStrategiesBySymbol[cleanSym];
+  }
+
+  /**
+   * Link an active position to a strategy (permanently remembered per symbol)
    */
   public linkPositionToStrategy(symbol: string, strategyId: string, strategyName?: string): boolean {
-    const pos = this.positions.find(p => p.symbol === symbol);
+    const cleanSym = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+    if (strategyId) {
+      this.linkedStrategiesBySymbol[symbol] = { strategyId, strategyName };
+      this.linkedStrategiesBySymbol[cleanSym] = { strategyId, strategyName };
+    } else {
+      delete this.linkedStrategiesBySymbol[symbol];
+      delete this.linkedStrategiesBySymbol[cleanSym];
+    }
+
+    const pos = this.positions.find(
+      p => p.symbol === symbol || p.symbol.replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanSym
+    );
     if (pos) {
       pos.strategyId = strategyId || undefined;
       pos.strategyName = strategyName || undefined;
-      notificationService.notify(
-        'SYSTEM',
-        'Posición Vinculada a Estrategia',
-        `Posición ${pos.symbol} vinculada a "${strategyId || 'Sin Estrategia'}"`,
-        'normal'
-      );
-      this.persistState();
-      this.notify();
-      return true;
     }
-    return false;
+    notificationService.notify(
+      'SYSTEM',
+      'Posición Vinculada a Estrategia',
+      `Posición ${symbol} vinculada a "${strategyId || 'Sin Estrategia'}"`,
+      'normal'
+    );
+    this.persistState();
+    this.notify();
+    return true;
   }
 
   /**
@@ -2601,20 +2637,29 @@ class BinanceWsEngine {
         if (Array.isArray(data.positions)) {
           const livePositions: PositionRisk[] = data.positions
             .filter((p: any) => parseFloat(p.positionAmt || p.size || '0') !== 0)
-            .map((p: any) => ({
-              symbol: p.symbol,
-              positionAmt: parseFloat(p.positionAmt || p.size || '0'),
-              entryPrice: parseFloat(p.entryPrice || '0'),
-              markPrice: parseFloat(p.markPrice || p.entryPrice || '0'),
-              unRealizedProfit: parseFloat(p.unrealizedProfit || p.unRealizedProfit || '0'),
-              liquidationPrice: parseFloat(p.liquidationPrice || '0'),
-              leverage: Math.min(5, Math.max(1, parseInt(p.leverage || '2', 10))),
-              marginType: (p.isolated ? 'ISOLATED' : (p.marginType || 'ISOLATED')) as any,
-              isolatedMargin: parseFloat(p.isolatedMargin || p.positionInitialMargin || '0'),
-              notional: parseFloat(p.notional || '0'),
-              roePercent: parseFloat(p.percentage || '0'),
-              updatedAt: Date.now(),
-            }));
+            .map((p: any) => {
+              const existingPos = this.positions.find(pos => pos.symbol === p.symbol);
+              const savedLink = this.getLinkedStrategyForSymbol(p.symbol);
+              return {
+                symbol: p.symbol,
+                positionAmt: parseFloat(p.positionAmt || p.size || '0'),
+                entryPrice: parseFloat(p.entryPrice || '0'),
+                markPrice: parseFloat(p.markPrice || p.entryPrice || '0'),
+                unRealizedProfit: parseFloat(p.unrealizedProfit || p.unRealizedProfit || '0'),
+                liquidationPrice: parseFloat(p.liquidationPrice || '0'),
+                leverage: Math.min(5, Math.max(1, parseInt(p.leverage || '2', 10))),
+                marginType: (p.isolated ? 'ISOLATED' : (p.marginType || 'ISOLATED')) as any,
+                isolatedMargin: parseFloat(p.isolatedMargin || p.positionInitialMargin || '0'),
+                notional: parseFloat(p.notional || '0'),
+                roePercent: parseFloat(p.percentage || '0'),
+                takeProfit: existingPos?.takeProfit,
+                stopLoss: existingPos?.stopLoss,
+                strategyId: existingPos?.strategyId || savedLink?.strategyId,
+                strategyName: existingPos?.strategyName || savedLink?.strategyName,
+                strategyStatus: existingPos?.strategyStatus,
+                updatedAt: Date.now(),
+              };
+            });
 
           this.positions = livePositions;
         }
@@ -2697,6 +2742,7 @@ class BinanceWsEngine {
           const notional = parseFloat(p.notional || (Math.abs(amt) * (mark || entry)).toString());
           const roe = isoMargin > 0 ? (unPnl / isoMargin) * 100 : 0;
           const existingPos = this.positions.find(pos => pos.symbol === p.symbol);
+          const savedLink = this.getLinkedStrategyForSymbol(p.symbol);
 
           return {
             symbol: p.symbol,
@@ -2712,8 +2758,9 @@ class BinanceWsEngine {
             roePercent: Number(roe.toFixed(2)),
             takeProfit: existingPos?.takeProfit,
             stopLoss: existingPos?.stopLoss,
-            strategyId: existingPos?.strategyId,
-            strategyName: existingPos?.strategyName,
+            strategyId: existingPos?.strategyId || savedLink?.strategyId,
+            strategyName: existingPos?.strategyName || savedLink?.strategyName,
+            strategyStatus: existingPos?.strategyStatus,
             updatedAt: Date.now(),
           };
         });
@@ -3063,6 +3110,7 @@ class BinanceWsEngine {
             const entry = parseFloat(p.ep || '0');
             const unPnl = parseFloat(p.up || '0');
             const isoM = parseFloat(p.iw || '0');
+            const savedLink = this.getLinkedStrategyForSymbol(sym);
             const posObj: PositionRisk = {
               symbol: sym,
               positionAmt: amt,
@@ -3075,6 +3123,11 @@ class BinanceWsEngine {
               isolatedMargin: Number(isoM.toFixed(2)),
               notional: Number((Math.abs(amt) * entry).toFixed(2)),
               roePercent: isoM > 0 ? Number(((unPnl / isoM) * 100).toFixed(2)) : 0,
+              takeProfit: idx >= 0 ? updatedPositions[idx].takeProfit : undefined,
+              stopLoss: idx >= 0 ? updatedPositions[idx].stopLoss : undefined,
+              strategyId: (idx >= 0 ? updatedPositions[idx].strategyId : undefined) || savedLink?.strategyId,
+              strategyName: (idx >= 0 ? updatedPositions[idx].strategyName : undefined) || savedLink?.strategyName,
+              strategyStatus: idx >= 0 ? updatedPositions[idx].strategyStatus : undefined,
               updatedAt: Date.now(),
             };
             if (idx >= 0) {

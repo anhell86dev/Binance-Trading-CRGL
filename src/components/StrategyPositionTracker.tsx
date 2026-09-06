@@ -50,12 +50,14 @@ interface StrategyPositionTrackerProps {
   onLinkStrategy?: (pos: PositionRisk) => void;
 }
 
-export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = ({
+export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = React.memo(({
   position,
   onLinkStrategy,
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'guia' | 'condicionales' | 'reglas' | 'disciplinas'>('guia');
+  const [activeTab, setActiveTab] = useState<'guia' | 'condicionales' | 'reglas' | 'disciplinas'>(
+    () => (sessionStorage.getItem(`tracker_tab_${position.symbol}`) as any) || 'guia'
+  );
   const [showFullSheetNotes, setShowFullSheetNotes] = useState(false);
   const [openOrders, setOpenOrders] = useState<OpenOrder[]>(() => binanceWs.getOpenOrders());
 
@@ -65,6 +67,13 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
   const [trailingCallbackRate, setTrailingCallbackRate] = useState<number>(1.5);
   const [trailingActivationPrice, setTrailingActivationPrice] = useState<string>('');
 
+  const handleTabChange = (tab: 'guia' | 'condicionales' | 'reglas' | 'disciplinas') => {
+    setActiveTab(tab);
+    try {
+      sessionStorage.setItem(`tracker_tab_${position.symbol}`, tab);
+    } catch {}
+  };
+
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
       setOpenOrders(binanceWs.getOpenOrders());
@@ -72,7 +81,10 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
     return () => unsub();
   }, []);
 
-  // 1. Find linked strategy or auto-detect matching strategy by symbol
+  // 1. Find linked strategy or auto-detect matching strategy by symbol (with durable fallback)
+  const effectiveStrategyId = position.strategyId || binanceWs.getLinkedStrategyForSymbol(position.symbol)?.strategyId;
+  const effectiveStrategyName = position.strategyName || binanceWs.getLinkedStrategyForSymbol(position.symbol)?.strategyName;
+
   const { linkedStrategy, isCustomStrategy, detectedStrategy } = useMemo(() => {
     const allStrategies = strategyService.getStrategies();
     const cleanSym = (position.symbol || '').replace(/[^A-Z0-9]/g, '').toUpperCase();
@@ -80,15 +92,15 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
     let found: GoogleSheetStrategyRow | undefined;
     let isCustom = false;
 
-    if (position.strategyId) {
+    if (effectiveStrategyId) {
       found = allStrategies.find(
         (s) =>
-          s.noEstrategia.toUpperCase() === position.strategyId?.toUpperCase() ||
-          s.nombreEstrategia.toUpperCase() === position.strategyId?.toUpperCase()
+          s.noEstrategia.toUpperCase() === effectiveStrategyId.toUpperCase() ||
+          s.nombreEstrategia.toUpperCase() === effectiveStrategyId.toUpperCase()
       );
 
       if (!found) {
-        const catalogFound = TOP_3_STRATEGIES_CATALOG.find((t) => t.id === position.strategyId);
+        const catalogFound = TOP_3_STRATEGIES_CATALOG.find((t) => t.id === effectiveStrategyId);
         if (catalogFound) {
           found = allStrategies.find((s) => s.par.replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanSym);
         } else {
@@ -110,7 +122,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
       isCustomStrategy: isCustom,
       detectedStrategy: detected,
     };
-  }, [position.strategyId, position.symbol]);
+  }, [effectiveStrategyId, position.symbol]);
 
   // 2. Derive key tactical levels (E1, E2, E3, SL, TP1, TP2, TP3)
   const isLong = position.positionAmt > 0;
@@ -547,8 +559,8 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-white text-xs sm:text-sm">
-                {position.strategyId
-                  ? `${position.strategyId} • ${position.strategyName || linkedStrategy?.nombreEstrategia || 'Estrategia'}`
+                {effectiveStrategyId
+                  ? `${effectiveStrategyId} • ${effectiveStrategyName || position.strategyName || linkedStrategy?.nombreEstrategia || 'Estrategia'}`
                   : `Trade sin Estrategia Vinculada (${position.symbol})`}
               </span>
               <span
@@ -577,7 +589,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
           <div className="bg-neutral-950 border border-neutral-800 rounded-lg p-0.5 flex items-center">
             <button
               type="button"
-              onClick={() => setActiveTab('guia')}
+              onClick={() => handleTabChange('guia')}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors ${
                 activeTab === 'guia'
                   ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
@@ -589,7 +601,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('condicionales')}
+              onClick={() => handleTabChange('condicionales')}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1.5 transition-colors ${
                 activeTab === 'condicionales'
                   ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
@@ -604,7 +616,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('reglas')}
+              onClick={() => handleTabChange('reglas')}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors ${
                 activeTab === 'reglas'
                   ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
@@ -616,7 +628,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('disciplinas')}
+              onClick={() => handleTabChange('disciplinas')}
               className={`px-2.5 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors ${
                 activeTab === 'disciplinas'
                   ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
@@ -635,7 +647,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
               className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-amber-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Link2 className="w-3 h-3 text-amber-400" />
-              <span>{position.strategyId ? 'Cambiar' : 'Vincular'}</span>
+              <span>{effectiveStrategyId ? 'Cambiar' : 'Vincular'}</span>
             </button>
           )}
         </div>
@@ -1878,4 +1890,4 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = (
       )}
     </div>
   );
-};
+});
