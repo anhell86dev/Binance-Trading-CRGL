@@ -4,8 +4,11 @@ import {
   ArrowRight,
   ArrowUpRight,
   Crown,
+  ExternalLink,
   Eye,
+  FileSpreadsheet,
   Radio,
+  RefreshCw,
   Shield,
   Sparkles,
   Table,
@@ -13,7 +16,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { GoogleSheetStrategyRow } from '../types/strategy';
-import { strategyService } from '../services/strategyService';
+import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
 import { livePriceService } from '../services/livePriceService';
 import { binanceWs } from '../services/binanceWs';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
@@ -26,6 +29,10 @@ interface TopStrategiesRiskRewardListProps {
   onStrategySelected?: (strategy: GoogleSheetStrategyRow) => void;
   onOpenDetails?: (strategy: GoogleSheetStrategyRow) => void;
   highlightSymbol?: string;
+  onOpenDocsManager?: () => void;
+  onSync?: () => void;
+  isSyncing?: boolean;
+  lastSyncTime?: string;
 }
 
 interface StrategyRowPriceBarProps {
@@ -268,6 +275,10 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
   onStrategySelected,
   onOpenDetails,
   highlightSymbol,
+  onOpenDocsManager,
+  onSync,
+  isSyncing = false,
+  lastSyncTime,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [, setPriceTick] = useState(0);
@@ -426,11 +437,47 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400 bg-neutral-950 px-2.5 py-1 rounded-md border border-neutral-800">
             <Radio className="w-2.5 h-2.5 animate-pulse text-emerald-400" />
             <span>Live FAPI</span>
           </div>
+
+          {onOpenDocsManager && (
+            <button
+              type="button"
+              onClick={onOpenDocsManager}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-500 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              title="Abrir Gestor de Google Docs: Leer, Escribir, Editar y Sincronizar"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-white" />
+              <span>Google Docs</span>
+            </button>
+          )}
+
+          {onSync && (
+            <button
+              type="button"
+              onClick={onSync}
+              disabled={isSyncing}
+              className="px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-200 border border-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer"
+              title="Sincronizar estrategias desde Google Sheets"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : 'text-neutral-400'}`} />
+              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+            </button>
+          )}
+
+          <a
+            href={OFFICIAL_GOOGLE_SHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2.5 py-1 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            title="Abrir hoja de cálculo oficial en Google Sheets"
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+            <span>Sheets URL</span>
+          </a>
         </div>
       </div>
 

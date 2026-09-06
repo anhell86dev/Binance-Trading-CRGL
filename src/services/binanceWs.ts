@@ -2730,64 +2730,143 @@ class BinanceWsEngine {
 
   /**
    * Fetches real open orders from Binance (WS-FAPI with REST fallback)
+   * Queries all active position symbols, current symbol, and previous symbols to ensure all conditional orders (TP, SL, Trailing) are retrieved
    */
   public async fetchLiveOpenOrders(): Promise<OpenOrder[]> {
     if (this.mode === 'simulation' || !this.credentials.apiKey) {
       return this.openOrders;
     }
 
-    let rawOrders: any[] = [];
+    const collectedRaw: any[] = [];
+    const seenOrderKeys = new Set<string>();
+
+    const addOrders = (list: any[]) => {
+      if (!Array.isArray(list)) return;
+      for (const ord of list) {
+        if (!ord) continue;
+        const key = String(ord.orderId || ord.i || ord.clientOrderId || ord.c || `${ord.symbol}-${ord.price}-${ord.stopPrice}`);
+        if (key && !seenOrderKeys.has(key)) {
+          seenOrderKeys.add(key);
+          collectedRaw.push(ord);
+        }
+      }
+    };
 
     // 1. Try WS-FAPI openOrders.status without symbol
     try {
       const ordersRes = await this.sendWsRequest('openOrders.status', {}, true);
       if (ordersRes && !ordersRes.error && Array.isArray(ordersRes.result)) {
-        rawOrders = ordersRes.result;
+        addOrders(ordersRes.result);
       }
-    } catch (e: any) {
-      // If symbol is required by Binance, query for current symbol
-      try {
-        const singleRes = await this.sendWsRequest('openOrders.status', { symbol: this.currentSymbol }, true);
-        if (singleRes && !singleRes.error && Array.isArray(singleRes.result)) {
-          rawOrders = singleRes.result;
-        }
-      } catch {}
+    } catch {}
+
+    // 2. Query open orders specifically for all position symbols and current symbol
+    const candidateSymbols = new Set<string>();
+    this.positions.forEach((p) => {
+      if (p.symbol) candidateSymbols.add(p.symbol);
+    });
+    if (this.currentSymbol) candidateSymbols.add(this.currentSymbol);
+    this.openOrders.forEach((o) => {
+      if (o.symbol) candidateSymbols.add(o.symbol);
+    });
+
+    const symbolList = Array.from(candidateSymbols);
+
+    if (symbolList.length > 0) {
+      await Promise.allSettled(
+        symbolList.map(async (sym) => {
+          try {
+            const res = await this.sendWsRequest('openOrders.status', { symbol: sym }, true);
+            if (res && !res.error && Array.isArray(res.result) && res.result.length > 0) {
+              addOrders(res.result);
+              return;
+            }
+          } catch {}
+
+          // Fallback: allOrders for this symbol
+          try {
+            const allRes = await this.sendWsRequest('allOrders', { symbol: sym, limit: 40 }, true);
+            if (allRes && !allRes.error && Array.isArray(allRes.result)) {
+              const openSubset = allRes.result.filter(
+                (o: any) =>
+                  o.status === 'NEW' ||
+                  o.status === 'PARTIALLY_FILLED' ||
+                  o.X === 'NEW' ||
+                  o.X === 'PARTIALLY_FILLED'
+              );
+              addOrders(openSubset);
+            }
+          } catch {}
+        })
+      );
     }
 
-    // 2. Fallback to REST /fapi/v1/openOrders
-    if (rawOrders.length === 0) {
+    // 3. Fallback to REST /fapi/v1/openOrders
+    if (collectedRaw.length === 0) {
       try {
         const restOrders = await this.fetchRestOpenOrders();
         if (Array.isArray(restOrders)) {
-          rawOrders = restOrders;
+          addOrders(restOrders);
         }
       } catch {}
     }
 
-    if (Array.isArray(rawOrders)) {
-      const mappedOrders: OpenOrder[] = rawOrders.map((ord: any) => ({
-        orderId: String(ord.orderId || ord.clientOrderId || Math.random()),
-        clientOrderId: ord.clientOrderId || String(ord.orderId),
-        symbol: ord.symbol,
-        side: ord.side as OrderSide,
-        type: ord.type as OrderType,
-        price: parseFloat(ord.price || '0'),
-        stopPrice: parseFloat(ord.stopPrice || '0'),
-        origQty: parseFloat(ord.origQty || '0'),
-        executedQty: parseFloat(ord.executedQty || '0'),
-        status: ord.status || 'NEW',
-        timeInForce: ord.timeInForce || 'GTC',
-        leverage: 2,
-        marginType: 'ISOLATED',
-        createdAt: ord.time || ord.updateTime || Date.now(),
-      }));
+    if (collectedRaw.length > 0) {
+      const mappedOrders: OpenOrder[] = collectedRaw
+        .filter((ord: any) => {
+          const st = ord.status || ord.X || 'NEW';
+          return st !== 'CANCELED' && st !== 'EXPIRED' && st !== 'FILLED';
+        })
+        .map((ord: any) => {
+          const orderId = String(ord.orderId || ord.i || ord.clientOrderId || ord.c || Math.random());
+          const clientOrderId = ord.clientOrderId || ord.c || orderId;
+          const symbol = ord.symbol || ord.s;
+          const side = (ord.side || ord.S) as OrderSide;
+          const type = (ord.type || ord.origType || ord.o) as OrderType;
+          const price = parseFloat(ord.price || ord.p || '0');
+          const stopPrice = parseFloat(ord.stopPrice || ord.sp || ord.activatePrice || ord.triggerPrice || '0');
+          const origQty = parseFloat(ord.origQty || ord.q || '0');
+          const executedQty = parseFloat(ord.executedQty || ord.z || '0');
+          const status = ord.status || ord.X || 'NEW';
+          const timeInForce = (ord.timeInForce || ord.f || 'GTC') as 'GTC';
+          const callbackRate = parseFloat(ord.priceRate || ord.callbackRate || ord.cr || '0') || undefined;
+          const createdAt = ord.time || ord.updateTime || ord.T || Date.now();
+
+          const existingOrd = this.openOrders.find((o) => o.orderId === orderId || o.clientOrderId === clientOrderId);
+
+          return {
+            orderId,
+            clientOrderId,
+            symbol,
+            side,
+            type,
+            price,
+            stopPrice,
+            callbackRate,
+            origQty,
+            executedQty,
+            status,
+            timeInForce,
+            leverage: existingOrd?.leverage || 2,
+            marginType: 'ISOLATED' as const,
+            createdAt,
+            strategyId: existingOrd?.strategyId,
+            strategyName: existingOrd?.strategyName,
+          };
+        });
 
       this.openOrders = mappedOrders;
+      this.syncPositionsWithConditionalOrders();
+      this.recalculateAccountStats();
       this.notify();
       return mappedOrders;
+    } else {
+      this.openOrders = [];
+      this.syncPositionsWithConditionalOrders();
+      this.recalculateAccountStats();
+      this.notify();
+      return [];
     }
-
-    return this.openOrders;
   }
 
   /**

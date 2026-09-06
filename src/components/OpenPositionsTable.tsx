@@ -38,6 +38,11 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
   const mode = binanceWs.getMode();
 
+  // Stable fixed order of position symbols so positions NEVER jump or re-order automatically
+  const [stableSymbolsOrder, setStableSymbolsOrder] = useState<string[]>(() =>
+    binanceWs.getPositions().map((p) => p.symbol)
+  );
+
   // Modal for editing TP/SL
   const [editingPos, setEditingPos] = useState<PositionRisk | null>(null);
   const [editTp, setEditTp] = useState<string>('');
@@ -78,6 +83,15 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       setBalance(binanceWs.getBalance());
       setIsSyncing(binanceWs.getIsSyncingData());
 
+      // Maintain fixed symbol positions: keep existing ordering intact and append any newly opened positions
+      setStableSymbolsOrder((prevOrder) => {
+        const activeSymbols = new Set(curPositions.map((p) => p.symbol));
+        const preserved = prevOrder.filter((sym) => activeSymbols.has(sym));
+        const existingSet = new Set(preserved);
+        const added = curPositions.map((p) => p.symbol).filter((sym) => !existingSet.has(sym));
+        return [...preserved, ...added];
+      });
+
       // Auto-expand any position that has a strategy attached if not yet expanded
       setExpandedSymbols((prev) => {
         const next = new Set(prev);
@@ -91,6 +105,22 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     });
     return () => unsub();
   }, []);
+
+  // Compute positions strictly in fixed stable order
+  const fixedPositions = React.useMemo(() => {
+    const posMap = new Map<string, PositionRisk>(positions.map((p) => [p.symbol, p]));
+    const result: PositionRisk[] = [];
+    stableSymbolsOrder.forEach((sym) => {
+      const found = posMap.get(sym);
+      if (found) {
+        result.push(found);
+        posMap.delete(sym);
+      }
+    });
+    // Append any remainder
+    posMap.forEach((p) => result.push(p));
+    return result;
+  }, [positions, stableSymbolsOrder]);
 
   const handleOpenOrder = () => {
     if (onOpenOrderModal) {
@@ -182,7 +212,6 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             <tr>
               <th className="py-3 px-4">Par</th>
               <th className="py-3 px-4">Estrategia Ligada</th>
-              <th className="py-3 px-4">Gestión de Riesgo</th>
               <th className="py-3 px-4">Apalancamiento</th>
               <th className="py-3 px-4">Margen</th>
               <th className="py-3 px-4">Tamaño</th>
@@ -195,9 +224,9 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800/60">
-            {positions.length === 0 ? (
+            {fixedPositions.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-12 px-4 text-center">
+                <td colSpan={11} className="py-12 px-4 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <div className="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-neutral-500 mb-3 shadow-inner">
                       <ShieldCheck className="w-6 h-6 text-emerald-400/80" />
@@ -231,13 +260,12 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 </td>
               </tr>
             ) : (
-              positions.map((pos) => {
+              fixedPositions.map((pos) => {
                 const isLong = pos.positionAmt > 0;
                 const pnl = pos.unRealizedProfit || 0;
                 const isProfit = pnl >= 0;
                 const roe = pos.roePercent || 0;
                 const safeLeverage = Math.min(5, Math.max(1, pos.leverage || 2));
-                const audit = auditPositionRisk(pos, balance.totalMarginBalance);
                 const { tpValue, slValue, tpOrder, slOrder } = getEffectiveTPSL(pos);
 
                 return (
@@ -308,23 +336,6 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                           )}
                         </button>
                       </div>
-                    </td>
-
-                    {/* Gestión de Riesgo Badge */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => setAuditPos(pos)}
-                        title="Ver auditoría de riesgo institucional detallada"
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
-                      >
-                        {audit.overallStatus === 'OPTIMAL' ? (
-                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                        ) : (
-                          <ShieldAlert className="w-3 h-3" />
-                        )}
-                        <span>{audit.badgeText}</span>
-                      </button>
                     </td>
 
                     {/* Apalancamiento Máx 5x */}
@@ -424,7 +435,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                   {/* Subfila Desplegable de Seguimiento Visual de la Estrategia */}
                   {expandedSymbols.has(pos.symbol) && (
                     <tr className="bg-neutral-950 border-b border-neutral-800">
-                      <td colSpan={12} className="p-3 sm:p-4 bg-neutral-950">
+                      <td colSpan={11} className="p-3 sm:p-4 bg-neutral-950">
                         <StrategyPositionTracker
                           position={pos}
                           onLinkStrategy={(p) => setLinkPos(p)}

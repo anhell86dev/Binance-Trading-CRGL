@@ -92,7 +92,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [proximityFilter, setProximityFilter] = useState<'ALL' | 'ZONE' | 'VERY_CLOSE' | 'CLOSE'>('ALL');
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
-  const [confluenceFilter, setConfluenceFilter] = useState<'ALL' | 'CONFLUENT' | 'NEUTRAL'>('ALL');
+  const [confluenceFilter, setConfluenceFilter] = useState<'ALL' | 'CONFLUENT' | 'BULLISH' | 'BEARISH' | 'NEUTRAL'>('ALL');
   const [sortBy, setSortBy] = useState<'RB' | 'PROXIMITY' | 'TP_POTENTIAL'>('RB');
 
   // Modal
@@ -279,6 +279,10 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
     // Confluence filter
     if (confluenceFilter === 'CONFLUENT') {
       list = list.filter((op) => op.isConfluent);
+    } else if (confluenceFilter === 'BULLISH') {
+      list = list.filter((op) => op.trafficLight === 'BULLISH');
+    } else if (confluenceFilter === 'BEARISH') {
+      list = list.filter((op) => op.trafficLight === 'BEARISH');
     } else if (confluenceFilter === 'NEUTRAL') {
       list = list.filter((op) => op.trafficLight === 'NEUTRAL');
     }
@@ -317,6 +321,18 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   }, [candidateOperations]);
   const confluentCount = useMemo(
     () => candidateOperations.filter((op) => op.isConfluent).length,
+    [candidateOperations]
+  );
+  const bullishCount = useMemo(
+    () => candidateOperations.filter((op) => op.trafficLight === 'BULLISH').length,
+    [candidateOperations]
+  );
+  const bearishCount = useMemo(
+    () => candidateOperations.filter((op) => op.trafficLight === 'BEARISH').length,
+    [candidateOperations]
+  );
+  const neutralCount = useMemo(
+    () => candidateOperations.filter((op) => op.trafficLight === 'NEUTRAL').length,
     [candidateOperations]
   );
 
@@ -555,23 +571,98 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             <button
               id="filter-dir-all"
               onClick={() => setDirectionFilter('ALL')}
-              className={`px-2 py-0.5 rounded ${directionFilter === 'ALL' ? 'bg-neutral-800 text-white font-bold' : 'text-neutral-400'}`}
+              className={`px-2 py-0.5 rounded ${directionFilter === 'ALL' ? 'bg-neutral-800 text-white font-bold' : 'text-neutral-400 hover:text-white'}`}
             >
               Todos
             </button>
             <button
               id="filter-dir-long"
               onClick={() => setDirectionFilter('LONG')}
-              className={`px-2 py-0.5 rounded ${directionFilter === 'LONG' ? 'bg-emerald-500/30 text-emerald-300 font-bold' : 'text-neutral-400'}`}
+              className={`px-2 py-0.5 rounded ${directionFilter === 'LONG' ? 'bg-emerald-500/30 text-emerald-300 font-bold' : 'text-neutral-400 hover:text-white'}`}
             >
               Long
             </button>
             <button
               id="filter-dir-short"
               onClick={() => setDirectionFilter('SHORT')}
-              className={`px-2 py-0.5 rounded ${directionFilter === 'SHORT' ? 'bg-rose-500/30 text-rose-300 font-bold' : 'text-neutral-400'}`}
+              className={`px-2 py-0.5 rounded ${directionFilter === 'SHORT' ? 'bg-rose-500/30 text-rose-300 font-bold' : 'text-neutral-400 hover:text-white'}`}
             >
               Short
+            </button>
+          </div>
+
+          {/* Filtro de Confluencia de Futuros */}
+          <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px]">
+            <span className="text-neutral-500 px-1 text-[10px] flex items-center gap-1">
+              <div className="flex items-center gap-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              </div>
+              <span>Confluencia:</span>
+            </span>
+            <button
+              id="filter-conf-all"
+              onClick={() => setConfluenceFilter('ALL')}
+              className={`px-2 py-0.5 rounded font-semibold transition-all ${
+                confluenceFilter === 'ALL'
+                  ? 'bg-neutral-800 text-white font-bold'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              Todas
+            </button>
+            <button
+              id="filter-conf-favorable"
+              onClick={() => setConfluenceFilter('CONFLUENT')}
+              className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                confluenceFilter === 'CONFLUENT'
+                  ? 'bg-emerald-500 text-neutral-950 font-bold shadow-xs'
+                  : 'text-emerald-400 hover:text-emerald-300'
+              }`}
+              title="Filtrar solo estrategias con confluencia favorable con respecto a su dirección"
+            >
+              <ShieldCheck className="w-3 h-3" />
+              <span>Favorable ({confluentCount})</span>
+            </button>
+            <button
+              id="filter-conf-bullish"
+              onClick={() => setConfluenceFilter('BULLISH')}
+              className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                confluenceFilter === 'BULLISH'
+                  ? 'bg-emerald-500/30 text-emerald-300 font-bold border border-emerald-500/50'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Semáforo Alcista (Compras institucionales, OI y ballenas en Long)"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>Alcista ({bullishCount})</span>
+            </button>
+            <button
+              id="filter-conf-bearish"
+              onClick={() => setConfluenceFilter('BEARISH')}
+              className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                confluenceFilter === 'BEARISH'
+                  ? 'bg-rose-500/30 text-rose-300 font-bold border border-rose-500/50'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Semáforo Bajista (Ventas agresivas o presión vendedora)"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+              <span>Bajista ({bearishCount})</span>
+            </button>
+            <button
+              id="filter-conf-neutral"
+              onClick={() => setConfluenceFilter('NEUTRAL')}
+              className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1 ${
+                confluenceFilter === 'NEUTRAL'
+                  ? 'bg-amber-500/30 text-amber-300 font-bold border border-amber-500/50'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Semáforo Neutral o en Rango"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              <span>Neutral ({neutralCount})</span>
             </button>
           </div>
 
@@ -621,6 +712,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               setSearchTerm('');
               setProximityFilter('ALL');
               setDirectionFilter('ALL');
+              setConfluenceFilter('ALL');
             }}
             className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-mono text-amber-300 transition-all mt-2"
           >
