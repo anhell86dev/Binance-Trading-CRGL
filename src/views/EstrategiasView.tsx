@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { estrategiasSheetService, EstrategiaRow, OrdenRow } from '../services/estrategiasSheetService';
 
 
-const SHEET_ID = '1xu-DaHU8kH0SiEEIG3mW2MHDfk7HXc43S6CttIzmi6s';
+
 
 export function EstrategiasView() {
   const [estrategias, setEstrategias] = useState<EstrategiaRow[]>([]);
