@@ -42,6 +42,7 @@ import {
   MarketSortOption,
 } from '../services/marketsService';
 import { binanceWs } from '../services/binanceWs';
+import { MarketLiquidityVolatilityChart } from './MarketLiquidityVolatilityChart';
 
 interface MarketsViewProps {
   onNavigateToFutures: (symbol: string) => void;
@@ -373,6 +374,13 @@ export const MarketsView: React.FC<MarketsViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* 2.5 Gráfico de Barras Comparativo de Liquidez y Volatilidad */}
+      <MarketLiquidityVolatilityChart
+        pairs={pairs}
+        onSelectPair={handleSelectTrade}
+        onOpenOrderModal={(sym) => onOpenOrderModal(sym)}
+      />
 
       {/* 3. Barra de Categorías y Presets Rápidos */}
       <div className="flex flex-col gap-3">
