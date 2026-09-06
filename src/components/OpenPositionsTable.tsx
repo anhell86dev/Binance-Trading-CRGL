@@ -25,6 +25,7 @@ import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
+import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -242,6 +243,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             <tr>
               <th className="py-3 px-4">Par</th>
               <th className="py-3 px-4">Estrategia Ligada</th>
+              <th className="py-3 px-4">Estado del Trade</th>
               <th className="py-3 px-4">Apalancamiento</th>
               <th className="py-3 px-4">Margen</th>
               <th className="py-3 px-4">Tamaño</th>
@@ -256,7 +258,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
           <tbody className="divide-y divide-neutral-800/60">
             {fixedPositions.length === 0 ? (
               <tr>
-                <td colSpan={11} className="py-12 px-4 text-center">
+                <td colSpan={12} className="py-12 px-4 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <div className="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-neutral-500 mb-3 shadow-inner">
                       <ShieldCheck className="w-6 h-6 text-emerald-400/80" />
@@ -371,6 +373,46 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </div>
                     </td>
 
+                    {/* Estado del Trade (Fase y Hitos Tocados) */}
+                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const tradeStatus = getTradeStatusAndPhase(pos, openOrders);
+                        return (
+                          <div className="flex flex-col gap-1 min-w-[190px]">
+                            {/* Fase Badge */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 shadow-2xs ${tradeStatus.badgeClass}`}
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+                                {tradeStatus.phaseBadge}
+                              </span>
+                              {tradeStatus.hasHitMilestone && (
+                                <span
+                                  className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
+                                  title="Hito alcanzado en la posición"
+                                >
+                                  Hito Tocado
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Detalle de Hitos Alcanzados */}
+                            <div className="flex items-center gap-1 text-[11px]">
+                              <span className={`font-semibold ${tradeStatus.textClass}`}>
+                                {tradeStatus.milestonesHitText}
+                              </span>
+                            </div>
+
+                            {/* Próximo Paso / Hito Siguiente */}
+                            <div className="text-[10px] text-neutral-400 font-mono">
+                              {tradeStatus.nextMilestoneText}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </td>
+
                     {/* Apalancamiento Máx 5x */}
                     <td className="py-3 px-3 font-bold">
                       <span className="px-1.5 py-0.5 rounded bg-neutral-950 text-amber-300 border border-neutral-700">
@@ -468,7 +510,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                   {/* Subfila Desplegable de Seguimiento Visual de la Estrategia */}
                   {expandedSymbols.has(pos.symbol) && (
                     <tr className="bg-neutral-950 border-b border-neutral-800">
-                      <td colSpan={11} className="p-3 sm:p-4 bg-neutral-950">
+                      <td colSpan={12} className="p-3 sm:p-4 bg-neutral-950">
                         <StrategyPositionTracker
                           position={pos}
                           onLinkStrategy={(p) => setLinkPos(p)}

@@ -181,36 +181,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           </button>
 
           <button
-            id="tab-orders-btn"
-            onClick={() => setTab('orders')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
-              tab === 'orders'
-                ? 'border-amber-400 text-white bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <span>Órdenes Abiertas</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono">
-              {orders.length}
-            </span>
-          </button>
-
-          <button
-            id="tab-history-btn"
-            onClick={() => setTab('history')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
-              tab === 'history'
-                ? 'border-amber-400 text-white bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <span>Historial Trades</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono">
-              {history.length}
-            </span>
-          </button>
-
-          <button
             id="tab-disciplines-btn"
             onClick={() => setTab('disciplines')}
             className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
@@ -221,21 +191,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
           >
             <Award className="w-3.5 h-3.5 text-amber-400" />
             <span>Disciplinas del Trade</span>
-          </button>
-
-          <button
-            id="tab-alerts-btn"
-            onClick={() => setTab('alerts')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
-              tab === 'alerts'
-                ? 'border-amber-400 text-white bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <span>Alertas Volatilidad</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono">
-              {alerts.length}
-            </span>
           </button>
         </div>
 
