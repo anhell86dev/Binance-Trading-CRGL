@@ -158,7 +158,6 @@ class BinanceWsEngine {
   private isSyncingData: boolean = false;
   private lastDataSyncTime: number = 0;
   private lastDataSyncError: string | null = null;
-  private balanceSyncInterval: any = null;
   private marketMetricsInterval: any = null;
   private lastLatencyMs: number = 24;
   private userDataWs: WebSocket | null = null;
@@ -853,17 +852,10 @@ class BinanceWsEngine {
             await this.sessionLogon();
           }
 
-          // In production or testnet: actively fetch and synchronize real balance, positions, orders and trades
+          // In production or testnet: start real-time user data push and perform initial snapshot sync
           if (this.credentials.apiKey && (this.mode === 'production' || this.mode === 'testnet')) {
             this.startUserDataStream().catch(() => {});
             this.syncAllAccountData().catch(() => {});
-
-            if (this.balanceSyncInterval) clearInterval(this.balanceSyncInterval);
-            this.balanceSyncInterval = setInterval(() => {
-              if (this.mode !== 'simulation' && this.credentials.apiKey) {
-                this.syncAllAccountData().catch(() => {});
-              }
-            }, 10000);
           }
 
           this.connectMarketStream();
@@ -884,10 +876,6 @@ class BinanceWsEngine {
 
         this.ws.onclose = (event) => {
           this.connectionStatus = 'disconnected';
-          if (this.balanceSyncInterval) {
-            clearInterval(this.balanceSyncInterval);
-            this.balanceSyncInterval = null;
-          }
           this.logFrame('IN', 'SYSTEM', `Conexión cerrada: código ${event.code}`, { reason: event.reason });
           this.notify();
         };
