@@ -14,10 +14,12 @@ import {
   AccountBalance,
   ApiCredentials,
   BinanceWsMessage,
+  ExecutionType,
   KlineCandle,
   NetworkMode,
   OpenOrder,
   OrderBook,
+  OrderExecutionStatus,
   OrderSide,
   OrderType,
   PerformanceStats,
@@ -25,9 +27,11 @@ import {
   RateLimitStatus,
   ScaledOrderConfig,
   TickerData,
+  TimeInForce,
   TradeHistoryItem,
   TrailingStopConfig,
   VolatilityAlert,
+  WorkingType,
   WsLogFrame,
   FuturesMarketMetrics,
 } from '../types/binance';
@@ -3180,61 +3184,144 @@ class BinanceWsEngine {
       this.lastDataSyncTime = Date.now();
       this.notify();
     } else if (data.e === 'ORDER_TRADE_UPDATE' && data.o) {
-      this.logFrame('IN', 'STREAM', `Binance FAPI Evento ORDER_TRADE_UPDATE (${data.o.s} ${data.o.X})`, data.o);
+      this.logFrame('IN', 'STREAM', `Binance Evento ORDER_TRADE_UPDATE (${data.o.s} ${data.o.X} - ${data.o.x})`, data.o);
       const o = data.o;
       const orderId = String(o.i || o.c);
-      const status = o.X; // 'NEW', 'PARTIALLY_FILLED', 'FILLED', 'CANCELED', 'EXPIRED'
-      
-      if (status === 'FILLED' || status === 'CANCELED' || status === 'EXPIRED') {
-        this.openOrders = this.openOrders.filter(ord => String(ord.orderId) !== orderId && ord.clientOrderId !== o.c);
-        if (status === 'FILLED') {
+      const clientOrderId = String(o.c || '');
+      const executionType = (o.x || 'NEW') as ExecutionType; // NEW, CANCELED, CALCULATED, EXPIRED, TRADE, AMENDMENT
+      const status = (o.X || 'NEW') as OrderExecutionStatus; // NEW, PARTIALLY_FILLED, FILLED, CANCELED, EXPIRED, EXPIRED_IN_MATCH
+      const symbol = o.s;
+      const side = (o.S || 'BUY') as OrderSide;
+      const orderType = (o.o || 'LIMIT') as OrderType;
+      const tif = (o.f || 'GTC') as TimeInForce;
+      const price = parseFloat(o.p || '0');
+      const stopPrice = parseFloat(o.sp || '0');
+      const activationPrice = o.AP ? parseFloat(o.AP) : undefined;
+      const callbackRate = o.cr ? parseFloat(o.cr) : undefined;
+      const origQty = parseFloat(o.q || '0');
+      const executedQty = parseFloat(o.z || '0');
+      const lastFilledQty = parseFloat(o.l || '0');
+      const lastFilledPrice = parseFloat(o.L || o.ap || o.p || '0');
+      const avgPrice = parseFloat(o.ap || '0');
+      const realizedPnl = parseFloat(o.rp || '0');
+      const commission = parseFloat(o.n || '0');
+      const commissionAsset = o.N || 'USDT';
+      const workingType = o.wt as WorkingType | undefined;
+      const isReduceOnly = Boolean(o.R);
+      const isCloseAll = Boolean(o.cp);
+      const positionSide = o.ps as 'BOTH' | 'LONG' | 'SHORT' | undefined;
+      const expiryReason = String(o.er || '0');
+      const eventTime = data.E || data.T || o.T || Date.now();
+
+      // Check liquidation or ADL notifications based on Binance spec
+      if (clientOrderId.startsWith('autoclose-') || clientOrderId === 'adl_autoclose') {
+        const isAdl = clientOrderId === 'adl_autoclose';
+        notificationService.notify(
+          'SYSTEM',
+          isAdl ? `⚠️ Desapalancamiento Automático (ADL): ${symbol}` : `🚨 Liquidación de Cuenta: ${symbol}`,
+          isAdl
+            ? `Posición en ${symbol} reducida automáticamente por Binance (ADL).`
+            : `Orden de liquidación forzosa ejecutada en ${symbol}.`,
+          'high'
+        );
+      }
+
+      // Check if order is terminal (FILLED, CANCELED, EXPIRED, EXPIRED_IN_MATCH, REJECTED)
+      const isTerminal = status === 'FILLED' || status === 'CANCELED' || status === 'EXPIRED' || status === 'EXPIRED_IN_MATCH' || status === 'REJECTED';
+
+      if (isTerminal) {
+        // Remove from active open orders list
+        this.openOrders = this.openOrders.filter(
+          (ord) => String(ord.orderId) !== orderId && ord.clientOrderId !== clientOrderId
+        );
+
+        // If execution type is TRADE or status is FILLED, register in Trade History
+        if (executionType === 'TRADE' || status === 'FILLED') {
           notificationService.notify(
             'SYSTEM',
-            `Orden Ejecutada: ${o.s}`,
-            `Orden ${o.S === 'BUY' ? 'Compra' : 'Venta'} de ${o.q} ${o.s} ejecutada a $${parseFloat(o.ap || o.p || '0').toFixed(2)}`,
+            `Orden Ejecutada: ${symbol} (${side})`,
+            `Orden ${side === 'BUY' ? 'Compra' : 'Venta'} (${orderType}) por ${lastFilledQty || origQty} ${symbol} ejecutada a $${(lastFilledPrice || avgPrice || price).toFixed(2)}${realizedPnl !== 0 ? ` | PnL: ${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(2)}` : ''}`,
             'normal'
           );
-          const fillPrice = parseFloat(o.ap || o.L || o.p || '0');
-          const fillQty = parseFloat(o.l || o.z || o.q || '0');
-          const pnl = parseFloat(o.rp || '0');
-          const comm = parseFloat(o.n || '0');
+
           this.tradeHistory.unshift({
-            id: String(o.t || Date.now()),
+            id: String(o.t || `${orderId}_${Date.now()}`),
             orderId,
-            symbol: o.s,
-            side: o.S,
-            price: fillPrice,
-            quantity: fillQty,
-            notional: Number((fillPrice * fillQty).toFixed(2)),
-            realizedPnl: Number(pnl.toFixed(2)),
-            commission: Number(comm.toFixed(3)),
-            time: o.T || Date.now(),
+            symbol,
+            side,
+            price: lastFilledPrice > 0 ? lastFilledPrice : (avgPrice > 0 ? avgPrice : price),
+            quantity: lastFilledQty > 0 ? lastFilledQty : (executedQty > 0 ? executedQty : origQty),
+            notional: Number(((lastFilledPrice || avgPrice || price) * (lastFilledQty || executedQty || origQty)).toFixed(2)),
+            realizedPnl: Number(realizedPnl.toFixed(2)),
+            commission: Number(commission.toFixed(3)),
+            time: o.T || eventTime,
             leverage: 2,
             marginType: 'ISOLATED',
           });
         }
       } else if (status === 'NEW' || status === 'PARTIALLY_FILLED') {
-        const existingIdx = this.openOrders.findIndex(ord => String(ord.orderId) === orderId || ord.clientOrderId === o.c);
-        const newOrd: OpenOrder = {
+        // Find if order already tracked
+        const existingIdx = this.openOrders.findIndex(
+          (ord) => String(ord.orderId) === orderId || (clientOrderId && ord.clientOrderId === clientOrderId)
+        );
+
+        const updatedOrder: OpenOrder = {
           orderId,
-          clientOrderId: o.c,
-          symbol: o.s,
-          side: o.S,
-          type: o.o,
-          price: parseFloat(o.p || '0'),
-          stopPrice: parseFloat(o.sp || '0'),
-          origQty: parseFloat(o.q || '0'),
-          executedQty: parseFloat(o.z || '0'),
-          status: status,
-          timeInForce: o.f || 'GTC',
-          leverage: 2,
+          clientOrderId,
+          symbol,
+          side,
+          type: orderType,
+          price,
+          avgPrice: avgPrice > 0 ? avgPrice : undefined,
+          origQty,
+          executedQty,
+          status,
+          executionType,
+          timeInForce: tif,
+          workingType,
+          positionSide,
+          isReduceOnly,
+          isCloseAll,
+          leverage: existingIdx >= 0 ? this.openOrders[existingIdx].leverage : 2,
           marginType: 'ISOLATED',
-          createdAt: o.T || Date.now(),
+          stopPrice: stopPrice > 0 ? stopPrice : undefined,
+          activationPrice,
+          callbackRate,
+          realizedPnl,
+          commission,
+          commissionAsset,
+          expiryReason,
+          parentScaledId: existingIdx >= 0 ? this.openOrders[existingIdx].parentScaledId : undefined,
+          tpPrice: existingIdx >= 0 ? this.openOrders[existingIdx].tpPrice : undefined,
+          slPrice: existingIdx >= 0 ? this.openOrders[existingIdx].slPrice : undefined,
+          strategyId: existingIdx >= 0 ? this.openOrders[existingIdx].strategyId : undefined,
+          strategyName: existingIdx >= 0 ? this.openOrders[existingIdx].strategyName : undefined,
+          createdAt: existingIdx >= 0 ? this.openOrders[existingIdx].createdAt : (o.T || eventTime),
+          updatedAt: eventTime,
         };
+
         if (existingIdx >= 0) {
-          this.openOrders[existingIdx] = newOrd;
+          this.openOrders[existingIdx] = updatedOrder;
         } else {
-          this.openOrders.unshift(newOrd);
+          this.openOrders.unshift(updatedOrder);
+        }
+
+        // If execution is TRADE on partially filled order, record partial trade fill
+        if (executionType === 'TRADE' && lastFilledQty > 0) {
+          this.tradeHistory.unshift({
+            id: String(o.t || `${orderId}_${Date.now()}`),
+            orderId,
+            symbol,
+            side,
+            price: lastFilledPrice > 0 ? lastFilledPrice : (avgPrice > 0 ? avgPrice : price),
+            quantity: lastFilledQty,
+            notional: Number(((lastFilledPrice || avgPrice || price) * lastFilledQty).toFixed(2)),
+            realizedPnl: Number(realizedPnl.toFixed(2)),
+            commission: Number(commission.toFixed(3)),
+            time: o.T || eventTime,
+            leverage: 2,
+            marginType: 'ISOLATED',
+          });
         }
       }
       this.recalculateAccountStats();

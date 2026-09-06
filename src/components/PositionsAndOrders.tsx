@@ -393,16 +393,16 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                 <table className="w-full text-left text-xs font-mono">
                   <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-[11px]">
                     <tr>
-                      <th className="py-2.5 px-3">ID / Fecha</th>
+                      <th className="py-2.5 px-3">ID / Hora</th>
                       <th className="py-2.5 px-3">Símbolo</th>
-                      <th className="py-2.5 px-3">Estrategia Ligada</th>
-                      <th className="py-2.5 px-3">Gestión de Riesgo</th>
-                      <th className="py-2.5 px-3">Tipo de Orden</th>
+                      <th className="py-2.5 px-3">Tipo & Flags</th>
                       <th className="py-2.5 px-3">Lado</th>
-                      <th className="py-2.5 px-3">Precio / Condición Activación</th>
-                      <th className="py-2.5 px-3">Cantidad</th>
-                      <th className="py-2.5 px-3">Apal.</th>
-                      <th className="py-2.5 px-3">Margen</th>
+                      <th className="py-2.5 px-3">Estado / Exec</th>
+                      <th className="py-2.5 px-3">Precio / Trigger</th>
+                      <th className="py-2.5 px-3">Cantidad / Llenado</th>
+                      <th className="py-2.5 px-3">TIF / WT</th>
+                      <th className="py-2.5 px-3">Gestión de Riesgo</th>
+                      <th className="py-2.5 px-3">Apal. & Margen</th>
                       <th className="py-2.5 px-3 text-right">Acción</th>
                     </tr>
                   </thead>
@@ -419,8 +419,9 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                         ord.clientOrderId?.includes('SL-');
 
                       const isTrailing = ord.type === 'TRAILING_STOP_MARKET';
+                      const isLiquidation = ord.type === 'LIQUIDATION' || ord.clientOrderId?.startsWith('autoclose-') || ord.clientOrderId === 'adl_autoclose';
                       const isConditional = isTP || isSL || isTrailing || (ord.stopPrice && ord.stopPrice > 0);
-                      const isProtective = isConditional || Boolean((ord as any).reduceOnly);
+                      const isProtective = isConditional || Boolean(ord.isReduceOnly) || Boolean((ord as any).reduceOnly);
 
                       const orderPrice = ord.price > 0 ? ord.price : (ord.stopPrice || 0);
                       const remainingQty = Math.max(0, ord.origQty - (ord.executedQty || 0));
@@ -432,90 +433,98 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                       return (
                         <tr key={ord.orderId} className="hover:bg-neutral-800/30 transition-colors">
                           <td className="py-3 px-3 text-neutral-400">
-                            <div>{ord.orderId.substring(0, 14)}...</div>
+                            <div className="font-mono text-neutral-300 font-semibold">{ord.orderId.substring(0, 14)}</div>
                             <div className="text-[10px] text-neutral-500">
                               {new Date(ord.createdAt).toLocaleTimeString()}
                             </div>
+                            {ord.clientOrderId && (
+                              <div className="text-[9px] text-neutral-500 truncate max-w-[100px]" title={ord.clientOrderId}>
+                                c: {ord.clientOrderId}
+                              </div>
+                            )}
                           </td>
-                          <td className="py-3 px-3 font-bold text-white">{ord.symbol}</td>
-                          
-                          {/* Estrategia Ligada */}
                           <td className="py-3 px-3">
-                            <div className="flex items-center gap-1.5">
-                              {ord.strategyId ? (
-                                <button
-                                  type="button"
-                                  onClick={() => setLinkOrder(ord)}
-                                  title={`Estrategia: ${ord.strategyId} - Clic para reasignar`}
-                                  className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
-                                >
-                                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                                  <span>{ord.strategyId}</span>
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setLinkOrder(ord)}
-                                  className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
-                                >
-                                  <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                                  <span>Ligar Estrategia</span>
-                                </button>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Gestión de Riesgo Badge */}
-                          <td className="py-3 px-3">
-                            <button
-                              type="button"
-                              onClick={() => setAuditOrder(ord)}
-                              title="Ver auditoría de riesgo institucional detallada"
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
-                            >
-                              {audit.overallStatus === 'OPTIMAL' ? (
-                                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                              ) : (
-                                <ShieldAlert className="w-3 h-3" />
-                              )}
-                              <span>{audit.badgeText}</span>
-                            </button>
-                          </td>
-
-                          {/* Tipo de Orden con badges descriptivos */}
-                          <td className="py-3 px-3">
-                            {isTP ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 font-bold text-[10px]">
-                                TAKE PROFIT (TP)
-                              </span>
-                            ) : isSL ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-800/80 text-rose-400 font-bold text-[10px]">
-                                STOP LOSS (SL)
-                              </span>
-                            ) : isTrailing ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/80 text-blue-400 font-bold text-[10px]">
-                                TRAILING ({ord.callbackRate}%)
-                              </span>
-                            ) : ord.parentScaledId ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/80 text-purple-400 font-bold text-[10px]">
-                                ESCALONADA
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 text-amber-300 font-bold text-[10px]">
-                                LÍMITE
+                            <span className="font-bold text-white">{ord.symbol}</span>
+                            {ord.positionSide && ord.positionSide !== 'BOTH' && (
+                              <span className="ml-1 text-[9px] px-1 py-0.2 rounded bg-neutral-800 text-neutral-400 font-mono">
+                                {ord.positionSide}
                               </span>
                             )}
+                          </td>
+
+                          {/* Tipo de Orden con badges descriptivos y Flags */}
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col gap-1 items-start">
+                              {isLiquidation ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950 border border-rose-700 text-rose-300 font-bold text-[10px] animate-pulse">
+                                  LIQUIDACIÓN / ADL
+                                </span>
+                              ) : isTP ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 font-bold text-[10px]">
+                                  {ord.type === 'TAKE_PROFIT' ? 'TAKE PROFIT LIMIT' : 'TAKE PROFIT (TP)'}
+                                </span>
+                              ) : isSL ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-800/80 text-rose-400 font-bold text-[10px]">
+                                  {ord.type === 'STOP' ? 'STOP LIMIT' : 'STOP LOSS (SL)'}
+                                </span>
+                              ) : isTrailing ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/80 text-blue-400 font-bold text-[10px]">
+                                  TRAILING ({ord.callbackRate || 1}%)
+                                </span>
+                              ) : ord.parentScaledId ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/80 text-purple-400 font-bold text-[10px]">
+                                  ESCALONADA
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-neutral-800 text-amber-300 font-bold text-[10px]">
+                                  {ord.type}
+                                </span>
+                              )}
+
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {ord.isReduceOnly && (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                                    Reduce-Only
+                                  </span>
+                                )}
+                                {ord.isCloseAll && (
+                                  <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-mono">
+                                    Close-All
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           </td>
 
                           {/* Lado */}
                           <td className="py-3 px-3">
                             <span
-                              className={`font-bold ${
-                                ord.side === 'BUY' ? 'text-emerald-400' : 'text-rose-400'
+                              className={`font-bold px-1.5 py-0.5 rounded text-[11px] ${
+                                ord.side === 'BUY'
+                                  ? 'bg-emerald-950/70 text-emerald-400 border border-emerald-800/60'
+                                  : 'bg-rose-950/70 text-rose-400 border border-rose-800/60'
                               }`}
                             >
                               {ord.side === 'BUY' ? 'COMPRA' : 'VENTA'}
                             </span>
+                          </td>
+
+                          {/* Estado / Exec Type */}
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className={`text-[10px] font-bold font-mono ${
+                                ord.status === 'NEW' ? 'text-emerald-400' :
+                                ord.status === 'PARTIALLY_FILLED' ? 'text-amber-400' :
+                                ord.status === 'FILLED' ? 'text-cyan-400' : 'text-rose-400'
+                              }`}>
+                                {ord.status || 'NEW'}
+                              </span>
+                              {ord.executionType && (
+                                <span className="text-[9px] text-neutral-500 font-mono">
+                                  exec: {ord.executionType}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Precio / Condición de Activación */}
@@ -523,12 +532,16 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                             {isConditional ? (
                               <div className="flex flex-col">
                                 <span className="font-bold text-amber-300 text-xs">
-                                  Trigger: ${(ord.stopPrice || orderPrice).toFixed(2)}
+                                  Stop: ${(ord.stopPrice || orderPrice).toFixed(2)}
                                 </span>
                                 <span className="text-[10px] text-neutral-400">
-                                  Ejec: {ord.price > 0 ? `$${ord.price.toFixed(2)}` : 'A Mercado'}
-                                  {posMatch && ' (Protege Posición)'}
+                                  Precio: {ord.price > 0 ? `$${ord.price.toFixed(2)}` : 'A Mercado'}
                                 </span>
+                                {ord.activationPrice && ord.activationPrice > 0 && (
+                                  <span className="text-[9px] text-blue-400">
+                                    Act: ${ord.activationPrice.toFixed(2)}
+                                  </span>
+                                )}
                               </div>
                             ) : (
                               <div className="font-semibold text-neutral-200 text-xs">
@@ -537,23 +550,64 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
                             )}
                           </td>
 
-                          <td className="py-3 px-3 text-neutral-300">{ord.origQty}</td>
-                          <td className="py-3 px-3 font-bold text-amber-300">
-                            {lev}x
-                          </td>
-                          <td className="py-3 px-3 font-semibold text-neutral-200">
-                            {isProtective ? (
-                              <span className="text-emerald-400 font-medium">
-                                $0.00 <span className="text-[10px] text-neutral-400 font-sans font-normal">(Protección)</span>
-                              </span>
-                            ) : (
-                              <span>${orderMargin.toFixed(2)} USDT</span>
+                          {/* Cantidad / Llenado */}
+                          <td className="py-3 px-3 text-neutral-300">
+                            <div className="font-semibold text-white">{ord.origQty}</div>
+                            {ord.executedQty > 0 && (
+                              <div className="text-[10px] text-amber-400">
+                                Llenado: {ord.executedQty} ({((ord.executedQty / (ord.origQty || 1)) * 100).toFixed(0)}%)
+                              </div>
                             )}
+                          </td>
+
+                          {/* TIF & Working Type */}
+                          <td className="py-3 px-3 font-mono text-[10px] text-neutral-400">
+                            <div>{ord.timeInForce || 'GTC'}</div>
+                            <div className="text-[9px] text-neutral-500">{ord.workingType || 'CONTRACT'}</div>
+                          </td>
+
+                          {/* Gestión de Riesgo & Estrategia */}
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setAuditOrder(ord)}
+                                title="Ver auditoría de riesgo institucional detallada"
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 transition-transform hover:scale-105 ${audit.badgeColor}`}
+                              >
+                                {audit.overallStatus === 'OPTIMAL' ? (
+                                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                                ) : (
+                                  <ShieldAlert className="w-3 h-3" />
+                                )}
+                                <span>{audit.badgeText}</span>
+                              </button>
+                              {ord.strategyId && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLinkOrder(ord)}
+                                  className="px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 text-[9px] font-mono truncate max-w-[120px] text-left"
+                                >
+                                  {ord.strategyId}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3 font-mono">
+                            <div className="text-amber-300 font-bold text-xs">{lev}x</div>
+                            <div className="text-[10px] text-neutral-400">
+                              {isProtective ? (
+                                <span className="text-emerald-400 font-sans">Protección ($0)</span>
+                              ) : (
+                                <span>${orderMargin.toFixed(2)} USDT</span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-3 px-3 text-right">
                             <button
                               onClick={() => binanceWs.cancelOrder(ord.orderId)}
-                              className="px-2 py-1 rounded bg-neutral-800 hover:bg-rose-950 hover:text-rose-300 text-neutral-400 text-xs transition-colors"
+                              className="px-2 py-1 rounded bg-neutral-800 hover:bg-rose-950 hover:text-rose-300 text-neutral-400 text-xs transition-colors cursor-pointer"
                               title="Cancelar Orden"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

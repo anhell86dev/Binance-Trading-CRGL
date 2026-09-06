@@ -7,12 +7,34 @@ export type OrderSide = 'BUY' | 'SELL';
 export type OrderType =
   | 'LIMIT'
   | 'MARKET'
+  | 'STOP'
   | 'STOP_MARKET'
+  | 'TAKE_PROFIT'
   | 'TAKE_PROFIT_MARKET'
   | 'TRAILING_STOP_MARKET'
+  | 'LIQUIDATION'
   | 'SCALED';
 
-export type TimeInForce = 'GTC'; // Mandated GTC
+export type ExecutionType =
+  | 'NEW'
+  | 'CANCELED'
+  | 'CALCULATED'
+  | 'EXPIRED'
+  | 'TRADE'
+  | 'AMENDMENT';
+
+export type OrderExecutionStatus =
+  | 'NEW'
+  | 'PARTIALLY_FILLED'
+  | 'FILLED'
+  | 'CANCELED'
+  | 'EXPIRED'
+  | 'EXPIRED_IN_MATCH'
+  | 'REJECTED';
+
+export type TimeInForce = 'GTC' | 'IOC' | 'FOK' | 'GTX';
+
+export type WorkingType = 'MARK_PRICE' | 'CONTRACT_PRICE';
 
 export type MarginType = 'ISOLATED'; // Strictly ISOLATED only
 
@@ -125,16 +147,27 @@ export interface OpenOrder {
   avgPrice?: number;
   origQty: number;
   executedQty: number;
-  status: 'NEW' | 'PARTIALLY_FILLED' | 'FILLED' | 'CANCELED' | 'REJECTED' | 'EXPIRED';
-  timeInForce: 'GTC';
+  status: OrderExecutionStatus;
+  executionType?: ExecutionType;
+  timeInForce: TimeInForce;
+  workingType?: WorkingType;
+  positionSide?: 'BOTH' | 'LONG' | 'SHORT';
+  isReduceOnly?: boolean;
+  isCloseAll?: boolean;
   leverage: number; // 1 to 5
   marginType: 'ISOLATED';
   stopPrice?: number;
-  callbackRate?: number; // for Trailing Stop
+  activationPrice?: number; // AP
+  callbackRate?: number; // for Trailing Stop (cr)
+  realizedPnl?: number; // rp
+  commission?: number; // n
+  commissionAsset?: string; // N
+  expiryReason?: string; // er
   parentScaledId?: string;
   tpPrice?: number;
   slPrice?: number;
   createdAt: number;
+  updatedAt?: number;
   strategyId?: string;
   strategyName?: string;
 }
