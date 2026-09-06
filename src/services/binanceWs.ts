@@ -240,7 +240,29 @@ class BinanceWsEngine {
       }
       const savedOrders = localStorage.getItem('binance_fapi_orders');
       if (savedOrders) {
-        this.openOrders = JSON.parse(savedOrders);
+        try {
+          const parsed = JSON.parse(savedOrders);
+          if (Array.isArray(parsed)) {
+            // Live/testnet mode gets active orders directly from live stream / query
+            if (this.mode !== 'simulation') {
+              this.openOrders = [];
+            } else {
+              // In simulation mode, only load orders that are strictly NEW or PARTIALLY_FILLED
+              this.openOrders = parsed.filter(
+                (o) =>
+                  o &&
+                  typeof o === 'object' &&
+                  (o.status === 'NEW' || o.status === 'PARTIALLY_FILLED') &&
+                  o.symbol &&
+                  (o.price > 0 || o.stopPrice > 0)
+              );
+            }
+          }
+        } catch {
+          this.openOrders = [];
+        }
+      } else {
+        this.openOrders = [];
       }
       const savedHistory = localStorage.getItem('binance_fapi_history');
       if (savedHistory) {
@@ -294,7 +316,10 @@ class BinanceWsEngine {
   private persistState() {
     try {
       localStorage.setItem('binance_fapi_creds', JSON.stringify(this.credentials));
-      localStorage.setItem('binance_fapi_orders', JSON.stringify(this.openOrders));
+      const activeToSave = this.openOrders.filter(
+        (o) => o && (o.status === 'NEW' || o.status === 'PARTIALLY_FILLED' || !o.status)
+      );
+      localStorage.setItem('binance_fapi_orders', JSON.stringify(activeToSave));
       localStorage.setItem('binance_fapi_history', JSON.stringify(this.tradeHistory));
       localStorage.setItem('binance_fapi_positions', JSON.stringify(this.positions));
       localStorage.setItem('binance_fapi_balance', JSON.stringify(this.balance));
