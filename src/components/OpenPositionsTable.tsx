@@ -144,6 +144,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     }
   };
 
+  const handleSyncPositions = async () => {
+    await binanceWs.syncAllAccountData();
+  };
+
   const getEffectiveTPSL = (pos: PositionRisk) => {
     const isLong = pos.positionAmt > 0;
     const matchingOrders = openOrders.filter(
@@ -208,6 +212,18 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            id="btn-sync-open-positions"
+            onClick={handleSyncPositions}
+            disabled={isSyncing}
+            className="px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 font-semibold text-[11px] flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Sincronizar y actualizar posiciones de Binance a demanda"
+          >
+            <RefreshCw className={`w-3 h-3 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleOpenOrder}

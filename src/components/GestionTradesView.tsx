@@ -12,6 +12,8 @@ import {
   Activity,
   DollarSign,
   TrendingDown,
+  RefreshCw,
+  Clock,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { PositionRisk, OpenOrder, AccountBalance, NetworkMode, ConnectionStatus, ApiCredentials } from '../types/binance';
@@ -38,6 +40,9 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
   const [credentials, setCredentials] = useState<ApiCredentials>(() => binanceWs.getCredentials());
   const [latencyMs, setLatencyMs] = useState<number>(() => binanceWs.getLastLatencyMs());
   const [isUserDataConnected, setIsUserDataConnected] = useState<boolean>(() => binanceWs.getIsUserDataConnected());
+  const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
+  const [lastSyncTime, setLastSyncTime] = useState<number>(() => binanceWs.getLastDataSyncTime());
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   // Subscribe to pure real-time WebSocket events (no polling, no resets)
   useEffect(() => {
@@ -50,10 +55,32 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
       setCredentials(binanceWs.getCredentials());
       setLatencyMs(binanceWs.getLastLatencyMs());
       setIsUserDataConnected(binanceWs.getIsUserDataConnected());
+      setIsSyncing(binanceWs.getIsSyncingData());
+      setLastSyncTime(binanceWs.getLastDataSyncTime());
     });
 
     return () => unsub();
   }, []);
+
+  const handleManualSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const res = await binanceWs.syncAllAccountData();
+      if (res.success) {
+        setSyncFeedback('¡Posiciones y órdenes sincronizadas!');
+        setTimeout(() => setSyncFeedback(null), 3000);
+      } else {
+        setSyncFeedback(res.error || 'Aviso en sincronización');
+        setTimeout(() => setSyncFeedback(null), 4000);
+      }
+    } catch (err: any) {
+      setSyncFeedback(err?.message || 'Error al sincronizar');
+      setTimeout(() => setSyncFeedback(null), 4000);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const totalIsolatedMargin = positions.reduce((acc, pos) => acc + (pos.isolatedMargin || 0), 0);
   const totalUnrealizedPnl = positions.reduce((acc, pos) => acc + (pos.unRealizedProfit || 0), 0);
@@ -119,8 +146,38 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
           {/* Indicador de Modo Stream Puro */}
           <div className="flex items-center gap-1.5 bg-neutral-950 px-2.5 py-1.5 rounded-lg border border-neutral-800 text-xs text-emerald-400 font-mono font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>WSS Reactivo (Sin Polling)</span>
+            <span>WSS Reactivo</span>
           </div>
+
+          {/* Botón Sincronizar Posiciones y Órdenes a Demanda */}
+          <button
+            type="button"
+            id="btn-sync-positions-gestion"
+            onClick={handleManualSync}
+            disabled={isSyncing}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border shadow-xs cursor-pointer ${
+              isSyncing
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 cursor-wait'
+                : 'bg-neutral-950 hover:bg-neutral-800 text-neutral-200 hover:text-white border-neutral-800 hover:border-amber-500/40 active:scale-95'
+            }`}
+            title={lastSyncTime > 0 ? `Última sincronización: ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Sincronizar posiciones y órdenes a demanda'}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+            {lastSyncTime > 0 && !isSyncing && (
+              <span className="text-[10px] text-neutral-500 font-mono hidden xl:inline">
+                ({new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })})
+              </span>
+            )}
+          </button>
+
+          {/* Feedback de sincronización si aplica */}
+          {syncFeedback && (
+            <span className="text-[11px] font-mono px-2 py-1 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/80 animate-fade-in shadow-xs flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+              {syncFeedback}
+            </span>
+          )}
 
           {/* Botón Consola WebSocket */}
           {onOpenConsole && (
@@ -331,8 +388,18 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono text-emerald-400/90 hidden md:inline flex items-center gap-1.5">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95 shadow-xs"
+              title="Actualizar a demanda posiciones y órdenes"
+            >
+              <RefreshCw className={`w-3 h-3 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span className="hidden xs:inline">{isSyncing ? 'Sincronizando...' : 'Actualizar Posiciones'}</span>
+            </button>
+            <span className="text-[11px] font-mono text-emerald-400/90 hidden md:inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               Streaming en Vivo vía WebSocket
             </span>
