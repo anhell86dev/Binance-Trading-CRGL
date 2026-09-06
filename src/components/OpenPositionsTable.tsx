@@ -3,7 +3,10 @@ import {
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
+  ChevronDown,
+  ChevronUp,
   Edit2,
+  Layers,
   Link as LinkIcon,
   Lock,
   RefreshCw,
@@ -21,6 +24,7 @@ import { auditPositionRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { strategyAutofillService } from '../services/strategyAutofillService';
+import { StrategyPositionTracker } from './StrategyPositionTracker';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -43,12 +47,47 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [auditPos, setAuditPos] = useState<PositionRisk | null>(null);
   const [linkPos, setLinkPos] = useState<PositionRisk | null>(null);
 
+  // Expanded symbols for visual strategy tracking (E2, E3, TP1, TP2, SL)
+  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    binanceWs.getPositions().forEach((p) => {
+      if (p.strategyId || p.symbol) {
+        initial.add(p.symbol);
+      }
+    });
+    return initial;
+  });
+
+  const toggleExpand = (sym: string) => {
+    setExpandedSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) {
+        next.delete(sym);
+      } else {
+        next.add(sym);
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
-      setPositions(binanceWs.getPositions());
+      const curPositions = binanceWs.getPositions();
+      setPositions(curPositions);
       setOpenOrders(binanceWs.getOpenOrders());
       setBalance(binanceWs.getBalance());
       setIsSyncing(binanceWs.getIsSyncingData());
+
+      // Auto-expand any position that has a strategy attached if not yet expanded
+      setExpandedSymbols((prev) => {
+        const next = new Set(prev);
+        curPositions.forEach((p) => {
+          if (p.strategyId) {
+            next.add(p.symbol);
+          }
+        });
+        return next;
+      });
     });
     return () => unsub();
   }, []);
@@ -202,11 +241,11 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 const { tpValue, slValue, tpOrder, slOrder } = getEffectiveTPSL(pos);
 
                 return (
-                  <tr
-                    key={pos.symbol}
-                    onClick={() => onSelectPosition && onSelectPosition(pos)}
-                    className="hover:bg-neutral-800/40 transition-colors cursor-pointer"
-                  >
+                  <React.Fragment key={pos.symbol}>
+                    <tr
+                      onClick={() => onSelectPosition && onSelectPosition(pos)}
+                      className="hover:bg-neutral-800/40 transition-colors cursor-pointer"
+                    >
                     {/* Par y Dirección */}
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-2">
@@ -223,15 +262,15 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </div>
                     </td>
 
-                    {/* Estrategia Ligada */}
+                    {/* Estrategia Ligada & Hitos */}
                     <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         {pos.strategyId ? (
                           <button
                             type="button"
                             onClick={() => setLinkPos(pos)}
                             title={`Estrategia: ${pos.strategyId} - Clic para cambiar`}
-                            className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors"
+                            className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
                           >
                             <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                             <span>{pos.strategyId}</span>
@@ -240,12 +279,34 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                           <button
                             type="button"
                             onClick={() => setLinkPos(pos)}
-                            className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors"
+                            className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
                           >
                             <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
                             <span>Ligar Estrategia</span>
                           </button>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(pos.symbol);
+                          }}
+                          title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                            expandedSymbols.has(pos.symbol)
+                              ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
+                              : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
+                          }`}
+                        >
+                          <Layers className="w-2.5 h-2.5 text-amber-400" />
+                          <span>Hitos</span>
+                          {expandedSymbols.has(pos.symbol) ? (
+                            <ChevronUp className="w-2.5 h-2.5" />
+                          ) : (
+                            <ChevronDown className="w-2.5 h-2.5" />
+                          )}
+                        </button>
                       </div>
                     </td>
 
@@ -359,10 +420,23 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       />
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
+
+                  {/* Subfila Desplegable de Seguimiento Visual de la Estrategia */}
+                  {expandedSymbols.has(pos.symbol) && (
+                    <tr className="bg-neutral-950 border-b border-neutral-800">
+                      <td colSpan={12} className="p-3 sm:p-4 bg-neutral-950">
+                        <StrategyPositionTracker
+                          position={pos}
+                          onLinkStrategy={(p) => setLinkPos(p)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })
+          )}
+        </tbody>
         </table>
       </div>
 

@@ -1,4 +1,4 @@
-export type StrategyTradeStatus = 'Activa' | 'Obsoleto' | 'Live' | 'Live+';
+export type StrategyTradeStatus = 'Activa' | 'Obsoleto' | 'Live' | 'Live+' | 'Fallida';
 
 export interface TradeProcessStageInfo {
   stage: number; // 0 = Obsoleto, 1 = Activa, 2 = Live, 3 = Live+

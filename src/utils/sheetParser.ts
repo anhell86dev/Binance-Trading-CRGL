@@ -31,6 +31,9 @@ SOL-20260903-RANGO-V2,2026-09-03,Trading de Rango y Consolidación Barrera $100 
 export function normalizeStrategyStatus(val?: string): StrategyTradeStatus {
   if (!val) return 'Activa';
   const clean = val.trim().toLowerCase();
+  if (clean === 'fallida' || clean.includes('fallid') || clean.includes('stop loss') || clean.includes('invalidad')) {
+    return 'Fallida';
+  }
   if (clean === 'live+' || clean.includes('live+') || clean.includes('live plus') || clean.includes('completad')) {
     return 'Live+';
   }
@@ -51,6 +54,21 @@ export function getTradeProcessStageInfo(
   hasOpenOrders: boolean = false,
   hasPosition: boolean = false
 ): TradeProcessStageInfo {
+  // If strategy failed (hit Stop Loss)
+  if (status === 'Fallida') {
+    return {
+      stage: -1,
+      status: 'Fallida',
+      label: 'Fallida',
+      meaning: 'Estrategia Fallida (Stop Loss Tocado)',
+      description:
+        'El precio ha alcanzado el nivel de Stop Loss técnico. La hipótesis de mercado quedó invalidada. Cierre obligatorio y post-mortem de riesgo.',
+      progressPct: 100,
+      nextStep: 'Registrar en diario de trading para análisis de lecciones aprendidas y respetar el protocolo.',
+      badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+    };
+  }
+
   // If Binance has an active position, it is in Live+ phase (completada / en curso)
   if (hasPosition || status === 'Live+') {
     return {

@@ -86,7 +86,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState<string>(() =>
     strategyService.getLastSyncTime()
   );
-  const [, setPriceTick] = useState(0);
+  const [priceTick, setPriceTick] = useState(0);
 
   // Filters & Controls
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,10 +115,15 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       setPriceTick((t) => t + 1);
     });
 
+    const unsubBinance = binanceWs.subscribe(() => {
+      setPriceTick((t) => t + 1);
+    });
+
     return () => {
       unsubStrat();
       unsubPrice();
       unsubConfluence();
+      unsubBinance();
     };
   }, []);
 
@@ -128,8 +133,51 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
 
   // 1. Process candidate trade operations
   const candidateOperations: CandidateTradeOperation[] = useMemo(() => {
+    // Get active positions in Binance Futures with non-zero size
+    const activePositions = binanceWs.getPositions().filter((p) => Math.abs(p.positionAmt) > 0);
+    const linkedStrategyIds = new Set<string>();
+    const managedSymbols = new Set<string>();
+
+    activePositions.forEach((pos) => {
+      if (pos.strategyId) {
+        linkedStrategyIds.add(pos.strategyId.trim().toUpperCase());
+        managedSymbols.add(pos.symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''));
+      }
+      if (pos.strategyName) {
+        linkedStrategyIds.add(pos.strategyName.trim().toUpperCase());
+      }
+    });
+
     return strategies
-      .filter((s) => normalizeStrategyStatus(s.estado) !== 'Obsoleto')
+      .filter((s) => {
+        const normStatus = normalizeStrategyStatus(s.estado);
+        if (normStatus === 'Obsoleto' || normStatus === 'Fallida') return false;
+
+        const stratId = (s.noEstrategia || '').trim().toUpperCase();
+        const stratName = (s.nombreEstrategia || '').trim().toUpperCase();
+        const stratPair = (s.par || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        // If this strategy is linked to an active position, it is currently being managed
+        // and must NOT appear in the work plan (Plan de Trabajo / Top Operaciones)
+        if (stratId && linkedStrategyIds.has(stratId)) return false;
+        if (stratName && linkedStrategyIds.has(stratName)) return false;
+        if (managedSymbols.has(stratPair)) {
+          const matchingPos = activePositions.find(
+            (p) => p.symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') === stratPair
+          );
+          if (matchingPos && matchingPos.strategyId) {
+            if (
+              matchingPos.strategyId.toUpperCase() === stratId ||
+              matchingPos.strategyId.toUpperCase() === stratName ||
+              matchingPos.strategyName?.toUpperCase() === stratName
+            ) {
+              return false;
+            }
+          }
+        }
+
+        return true;
+      })
       .map((strat) => {
         const prices = parsePricesFromStrategy(strat);
         const livePrice = livePriceService.getPrice(strat.par) || prices.entry1Price || 100;
@@ -189,7 +237,13 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           isConfluent,
         };
       });
-  }, [strategies]);
+  }, [strategies, priceTick]);
+
+  // Count strategies currently linked to active positions and being managed
+  const managedStrategiesCount = useMemo(() => {
+    const activePositions = binanceWs.getPositions().filter((p) => Math.abs(p.positionAmt) > 0);
+    return activePositions.filter((p) => Boolean(p.strategyId)).length;
+  }, [priceTick]);
 
   // 2. Filter & Sort operations
   const filteredAndSortedOperations = useMemo(() => {
@@ -403,6 +457,23 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Banner de Estrategias en Gestión Activa (Ocultas de este plan) */}
+      {managedStrategiesCount > 0 && (
+        <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs shadow-xs">
+          <div className="flex items-center gap-2.5 text-neutral-300">
+            <div className="w-6 h-6 rounded-md bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
+              <Sparkles className="w-3.5 h-3.5" />
+            </div>
+            <span>
+              <strong className="text-amber-300">{managedStrategiesCount} estrategia{managedStrategiesCount > 1 ? 's' : ''}</strong> vinculada{managedStrategiesCount > 1 ? 's' : ''} a posiciones abiertas y en seguimiento activo en <strong className="text-white">Gestión de Trades</strong> (oculta{managedStrategiesCount > 1 ? 's' : ''} de este plan de trabajo para evitar duplicidad).
+            </span>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono border border-neutral-700 shrink-0">
+            Gestión en Curso
+          </span>
+        </div>
+      )}
 
       {/* 3. Barra de Filtros, Ordenamiento y Controles */}
       <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 shadow-md">

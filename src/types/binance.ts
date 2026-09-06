@@ -102,6 +102,7 @@ export interface PositionRisk {
   updatedAt: number;
   strategyId?: string;
   strategyName?: string;
+  strategyStatus?: string;
 }
 
 export interface AccountBalance {

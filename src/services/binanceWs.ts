@@ -1476,6 +1476,25 @@ class BinanceWsEngine {
   }
 
   /**
+   * Cancel only pending DCA / Entry LIMIT orders (preserving protective Stop Loss and TP)
+   */
+  public async cancelPendingEntryOrders(symbol?: string): Promise<number> {
+    const target = symbol || this.currentSymbol;
+    const initialCount = this.openOrders.length;
+    const entryOrders = this.openOrders.filter(
+      o => o.symbol === target && o.type === 'LIMIT' && !o.clientOrderId?.includes('TP-') && !o.clientOrderId?.includes('SL-')
+    );
+
+    for (const ord of entryOrders) {
+      await this.cancelOrder(ord.orderId);
+    }
+
+    const canceled = initialCount - this.openOrders.length;
+    notificationService.notify('SYSTEM', 'Órdenes DCA Canceladas', `Se cancelaron ${canceled} órdenes de entrada DCA para ${target}`);
+    return canceled;
+  }
+
+  /**
    * Place Strategy Orders - STRICTLY REQUIRING EXPLICIT OPERATOR AUTHORIZATION
    * "La estrategia solo se debe crear en Binance con un boton de autorizacion"
    */
@@ -1636,6 +1655,15 @@ class BinanceWsEngine {
       o => !(o.symbol === symbol && (o.type === 'STOP_MARKET' || o.type === 'TAKE_PROFIT_MARKET' || o.clientOrderId?.includes('TP-') || o.clientOrderId?.includes('SL-')))
     );
 
+    // If position was closed at Stop Loss or negative PnL, mark linked strategy as Fallida
+    const isLong = pos.positionAmt > 0;
+    const isStopLossHit = (pos.stopLoss && (isLong ? exitPrice <= pos.stopLoss : exitPrice >= pos.stopLoss)) || realizedPnl < 0;
+    if (pos.strategyId && isStopLossHit) {
+      import('./strategyService').then(({ strategyService }) => {
+        strategyService.updateStrategyStatus(pos.strategyId!, 'Fallida');
+      }).catch(() => {});
+    }
+
     notificationService.notify(
       realizedPnl >= 0 ? 'TP_HIT' : 'SL_HIT',
       'Posición Cerrada (ISOLATED)',
@@ -1644,6 +1672,86 @@ class BinanceWsEngine {
     );
 
     this.logFrame('IN', 'STREAM', `Posición cerrada: ${symbol}`, tradeItem);
+    this.recalculateAccountStats();
+    this.persistState();
+    this.notify();
+  }
+
+  /**
+   * Close partial position at market (e.g. 50% for TP1 or 75% for TP2)
+   */
+  public async closePartialPosition(symbol: string, percentage: number): Promise<void> {
+    const pos = this.positions.find(p => p.symbol === symbol);
+    if (!pos) return;
+
+    if (percentage >= 100) {
+      await this.closePosition(symbol);
+      return;
+    }
+
+    const pct = Math.max(1, Math.min(99, percentage)) / 100;
+    const totalQty = Math.abs(pos.positionAmt);
+    const closeQty = Number((totalQty * pct).toFixed(4));
+    if (closeQty <= 0) return;
+
+    const remainingQty = Number((totalQty - closeQty).toFixed(4));
+    const exitPrice = this.ticker.lastPrice || pos.markPrice || pos.entryPrice;
+    const notional = closeQty * exitPrice;
+    const realizedPnl =
+      pos.positionAmt > 0
+        ? (exitPrice - pos.entryPrice) * closeQty
+        : (pos.entryPrice - exitPrice) * closeQty;
+
+    if (this.mode !== 'simulation' && this.credentials.apiKey) {
+      try {
+        const closeSide = pos.positionAmt > 0 ? 'SELL' : 'BUY';
+        const qtyStr = formatDecimal(closeQty, 3);
+        await this.sendWsRequest('order.place', {
+          symbol: pos.symbol,
+          side: closeSide,
+          type: 'MARKET',
+          quantity: qtyStr,
+          reduceOnly: 'true',
+        }, true);
+      } catch (err: any) {
+        console.warn('Error enviando cierre parcial WS:', err);
+      }
+    }
+
+    const tradeItem: TradeHistoryItem = {
+      id: `TRD-${Date.now()}`,
+      orderId: `PARTIAL-${Date.now()}`,
+      symbol: pos.symbol,
+      side: pos.positionAmt > 0 ? 'SELL' : 'BUY',
+      price: exitPrice,
+      quantity: closeQty,
+      notional,
+      realizedPnl: Number(realizedPnl.toFixed(2)),
+      commission: Number((notional * 0.0004).toFixed(2)),
+      time: Date.now(),
+      leverage: pos.leverage,
+      marginType: 'ISOLATED',
+    };
+
+    this.balance.totalWalletBalance += realizedPnl - tradeItem.commission;
+    this.tradeHistory = [tradeItem, ...this.tradeHistory];
+
+    if (remainingQty > 0) {
+      pos.positionAmt = pos.positionAmt > 0 ? remainingQty : -remainingQty;
+      pos.isolatedMargin = pos.isolatedMargin * (1 - pct);
+      pos.notional = remainingQty * exitPrice;
+    } else {
+      this.positions = this.positions.filter(p => p.symbol !== symbol);
+    }
+
+    notificationService.notify(
+      realizedPnl >= 0 ? 'TP_HIT' : 'SL_HIT',
+      `Toma Parcial (${percentage}%) Ejecutada`,
+      `${pos.symbol} parcial cerrada @ $${exitPrice.toFixed(2)}. PnL Realizado: ${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(2)} USDT`,
+      'normal'
+    );
+
+    this.logFrame('IN', 'STREAM', `Cierre parcial ${percentage}%: ${symbol}`, tradeItem);
     this.recalculateAccountStats();
     this.persistState();
     this.notify();
