@@ -701,6 +701,7 @@ class BinanceWsEngine {
       };
 
       this.checkVolatilityAndOrders(oldPrice, newPrice);
+      this.recalculateAccountStats();
       this.notify();
     }
     // Mark Price & Funding Rate stream
@@ -716,6 +717,7 @@ class BinanceWsEngine {
         this.futuresMetrics.nextFundingTime = msg.T;
         this.futuresMetrics.countdownMs = Math.max(0, msg.T - Date.now());
       }
+      this.recalculateAccountStats();
       this.notify();
     }
     // Kline / Candlestick stream
@@ -1976,10 +1978,17 @@ class BinanceWsEngine {
       }
     });
 
-    // 2. Check Orders Matching (Limit, Scaled, Trailing Stop)
+    // 2. Check Orders Matching (Limit, Scaled, Trailing Stop) - ONLY for matching symbol in simulation mode
     const remainingOrders: OpenOrder[] = [];
 
     this.openOrders.forEach(order => {
+      // In live/testnet mode, Binance server fills orders. Do not simulate fills.
+      // If symbol doesn't match current ticker, preserve order unchanged.
+      if (this.mode !== 'simulation' || order.symbol !== this.ticker.symbol) {
+        remainingOrders.push(order);
+        return;
+      }
+
       let isFilled = false;
       const fillPrice = order.price || newPrice;
 
@@ -2032,25 +2041,28 @@ class BinanceWsEngine {
 
     this.openOrders = remainingOrders;
 
-    // 3. Check Position TP / SL
-    this.positions.forEach(pos => {
-      // Long TP / SL
-      if (pos.positionAmt > 0) {
-        if (pos.takeProfit && newPrice >= pos.takeProfit) {
-          this.closePosition(pos.symbol);
-        } else if (pos.stopLoss && newPrice <= pos.stopLoss) {
-          this.closePosition(pos.symbol);
+    // 3. Check Position TP / SL - ONLY for matching symbol in simulation mode
+    if (this.mode === 'simulation') {
+      this.positions.forEach(pos => {
+        if (pos.symbol !== this.ticker.symbol) return;
+        // Long TP / SL
+        if (pos.positionAmt > 0) {
+          if (pos.takeProfit && newPrice >= pos.takeProfit) {
+            this.closePosition(pos.symbol);
+          } else if (pos.stopLoss && newPrice <= pos.stopLoss) {
+            this.closePosition(pos.symbol);
+          }
         }
-      }
-      // Short TP / SL
-      else if (pos.positionAmt < 0) {
-        if (pos.takeProfit && newPrice <= pos.takeProfit) {
-          this.closePosition(pos.symbol);
-        } else if (pos.stopLoss && newPrice >= pos.stopLoss) {
-          this.closePosition(pos.symbol);
+        // Short TP / SL
+        else if (pos.positionAmt < 0) {
+          if (pos.takeProfit && newPrice <= pos.takeProfit) {
+            this.closePosition(pos.symbol);
+          } else if (pos.stopLoss && newPrice >= pos.stopLoss) {
+            this.closePosition(pos.symbol);
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   private executeOrderFill(order: OpenOrder, fillPrice: number) {

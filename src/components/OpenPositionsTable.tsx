@@ -63,6 +63,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     return initial;
   });
 
+  const seenSymbolsRef = React.useRef<Set<string>>(
+    new Set(binanceWs.getPositions().map((p) => p.symbol))
+  );
+
   const toggleExpand = (sym: string) => {
     setExpandedSymbols((prev) => {
       const next = new Set(prev);
@@ -95,19 +99,23 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         return [...preserved, ...added];
       });
 
-      // Auto-expand any position that has a strategy attached if not yet expanded
-      setExpandedSymbols((prev) => {
-        let changed = false;
-        const next = new Set(prev);
-        curPositions.forEach((p) => {
-          const stratId = p.strategyId || binanceWs.getLinkedStrategyForSymbol(p.symbol)?.strategyId;
-          if (stratId && !prev.has(p.symbol)) {
-            next.add(p.symbol);
-            changed = true;
-          }
+      // Auto-expand only newly opened positions that have a strategy attached (do not re-expand if user collapsed)
+      const brandNewPositions = curPositions.filter((p) => !seenSymbolsRef.current.has(p.symbol));
+      if (brandNewPositions.length > 0) {
+        brandNewPositions.forEach((p) => seenSymbolsRef.current.add(p.symbol));
+        setExpandedSymbols((prev) => {
+          let changed = false;
+          const next = new Set(prev);
+          brandNewPositions.forEach((p) => {
+            const stratId = p.strategyId || binanceWs.getLinkedStrategyForSymbol(p.symbol)?.strategyId;
+            if (stratId && !prev.has(p.symbol)) {
+              next.add(p.symbol);
+              changed = true;
+            }
+          });
+          return changed ? next : prev;
         });
-        return changed ? next : prev;
-      });
+      }
     });
     return () => unsub();
   }, []);

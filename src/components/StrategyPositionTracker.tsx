@@ -169,6 +169,77 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
     tpFinalPrice = 0,
   } = strategyPrices;
 
+  // Persistent tracking of milestones reached during position life to avoid tick flicker
+  const [reachedMilestones, setReachedMilestones] = useState<{
+    e2: boolean;
+    e3: boolean;
+    tp1: boolean;
+    tp2: boolean;
+  }>(() => {
+    try {
+      const saved = sessionStorage.getItem(`milestones_${position.symbol}_${position.entryPrice}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { e2: false, e3: false, tp1: false, tp2: false };
+  });
+
+  // Update reached milestones when price touches levels
+  useEffect(() => {
+    if (!markPrice || !entryPrice) return;
+    setReachedMilestones((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      if (isLong) {
+        if (!next.tp2 && tp2Price > 0 && markPrice >= tp2Price) {
+          next.tp2 = true;
+          next.tp1 = true;
+          changed = true;
+        }
+        if (!next.tp1 && tp1Price > 0 && markPrice >= tp1Price) {
+          next.tp1 = true;
+          changed = true;
+        }
+        if (!next.e3 && entry3Price > 0 && markPrice <= entry3Price && entry3Price > slPrice) {
+          next.e3 = true;
+          next.e2 = true;
+          changed = true;
+        }
+        if (!next.e2 && entry2Price > 0 && markPrice <= entry2Price && entry2Price > slPrice) {
+          next.e2 = true;
+          changed = true;
+        }
+      } else {
+        if (!next.tp2 && tp2Price > 0 && markPrice <= tp2Price) {
+          next.tp2 = true;
+          next.tp1 = true;
+          changed = true;
+        }
+        if (!next.tp1 && tp1Price > 0 && markPrice <= tp1Price) {
+          next.tp1 = true;
+          changed = true;
+        }
+        if (!next.e3 && entry3Price > 0 && markPrice >= entry3Price && entry3Price < slPrice) {
+          next.e3 = true;
+          next.e2 = true;
+          changed = true;
+        }
+        if (!next.e2 && entry2Price > 0 && markPrice >= entry2Price && entry2Price < slPrice) {
+          next.e2 = true;
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        try {
+          sessionStorage.setItem(`milestones_${position.symbol}_${position.entryPrice}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      }
+      return prev;
+    });
+  }, [markPrice, entryPrice, isLong, tp1Price, tp2Price, entry2Price, entry3Price, slPrice, position.symbol]);
+
   // 3. Status and milestone detection
   // Check if Stop Loss was hit or breached
   const isSlHit =
@@ -177,11 +248,17 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
     linkedStrategy?.estado === 'Fallida';
 
   // Check if TP2 was hit
-  const isTp2Hit = !isSlHit && tp2Price > 0 && (isLong ? markPrice >= tp2Price : markPrice <= tp2Price);
+  const isTp2Hit =
+    !isSlHit &&
+    tp2Price > 0 &&
+    (reachedMilestones.tp2 || (isLong ? markPrice >= tp2Price : markPrice <= tp2Price));
 
   // Check if TP1 was hit
   const isTp1Hit =
-    !isSlHit && !isTp2Hit && tp1Price > 0 && (isLong ? markPrice >= tp1Price : markPrice <= tp1Price);
+    !isSlHit &&
+    !isTp2Hit &&
+    tp1Price > 0 &&
+    (reachedMilestones.tp1 || (isLong ? markPrice >= tp1Price : markPrice <= tp1Price));
 
   // Check if E3 was touched before TP1
   const isE3Hit =
@@ -189,7 +266,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
     !isTp1Hit &&
     !isTp2Hit &&
     entry3Price > 0 &&
-    (isLong ? markPrice <= entry3Price && entry3Price > slPrice : markPrice >= entry3Price && entry3Price < slPrice);
+    (reachedMilestones.e3 || (isLong ? markPrice <= entry3Price && entry3Price > slPrice : markPrice >= entry3Price && entry3Price < slPrice));
 
   // Check if E2 was touched before TP1 & E3
   const isE2Hit =
@@ -198,7 +275,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
     !isTp2Hit &&
     !isE3Hit &&
     entry2Price > 0 &&
-    (isLong ? markPrice <= entry2Price && entry2Price > slPrice : markPrice >= entry2Price && entry2Price < slPrice);
+    (reachedMilestones.e2 || (isLong ? markPrice <= entry2Price && entry2Price > slPrice : markPrice >= entry2Price && entry2Price < slPrice));
 
   // Distances to milestones
   const pctToTp1 = tp1Price > 0 ? (((tp1Price - markPrice) / markPrice) * 100) : 0;
