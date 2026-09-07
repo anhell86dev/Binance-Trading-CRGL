@@ -185,11 +185,11 @@ export const WalletView: React.FC<WalletViewProps> = ({
         <div>
           <div className="d-flex align-items-center gap-2">
             <h4 className="m-0 fw-bold text-white">Billetera de Futuros</h4>
-            <span className="badge bg-dark border border-secondary text-secondary font-monospace" style={{ fontSize: '0.7rem' }}>
+            <span className="badge bg-dark border border-secondary text-secondary font-monospace fs-8">
               OpenAPI v3.0.2
             </span>
-            <span className="badge bg-success-subtle text-success border border-success-subtle" style={{ fontSize: '0.7rem' }}>
-              <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
+            <span className="badge bg-success-subtle text-success border border-success-subtle fs-8">
+              <i className="bi bi-circle-fill me-1 fs-9"></i>
               {mode === 'simulation' ? 'Cuenta Normal (Simulada)' : 'Cuenta Normal'}
             </span>
           </div>
@@ -286,7 +286,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="col-sm-6">
                 <div className="trading-card border-accent-warning p-3 h-100 mb-0">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary small fw-bold text-uppercase fs-7">
                       Saldo Total Margen
                     </span>
                     <i className="bi bi-currency-dollar text-warning fs-5"></i>
@@ -295,7 +295,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     ${displayTotalWallet.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
                     <span className="fs-6 text-secondary font-sans">USDT</span>
                   </div>
-                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-mono" style={{ fontSize: '0.75rem' }}>
+                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-mono fs-7">
                     <span className="text-secondary">Disponible:</span>
                     <span className="text-success fw-bold">${displayAvailable.toFixed(2)} USDT</span>
                   </div>
@@ -306,7 +306,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="col-sm-6">
                 <div className="trading-card p-3 h-100 mb-0">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary small fw-bold text-uppercase fs-7">
                       Garantía Aislada
                     </span>
                     <i className="bi bi-lock-fill text-info fs-5"></i>
@@ -315,7 +315,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     ${displayIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
                     <span className="fs-6 text-secondary font-sans">USDT</span>
                   </div>
-                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-mono" style={{ fontSize: '0.75rem' }}>
+                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-mono fs-7">
                     <span className="text-secondary">En posiciones:</span>
                     <span className="text-info">{displayActivePositions} activas</span>
                   </div>
@@ -326,7 +326,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="col-sm-6">
                 <div className="trading-card p-3 h-100 mb-0">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary small fw-bold text-uppercase fs-7">
                       PnL No Realizado
                     </span>
                     <i className={`bi ${displayUnrealizedPnl >= 0 ? 'bi-graph-up-arrow text-success' : 'bi-graph-down-arrow text-danger'} fs-5`}></i>
@@ -335,7 +335,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     {displayUnrealizedPnl >= 0 ? '+' : ''}${displayUnrealizedPnl.toFixed(2)}{' '}
                     <span className="fs-6 text-secondary font-sans">USDT</span>
                   </div>
-                  <div className="text-secondary small mt-2 pt-2 border-top border-secondary" style={{ fontSize: '0.75rem' }}>
+                  <div className="text-secondary small mt-2 pt-2 border-top border-secondary fs-7">
                     {displayUnrealizedPnl >= 0 ? 'Rendimiento positivo en posiciones' : 'Exposición acotada por SL'}
                   </div>
                 </div>
@@ -345,13 +345,13 @@ export const WalletView: React.FC<WalletViewProps> = ({
               <div className="col-sm-6">
                 <div className="trading-card p-3 h-100 mb-0">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary small fw-bold text-uppercase fs-7">
                       Protección / Apalancamiento
                     </span>
                     <i className="bi bi-shield-check text-success fs-5"></i>
                   </div>
                   <div className="fs-3 fw-bold font-mono text-success">1x – 5x</div>
-                  <div className="text-secondary small mt-2 pt-2 border-top border-secondary" style={{ fontSize: '0.75rem' }}>
+                  <div className="text-secondary small mt-2 pt-2 border-top border-secondary fs-7">
                     <i className="bi bi-check2 me-1 text-success"></i> Sin contagio cruzado (Isolated)
                   </div>
                 </div>
@@ -392,7 +392,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 {/* Fila de Ratios Clave */}
                 <div className="d-flex justify-content-between align-items-baseline mb-2">
                   <div>
-                    <span className="text-secondary small text-uppercase fw-semibold" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary small text-uppercase fw-semibold fs-7">
                       Ratio de Margen:
                     </span>
                     <div className={`fs-3 fw-bold font-mono ${isCriticalRisk ? 'text-danger' : isWarningRisk ? 'text-warning' : 'text-success'}`}>
@@ -403,7 +403,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     </div>
                   </div>
                   <div className="text-end font-mono">
-                    <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>Margen Libre:</span>
+                    <span className="text-secondary small fs-7">Margen Libre:</span>
                     <div className={`fs-5 fw-bold ${displayAvailable <= 0.05 ? 'text-danger' : 'text-success'}`}>
                       ${displayAvailable.toFixed(2)}
                     </div>
@@ -411,7 +411,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </div>
 
                 {/* Mini Grid 2 Columnas */}
-                <div className="row g-2 py-2 my-2 border-top border-bottom border-secondary font-mono" style={{ fontSize: '0.8rem' }}>
+                <div className="row g-2 py-2 my-2 border-top border-bottom border-secondary font-mono fs-7">
                   <div className="col-6">
                     <span className="text-secondary">Balance Total:</span>
                     <div className="fw-bold text-white">${displayTotalWallet.toFixed(2)} USDT</div>
@@ -424,13 +424,13 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
                 {/* Distribución del Margen */}
                 <div className="mb-3">
-                  <div className="d-flex justify-content-between small font-mono mb-1" style={{ fontSize: '0.75rem' }}>
+                  <div className="d-flex justify-content-between small font-mono mb-1 fs-7">
                     <span className="text-secondary">Uso del Capital:</span>
                     <span className={`${isCriticalRisk ? 'text-danger' : 'text-success'} fw-bold`}>
                       {displayMarginUsage.toFixed(1)}% Comprometido
                     </span>
                   </div>
-                  <div className="progress bg-dark" style={{ height: '8px' }}>
+                  <div className="progress bg-dark progress-sm">
                     <div
                       className="progress-bar bg-warning"
                       style={{ width: `${Math.round(ordersPct || 39)}%` }}
@@ -442,7 +442,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       title={`Posiciones: $${displayPositionsMargin.toFixed(1)}`}
                     ></div>
                   </div>
-                  <div className="d-flex justify-content-between text-secondary small font-mono mt-1" style={{ fontSize: '0.7rem' }}>
+                  <div className="d-flex justify-content-between text-secondary small font-mono mt-1 fs-8">
                     <span>Órdenes: ${displayOrdersMargin.toFixed(1)}</span>
                     <span>Posiciones: ${displayPositionsMargin.toFixed(1)}</span>
                     <span className={freePct < 5 ? 'text-danger' : 'text-success'}>

@@ -1278,7 +1278,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       ) : (
         /* VISTA TABLA TÉCNICA COMPARATIVA CON FLASH NOTIFICACIÓN */
         <div className="crypto-table-container shadow-md">
-          <table className="financial-table text-base font-mono" style={{ fontSize: '15px' }}>
+          <table className="financial-table table-trading text-base font-mono fs-6">
             <thead>
               <tr className="bg-neutral-950 text-neutral-400 uppercase tracking-wider text-xs border-b border-neutral-800">
                 <th className="p-3"># R:B</th>

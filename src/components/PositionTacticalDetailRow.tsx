@@ -28,11 +28,41 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const isLong = position.positionAmt > 0;
   const qty = Math.abs(position.positionAmt || 0);
 
-  // 1. Precios en Vivo
-  const liveTicker = livePriceService.getPrice(position.symbol);
+  // 1. Precios en Vivo y Suscripción WebSocket pura en tiempo real
+  const [livePrice, setLivePrice] = useState<number>(() => {
+    const p = livePriceService.getPrice(position.symbol);
+    if (p > 0) return p;
+    const wsTicker = binanceWs.getTicker();
+    if (wsTicker.symbol === position.symbol && wsTicker.lastPrice > 0) return wsTicker.lastPrice;
+    return position.markPrice > 0 ? position.markPrice : (position.entryPrice || 1);
+  });
+
+  useEffect(() => {
+    const handleTickerUpdate = () => {
+      const p = livePriceService.getPrice(position.symbol);
+      if (p > 0) {
+        setLivePrice(p);
+        return;
+      }
+      const wsTicker = binanceWs.getTicker();
+      if (wsTicker.symbol === position.symbol && wsTicker.lastPrice > 0) {
+        setLivePrice(wsTicker.lastPrice);
+      }
+    };
+
+    handleTickerUpdate();
+    const unsubLive = livePriceService.subscribe(handleTickerUpdate);
+    const unsubWs = binanceWs.subscribe(handleTickerUpdate);
+
+    return () => {
+      unsubLive();
+      unsubWs();
+    };
+  }, [position.symbol]);
+
   const currentLivePrice =
-    liveTicker && liveTicker > 0
-      ? liveTicker
+    livePrice > 0
+      ? livePrice
       : (position.markPrice > 0 ? position.markPrice : (position.entryPrice || 1));
 
   const entryPrice = position.entryPrice > 0 ? position.entryPrice : currentLivePrice;
@@ -102,16 +132,31 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
       : (qty * entryPrice) / Math.max(1, position.leverage || 5);
   const roe = margin > 0 ? (pnl / margin) * 100 : (position.roePercent || 0);
 
-  const notionalUsd = qty * entryPrice;
+  const notionalUsd = qty * currentLivePrice;
 
   // Porcentajes de distancia respecto a la entrada
   const slDiffPct = entryPrice > 0 ? ((slPrice - entryPrice) / entryPrice) * 100 : -1.83;
   const tp1DiffPct = entryPrice > 0 ? ((tp1Price - entryPrice) / entryPrice) * 100 : 2.67;
+  const tp2DiffPct = entryPrice > 0 ? ((tp2Price - entryPrice) / entryPrice) * 100 : 5.17;
 
   // Distancia restante a TP1
   const remainingToTp1 = isLong
     ? ((tp1Price - currentLivePrice) / currentLivePrice) * 100
     : ((currentLivePrice - tp1Price) / currentLivePrice) * 100;
+
+  // Progreso porcentual hacia TP1
+  const totalTargetDistance = Math.abs(tp1Price - entryPrice);
+  const currentCoveredDistance = isLong
+    ? Math.max(0, currentLivePrice - entryPrice)
+    : Math.max(0, entryPrice - currentLivePrice);
+  const progressToTp1Pct = totalTargetDistance > 0
+    ? Math.min(100, Math.max(0, (currentCoveredDistance / totalTargetDistance) * 100))
+    : 0;
+
+  // Estimaciones para TP2 y Riesgo Máximo SL
+  const tp2ProfitEst = isLong ? (tp2Price - entryPrice) * qty : (entryPrice - tp2Price) * qty;
+  const tp2RoeEst = margin > 0 ? (tp2ProfitEst / margin) * 100 : 0;
+  const maxRiskUsd = isLong ? Math.max(0, (entryPrice - slPrice) * qty) : Math.max(0, (slPrice - entryPrice) * qty);
 
   // Ratio R:B
   const riskDistance = Math.abs(entryPrice - slPrice);
@@ -132,7 +177,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     return val.toFixed(2);
   };
 
-  // Motor de Renderizado en Canvas con Coordenadas (X, Y) Reales
+  // Motor de Renderizado en Canvas con Coordenadas (X, Y) y Zonas de Riesgo / Beneficio Dinámicas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -165,7 +210,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
       const minRaw = Math.min(...allPrices);
       const maxRaw = Math.max(...allPrices);
       const priceRange = Math.max(0.0001, maxRaw - minRaw);
-      const pad = priceRange * 0.14;
+      const pad = priceRange * 0.16;
       const minP = minRaw - pad;
       const maxP = maxRaw + pad;
 
@@ -174,45 +219,78 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
         return h - ((clamped - minP) / (maxP - minP)) * h;
       };
 
-      // 1. Sombrear Zona Verde de Beneficio (Entry a TP2/TP1)
+      const chartRightEdge = w - 100;
+
+      // 1. Sombrear Zona Dinámica de Beneficio (Verde) y Zona de Riesgo (Roja)
       if (isLong) {
+        // En LONG: Beneficio por encima de la entrada (hasta TP2/TP1)
         const yTopProfit = getY(tp2);
         const yBottomProfit = getY(entry);
         const profitHeight = yBottomProfit - yTopProfit;
         if (profitHeight > 0) {
-          ctx.fillStyle = 'rgba(46, 189, 133, 0.08)';
-          ctx.fillRect(0, yTopProfit, w, profitHeight);
+          const gradProfit = ctx.createLinearGradient(0, yTopProfit, 0, yBottomProfit);
+          gradProfit.addColorStop(0, 'rgba(46, 189, 133, 0.18)');
+          gradProfit.addColorStop(1, 'rgba(46, 189, 133, 0.03)');
+          ctx.fillStyle = gradProfit;
+          ctx.fillRect(0, yTopProfit, chartRightEdge, profitHeight);
+
+          // Etiqueta sutil de Zona de Beneficio
+          ctx.fillStyle = 'rgba(46, 189, 133, 0.6)';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText('▲ ZONA BENEFICIO (TP1 / TP2)', 14, yTopProfit + 15);
         }
 
-        // Sombrear Zona Roja de Riesgo (SL a Entry)
+        // Riesgo por debajo de la entrada (hasta SL)
         const yTopRisk = getY(entry);
         const yBottomRisk = getY(sl);
         const riskHeight = yBottomRisk - yTopRisk;
         if (riskHeight > 0) {
-          ctx.fillStyle = 'rgba(246, 70, 93, 0.08)';
-          ctx.fillRect(0, yTopRisk, w, riskHeight);
+          const gradRisk = ctx.createLinearGradient(0, yTopRisk, 0, yBottomRisk);
+          gradRisk.addColorStop(0, 'rgba(246, 70, 93, 0.03)');
+          gradRisk.addColorStop(1, 'rgba(246, 70, 93, 0.18)');
+          ctx.fillStyle = gradRisk;
+          ctx.fillRect(0, yTopRisk, chartRightEdge, riskHeight);
+
+          // Etiqueta sutil de Zona de Riesgo
+          ctx.fillStyle = 'rgba(246, 70, 93, 0.6)';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText('▼ ZONA RIESGO ACOTADO (SL)', 14, yBottomRisk - 8);
         }
       } else {
-        // En SHORT: Beneficio debajo de la entrada
+        // En SHORT: Beneficio por debajo de la entrada (hasta TP2/TP1)
         const yTopProfit = getY(entry);
         const yBottomProfit = getY(tp2);
         const profitHeight = yBottomProfit - yTopProfit;
         if (profitHeight > 0) {
-          ctx.fillStyle = 'rgba(46, 189, 133, 0.08)';
-          ctx.fillRect(0, yTopProfit, w, profitHeight);
+          const gradProfit = ctx.createLinearGradient(0, yTopProfit, 0, yBottomProfit);
+          gradProfit.addColorStop(0, 'rgba(46, 189, 133, 0.03)');
+          gradProfit.addColorStop(1, 'rgba(46, 189, 133, 0.18)');
+          ctx.fillStyle = gradProfit;
+          ctx.fillRect(0, yTopProfit, chartRightEdge, profitHeight);
+
+          ctx.fillStyle = 'rgba(46, 189, 133, 0.6)';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText('▼ ZONA BENEFICIO SHORT (TP1 / TP2)', 14, yBottomProfit - 8);
         }
 
-        // Riesgo por encima de la entrada
+        // Riesgo por encima de la entrada (hasta SL)
         const yTopRisk = getY(sl);
         const yBottomRisk = getY(entry);
         const riskHeight = yBottomRisk - yTopRisk;
         if (riskHeight > 0) {
-          ctx.fillStyle = 'rgba(246, 70, 93, 0.08)';
-          ctx.fillRect(0, yTopRisk, w, riskHeight);
+          const gradRisk = ctx.createLinearGradient(0, yTopRisk, 0, yBottomRisk);
+          gradRisk.addColorStop(0, 'rgba(246, 70, 93, 0.18)');
+          gradRisk.addColorStop(1, 'rgba(246, 70, 93, 0.03)');
+          ctx.fillStyle = gradRisk;
+          ctx.fillRect(0, yTopRisk, chartRightEdge, riskHeight);
+
+          ctx.fillStyle = 'rgba(246, 70, 93, 0.6)';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText('▲ ZONA RIESGO SHORT (SL)', 14, yTopRisk + 15);
         }
       }
 
-      // Guías de cuadrícula sutiles
+      // 2. Guías de cuadrícula de fondo
       ctx.strokeStyle = '#1e2638';
       ctx.lineWidth = 1;
       ctx.setLineDash([2, 4]);
@@ -224,22 +302,28 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
         ctx.stroke();
       }
 
-      // Función para trazar líneas de nivel
+      // 3. Función para trazar niveles de precio clave
       function drawLevel(price: number, label: string, color: string, dashed = false) {
         const y = getY(price);
         ctx.beginPath();
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.3;
         if (dashed) ctx.setLineDash([4, 4]);
         else ctx.setLineDash([]);
         ctx.moveTo(0, y);
-        ctx.lineTo(w - 95, y);
+        ctx.lineTo(chartRightEdge, y);
         ctx.stroke();
 
-        // Etiqueta lateral derecha
+        // Pastilla de etiqueta lateral derecha
+        ctx.fillStyle = '#161c28';
+        ctx.fillRect(chartRightEdge + 4, y - 9, w - chartRightEdge - 8, 18);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(chartRightEdge + 4, y - 9, w - chartRightEdge - 8, 18);
+
         ctx.fillStyle = color;
         ctx.font = 'bold 10px monospace';
-        ctx.fillText(`${label} $${formatVal(price)}`, w - 90, y + 3);
+        ctx.fillText(`${label} $${formatVal(price)}`, chartRightEdge + 8, y + 4);
       }
 
       if (tp2Price) drawLevel(tp2, 'TP2', '#2ebd85', true);
@@ -247,13 +331,13 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
       drawLevel(entry, 'E1', '#00b8d9');
       drawLevel(sl, 'SL', '#f6465d');
 
-      // 3. Trayectoria reciente simulada de velas / sparkline hasta Live
-      const liveX = Math.max(60, Math.min(w - 110, w * 0.7));
+      // 4. Trayectoria de precio hacia el tick actual (Sparkline en vivo)
+      const liveX = Math.max(70, Math.min(chartRightEdge - 20, chartRightEdge * 0.75));
       const liveY = getY(live);
       const entryY = getY(entry);
 
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([]);
 
@@ -274,20 +358,29 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
       }
       ctx.stroke();
 
-      // Halo sutil bajo la curva
+      // Halo degradado bajo la curva
       ctx.lineTo(liveX, h);
       ctx.lineTo(pts[0].x, h);
       ctx.closePath();
       const grad = ctx.createLinearGradient(0, Math.min(entryY, liveY), 0, h);
-      grad.addColorStop(0, 'rgba(240, 185, 11, 0.08)');
+      grad.addColorStop(0, 'rgba(240, 185, 11, 0.12)');
       grad.addColorStop(1, 'rgba(240, 185, 11, 0)');
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // 4. Marcador puntual de la posición actual (LIVE)
+      // Línea horizontal punteada del precio LIVE actual
       ctx.beginPath();
-      ctx.arc(liveX, liveY, 9, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(240, 185, 11, 0.25)';
+      ctx.strokeStyle = '#f0b90b';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.moveTo(0, liveY);
+      ctx.lineTo(chartRightEdge, liveY);
+      ctx.stroke();
+
+      // 5. Marcador puntual LIVE con halo pulsante
+      ctx.beginPath();
+      ctx.arc(liveX, liveY, 10, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(240, 185, 11, 0.3)';
       ctx.fill();
 
       ctx.beginPath();
@@ -295,13 +388,22 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
       ctx.fillStyle = '#f0b90b';
       ctx.fill();
 
+      // Etiqueta flotante enriquecida con precio y PnL en vivo
+      ctx.fillStyle = '#121722';
+      const badgeText = `LIVE: $${formatVal(live)} (${isProfit ? '+' : ''}$${pnl.toFixed(2)} / ${isProfit ? '+' : ''}${roe.toFixed(2)}%)`;
+      ctx.font = 'bold 10px monospace';
+      const textW = ctx.measureText(badgeText).width;
+      const badgeX = Math.max(10, Math.min(chartRightEdge - textW - 14, liveX - textW / 2));
+      const badgeY = liveY < 32 ? liveY + 14 : liveY - 18;
+
+      ctx.fillRect(badgeX - 4, badgeY - 11, textW + 8, 16);
+      ctx.strokeStyle = '#f0b90b';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([]);
+      ctx.strokeRect(badgeX - 4, badgeY - 11, textW + 8, 16);
+
       ctx.fillStyle = '#f0b90b';
-      ctx.font = 'bold 11px monospace';
-      const liveText = `LIVE: $${formatVal(live)}`;
-      const textW = ctx.measureText(liveText).width;
-      const textX = Math.max(10, Math.min(w - textW - 10, liveX - textW / 2));
-      const textY = liveY < 30 ? liveY + 18 : liveY - 10;
-      ctx.fillText(liveText, textX, textY);
+      ctx.fillText(badgeText, badgeX, badgeY + 1);
     };
 
     render();
@@ -314,7 +416,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     return () => {
       ro.disconnect();
     };
-  }, [currentLivePrice, entryPrice, slPrice, tp1Price, tp2Price, isLong]);
+  }, [currentLivePrice, entryPrice, slPrice, tp1Price, tp2Price, isLong, pnl, roe, isProfit]);
 
   // Acciones Rápidas
   const handleMoveToBE = async () => {
@@ -353,38 +455,51 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   };
 
   return (
-    <tr style={{ backgroundColor: '#07090e', borderBottom: '1px solid #1e2638' }}>
-      <td colSpan={8} style={{ padding: '8px 12px', border: 'none', backgroundColor: '#07090e' }}>
-        {/* CONTENEDOR EXPEDIENTE TOTALMENTE ENCAPSULADO */}
+    <tr className="bg-trading-darker border-bottom border-secondary">
+      <td colSpan={8} className="p-2 border-0 bg-trading-darker">
+        {/* CONTENEDOR EXPEDIENTE TOTALMENTE ENCAPSULADO CON BOOTSTRAP 5 / ADMINLTE 4 */}
         <div className="trading-card border-accent-warning p-3 w-100 my-1">
-          {/* 1. HEADER DEL TRADE */}
+          {/* 1. HEADER DEL TRADE CON BADGE DE PNL / ROE EN VIVO VÍA WEBSOCKET */}
           <div className="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-3 flex-wrap gap-2">
             <div className="d-flex align-items-center gap-2 flex-wrap">
               <span className="fs-5 fw-bold text-white font-mono">
                 {position.symbol}
               </span>
               <span
-                className={`badge px-2 py-1 font-mono fw-bold ${
+                className={`badge px-2 py-1 font-mono fw-bold fs-7 ${
                   isLong
                     ? 'bg-success-subtle text-success border border-success'
                     : 'bg-danger-subtle text-danger border border-danger'
                 }`}
-                style={{ fontSize: '0.75rem' }}
               >
                 {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x
               </span>
-              <span className="badge bg-dark border border-secondary text-secondary font-mono" style={{ fontSize: '0.75rem' }}>
+              <span className="badge bg-dark border border-secondary text-secondary font-mono fs-7">
                 ID: {effectiveStrategyId}
               </span>
+
+              {/* Badge Visual Reactivo de PnL no realizado y ROE% con WebSocket Stream */}
               <span
-                className={`badge px-2 py-1 ${
+                className={`badge px-2 py-1 font-mono fw-bold fs-7 d-flex align-items-center gap-1 ${
+                  isProfit
+                    ? 'bg-success-subtle text-success border border-success'
+                    : 'bg-danger-subtle text-danger border border-danger'
+                }`}
+                title="PnL No Realizado calculado dinámicamente con ticks en vivo de WebSocket"
+              >
+                <i className={`bi ${isProfit ? 'bi-graph-up-arrow' : 'bi-graph-down-arrow'}`}></i>
+                <span>{isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} USDT</span>
+                <span>({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)</span>
+              </span>
+
+              <span
+                className={`badge px-2 py-1 fs-7 ${
                   isTp1Reached
                     ? 'bg-success-subtle text-success border border-success'
                     : isSlBreached
                     ? 'bg-danger-subtle text-danger border border-danger'
                     : 'bg-primary-subtle text-primary border border-primary'
                 }`}
-                style={{ fontSize: '0.75rem' }}
               >
                 {isTp1Reached
                   ? 'Fase 3: TP1 Alcanzado'
@@ -392,8 +507,9 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
                   ? 'Fase 4: SL Amenazado'
                   : 'Fase 2: En Desarrollo'}
               </span>
+
               {actionFeedback && (
-                <span className="badge bg-warning text-dark fw-bold font-mono">
+                <span className="badge bg-warning text-dark fw-bold font-mono fs-7">
                   {actionFeedback}
                 </span>
               )}
@@ -407,8 +523,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               <button
                 type="button"
                 onClick={handleMoveToBE}
-                className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono"
-                style={{ fontSize: '0.75rem' }}
+                className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono fs-7"
               >
                 <i className="bi bi-shield-check me-1 text-success"></i>
                 Mover a BE (${formatVal(entryPrice)})
@@ -416,8 +531,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               <button
                 type="button"
                 onClick={() => onOpenEditModal(position)}
-                className="btn btn-sm btn-outline-warning py-1 px-2 fw-semibold font-mono"
-                style={{ fontSize: '0.75rem' }}
+                className="btn btn-sm btn-outline-warning py-1 px-2 fw-semibold font-mono fs-7"
               >
                 <i className="bi bi-pencil-square me-1"></i>
                 Ajustar TP/SL
@@ -425,8 +539,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               <button
                 type="button"
                 onClick={handlePanicClose}
-                className="btn btn-sm btn-danger fw-bold text-white py-1 px-2"
-                style={{ fontSize: '0.75rem' }}
+                className="btn btn-sm btn-danger fw-bold text-white py-1 px-2 fs-7"
               >
                 <i className="bi bi-exclamation-triangle-fill me-1"></i>
                 Cierre Pánico
@@ -434,13 +547,13 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             </div>
           </div>
 
-          {/* 2. GRID PRINCIPAL (GRÁFICO A LA IZQ, TIMELINE A LA DER) */}
+          {/* 2. GRID PRINCIPAL (GRÁFICO A LA IZQ, TIMELINE VERTICAL A LA DER) */}
           <div className="row g-3 align-items-start">
-            {/* COLUMNA IZQUIERDA: GRÁFICO REAL + VOLATILIDAD */}
+            {/* COLUMNA IZQUIERDA: GRÁFICO REAL ENCAPSULADO CON CSS GRID */}
             <div className="col-12 col-lg-7 d-flex flex-column gap-3">
-              <div className="trading-card p-0 overflow-hidden">
-                {/* Header de niveles */}
-                <div className="d-flex justify-content-between align-items-center bg-dark p-2 px-3 small border-bottom border-secondary font-mono flex-wrap gap-2">
+              <div className="trading-chart-grid">
+                {/* Header de Niveles en CSS Grid */}
+                <div className="chart-grid-header d-flex justify-content-between align-items-center font-mono fs-7 flex-wrap gap-2">
                   <span className="text-danger fw-bold">
                     <i className="bi bi-arrow-down-circle me-1"></i>
                     SL: ${formatVal(slPrice)} ({slDiffPct >= 0 ? '+' : ''}{slDiffPct.toFixed(2)}%)
@@ -453,23 +566,28 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
                     <i className="bi bi-arrow-up-circle me-1"></i>
                     TP1: ${formatVal(tp1Price)} ({tp1DiffPct >= 0 ? '+' : ''}{tp1DiffPct.toFixed(2)}%)
                   </span>
+                  {tp2Price > 0 && (
+                    <span className="text-success-subtle fw-semibold">
+                      TP2: ${formatVal(tp2Price)} ({tp2DiffPct >= 0 ? '+' : ''}{tp2DiffPct.toFixed(2)}%)
+                    </span>
+                  )}
                 </div>
 
-                {/* CANVAS INTERACTIVO (DIBUJA EL TRADE) */}
-                <div className="position-relative w-100 bg-black" style={{ height: '260px' }}>
+                {/* Contenedor Encapsulado del Canvas */}
+                <div className="chart-grid-canvas-container">
                   <canvas ref={canvasRef} className="w-100 h-100 d-block" />
                 </div>
 
-                {/* Footer métricas */}
-                <div className="d-flex justify-content-between align-items-center bg-dark p-2 px-3 small text-secondary border-top border-secondary font-mono flex-wrap gap-2">
+                {/* Footer Métricas en CSS Grid */}
+                <div className="chart-grid-footer d-flex justify-content-between align-items-center text-secondary font-mono fs-7 flex-wrap gap-2">
                   <span>
                     ATR (15m): <strong className="text-warning">27.67%</strong>
                   </span>
                   <span>
-                    Volumen Posición: <strong className="text-white">${notionalUsd.toFixed(2)} USDT</strong>
+                    Volumen: <strong className="text-white">${notionalUsd.toFixed(2)} USDT</strong>
                   </span>
                   <span>
-                    PnL:{' '}
+                    PnL Flotante:{' '}
                     <strong className={isProfit ? 'text-success' : 'text-danger'}>
                       {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} ({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)
                     </strong>
@@ -477,126 +595,163 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
                 </div>
               </div>
 
-              {/* Alerta de Diagnóstico */}
+              {/* Alerta de Diagnóstico y Disciplina */}
               <div className="p-3 rounded border-start border-4 border-primary bg-primary-subtle text-light small">
                 <div className="text-primary fw-bold mb-1 d-flex align-items-center gap-1">
                   <i className="bi bi-info-circle-fill"></i>
-                  Diagnóstico Táctico &amp; Disciplina
+                  Diagnóstico Táctico &amp; Disciplina Operativa
                 </div>
                 <div className="text-secondary">
                   {isTp1Reached
-                    ? 'El precio alcanzó la zona de TP1. Activa el protocolo de Break-Even para blindar la operación.'
+                    ? 'El precio alcanzó la zona de TP1. Activa el protocolo de Break-Even para blindar la operación sin riesgo de pérdida.'
                     : isSlBreached
                     ? 'Atención: El precio está en proximidad de Stop Loss. Respeta la salida sin promediar.'
-                    : 'El precio consolida dentro del rango esperado sin tocar zona de stop loss.'}
+                    : `El precio consolida a favor. Faltan ${Math.max(0, remainingToTp1).toFixed(2)}% para tocar el objetivo TP1.`}
                 </div>
                 <div className="mt-2 text-warning small font-mono">
                   <i className="bi bi-shield-exclamation me-1"></i>
-                  <strong>Regla #8:</strong> Mantén la orden condicional; no cierres por ansiedad antes de tocar TP1.
+                  <strong>Regla #8:</strong> Mantén la orden condicional en Binance; no cierres por ansiedad antes de tocar TP1 o activar Break-Even.
                 </div>
               </div>
             </div>
 
-            {/* COLUMNA DERECHA: CRONOLOGÍA (TIMELINE) */}
+            {/* COLUMNA DERECHA: CRONOLOGÍA ESTILO PASO A PASO (VERTICAL TIMELINE) */}
             <div className="col-12 col-lg-5">
               <div className="trading-card p-3 h-100">
                 <div className="small fw-bold text-secondary text-uppercase mb-3 border-bottom border-secondary pb-2 d-flex justify-content-between align-items-center">
-                  <span>Cronología del Trade</span>
-                  <span className="badge bg-dark border border-secondary text-secondary font-mono">En Vivo</span>
+                  <span className="d-flex align-items-center gap-1">
+                    <i className="bi bi-diagram-3 me-1 text-warning"></i>
+                    Cronología del Trade (Paso a Paso)
+                  </span>
+                  <span className="badge bg-dark border border-secondary text-success font-mono fs-8">
+                    <i className="bi bi-circle-fill me-1 text-success fs-8"></i>
+                    WebSocket Live
+                  </span>
                 </div>
 
-                {/* Items del Timeline con líneas nativas */}
-                <div
-                  style={{
-                    position: 'relative',
-                    paddingLeft: '20px',
-                    borderLeft: '2px solid #232a3b',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '18px',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  {/* Hito 1: Completado */}
-                  <div style={{ position: 'relative' }}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: '-26px',
-                        top: '2px',
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        background: '#2ebd85',
-                      }}
-                    />
-                    <div className="fw-bold text-white">Entrada Ejecutada (100%)</div>
-                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>
-                      05 Sept 20:00 · ${formatVal(entryPrice)}
+                {/* Vertical Timeline Paso a Paso */}
+                <div className="trading-timeline">
+                  {/* Paso 1: Entrada Ejecutada (Completado) */}
+                  <div className="timeline-step">
+                    <div className="timeline-node completed">
+                      <i className="bi bi-check-lg"></i>
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-title">
+                        <span>Paso 1: Entrada Ejecutada (100%)</span>
+                        <span className="badge bg-success-subtle text-success border border-success font-mono fs-8">
+                          Fill 100%
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Precio Entrada: <strong className="text-white">${formatVal(entryPrice)}</strong> • {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x Isolated
+                      </div>
                     </div>
                   </div>
 
-                  {/* Hito 2: En Desarrollo */}
-                  <div style={{ position: 'relative' }}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: '-26px',
-                        top: '2px',
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        background: '#f0b90b',
-                        boxShadow: '0 0 6px #f0b90b',
-                      }}
-                    />
-                    <div className="fw-bold text-warning">
-                      {isTp1Reached ? 'TP1 Alcanzado (100%)' : 'En Desarrollo a TP1'}
+                  {/* Paso 2: Trayectoria Hacia TP1 (En Curso / Completado) */}
+                  <div className="timeline-step">
+                    <div className={`timeline-node ${isTp1Reached ? 'completed' : 'active'}`}>
+                      {isTp1Reached ? <i className="bi bi-check-lg"></i> : '2'}
                     </div>
-                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>
-                      Precio actual: ${formatVal(currentLivePrice)}{' '}
-                      {isTp1Reached
-                        ? '(¡Objetivo Logrado!)'
-                        : `(Faltan ${Math.max(0, remainingToTp1).toFixed(1)}%)`}
-                    </div>
-                  </div>
-
-                  {/* Hito 3: Pendiente o Activo */}
-                  <div style={{ position: 'relative', opacity: isTp1Reached ? 1 : 0.4 }}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: '-26px',
-                        top: '2px',
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        background: isTp1Reached ? '#3b82f6' : '#474d57',
-                      }}
-                    />
-                    <div className="text-white" style={{ fontWeight: isTp1Reached ? 'bold' : 'normal' }}>
-                      Mover a Break-Even
-                    </div>
-                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>
-                      {isTp1Reached ? '¡Listo para activar BE!' : 'Trigger automático en TP1'}
+                    <div className={`timeline-content ${!isTp1Reached ? 'active-step' : ''}`}>
+                      <div className="timeline-title">
+                        <span className={isTp1Reached ? 'text-success' : 'text-warning'}>
+                          {isTp1Reached ? 'Paso 2: TP1 Alcanzado' : 'Paso 2: En Trayectoria a TP1'}
+                        </span>
+                        <span className={`badge font-mono fs-8 ${isTp1Reached ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning'}`}>
+                          {isTp1Reached ? '100% Logrado' : `${progressToTp1Pct.toFixed(0)}% Completado`}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Precio actual: <strong className="text-warning">${formatVal(currentLivePrice)}</strong> • TP1: <strong className="text-success">${formatVal(tp1Price)}</strong>
+                      </div>
+                      {/* Barra de Progreso a TP1 */}
+                      <div className="progress bg-dark mt-2 border border-secondary progress-xs">
+                        <div
+                          className={`progress-bar ${isTp1Reached ? 'bg-success' : 'bg-warning'}`}
+                          role="progressbar"
+                          style={{ width: `${isTp1Reached ? 100 : Math.max(5, progressToTp1Pct)}%` }}
+                          aria-valuenow={progressToTp1Pct}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        ></div>
+                      </div>
+                      <div className="d-flex justify-content-between text-secondary font-mono mt-1 fs-8">
+                        <span>Entrada: ${formatVal(entryPrice)}</span>
+                        <span>{isTp1Reached ? '¡Objetivo tocado!' : `Resta: ${Math.max(0, remainingToTp1).toFixed(2)}%`}</span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Hito 4: Objetivo Final */}
-                  <div style={{ position: 'relative', opacity: 0.4 }}>
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: '-26px',
-                        top: '2px',
-                        width: '10px',
-                        height: '10px',
-                        borderRadius: '50%',
-                        background: '#474d57',
-                      }}
-                    />
-                    <div className="text-white">TP2 (${formatVal(tp2Price)})</div>
-                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>Salida final del trade</div>
+                  {/* Paso 3: Protocolo Break-Even (Blindaje) */}
+                  <div className="timeline-step">
+                    <div className={`timeline-node ${isTp1Reached ? 'active' : 'pending'}`}>
+                      {isTp1Reached ? <i className="bi bi-shield-check"></i> : '3'}
+                    </div>
+                    <div className={`timeline-content ${isTp1Reached ? 'active-step' : ''}`}>
+                      <div className="timeline-title">
+                        <span className={isTp1Reached ? 'text-white fw-bold' : 'text-secondary'}>
+                          Paso 3: Protocolo Break-Even
+                        </span>
+                        <span className={`badge font-mono fs-8 ${isTp1Reached ? 'bg-info-subtle text-info border border-info' : 'bg-dark border border-secondary text-secondary'}`}>
+                          {isTp1Reached ? 'Listo para activar' : 'Condicional a TP1'}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext">
+                        Ajusta el Stop Loss al costo de entrada (${formatVal(entryPrice)}) para garantizar 0 riesgo.
+                      </div>
+                      {isTp1Reached && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={handleMoveToBE}
+                            className="btn btn-sm btn-outline-success py-1 px-2 font-mono fs-7 w-100"
+                          >
+                            <i className="bi bi-shield-lock-fill me-1"></i>
+                            Blindar a Break-Even Ahora (${formatVal(entryPrice)})
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Paso 4: Toma de Beneficios Final (TP2) */}
+                  <div className="timeline-step">
+                    <div className="timeline-node pending">
+                      <span>4</span>
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-title">
+                        <span className="text-secondary">Paso 4: Salida Final (TP2)</span>
+                        <span className="badge bg-dark border border-secondary text-secondary font-mono fs-8">
+                          ${formatVal(tp2Price)}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Ganancia proyectada: <strong className="text-success">+${tp2ProfitEst.toFixed(2)} USDT</strong> (+{tp2RoeEst.toFixed(1)}% ROE).
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Paso 5: Stop Loss Preventivo */}
+                  <div className="timeline-step">
+                    <div className={`timeline-node ${isSlBreached ? 'alert' : 'pending'}`}>
+                      <i className={`bi ${isSlBreached ? 'bi-exclamation-triangle-fill' : 'bi-shield-x'}`}></i>
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-title">
+                        <span className={isSlBreached ? 'text-danger fw-bold' : 'text-secondary'}>
+                          Stop Loss Preventivo
+                        </span>
+                        <span className="badge bg-danger-subtle text-danger border border-danger font-mono fs-8">
+                          SL: ${formatVal(slPrice)}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Riesgo máximo acotado: <span className="text-danger">-${maxRiskUsd.toFixed(2)} USDT</span> ({slDiffPct.toFixed(2)}%).
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -608,8 +763,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             <button
               type="button"
               onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-              className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono"
-              style={{ fontSize: '0.75rem' }}
+              className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono fs-7"
             >
               {showAdvancedTools
                 ? '▲ Ocultar Herramientas Avanzadas & Órdenes Condicionales'
@@ -620,8 +774,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               <button
                 type="button"
                 onClick={() => onLinkStrategy(position)}
-                className="btn btn-sm btn-outline-warning py-1 px-2 font-mono"
-                style={{ fontSize: '0.75rem' }}
+                className="btn btn-sm btn-outline-warning py-1 px-2 font-mono fs-7"
               >
                 <i className="bi bi-link-45deg me-1"></i>
                 Vincular / Cambiar Estrategia
