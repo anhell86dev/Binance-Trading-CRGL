@@ -23,6 +23,84 @@ import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrate
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
+import { futuresConfluenceService } from '../services/futuresConfluenceService';
+
+const formatPriceVal = (val: number): string => {
+  if (!val || isNaN(val) || val <= 0) return '0.00';
+  if (val < 0.0001) return val.toFixed(6);
+  if (val < 0.1) return val.toFixed(4);
+  if (val < 10) return val.toFixed(4);
+  return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+const formatDollarVal = (val: number): string => {
+  if (!val || isNaN(val) || val <= 0) return '0.00';
+  if (val < 0.01) return val.toFixed(4);
+  if (val < 1) return val.toFixed(3);
+  return val.toFixed(2);
+};
+
+const StrategyConfluenceSemaphoreCell: React.FC<{ symbol: string; isLong: boolean }> = ({
+  symbol,
+  isLong,
+}) => {
+  const [confluenceData, setConfluenceData] = useState(() =>
+    futuresConfluenceService.getConfluence(symbol)
+  );
+
+  useEffect(() => {
+    setConfluenceData(futuresConfluenceService.getConfluence(symbol));
+    const unsubscribe = futuresConfluenceService.subscribe(() => {
+      setConfluenceData(futuresConfluenceService.getConfluence(symbol));
+    });
+    return unsubscribe;
+  }, [symbol]);
+
+  const { analysis } = confluenceData;
+  const { trafficLight, confidenceScore } = analysis;
+  const isGreen = trafficLight === 'BULLISH';
+  const isRed = trafficLight === 'BEARISH';
+  const isConfluent = (isLong && isGreen) || (!isLong && isRed);
+  const isConflicting = (isLong && isRed) || (!isLong && isGreen);
+
+  let badgeClass = 'bg-secondary-subtle text-secondary border border-secondary-subtle';
+  let badgeText = 'NEUTRAL';
+  let iconClass = 'bi bi-dash-circle me-1';
+  let progressBarClass = 'bg-secondary';
+
+  if (isConfluent) {
+    badgeClass = 'bg-success-subtle text-success border border-success-subtle';
+    badgeText = isLong ? 'APTO LONG' : 'APTO SHORT';
+    iconClass = 'bi bi-check-circle-fill me-1';
+    progressBarClass = 'bg-success';
+  } else if (isConflicting) {
+    badgeClass = 'bg-danger-subtle text-danger border border-danger-subtle';
+    badgeText = isLong ? 'RIESGO SHORT' : 'RIESGO LONG';
+    iconClass = 'bi bi-exclamation-triangle-fill me-1';
+    progressBarClass = 'bg-danger';
+  } else {
+    badgeClass = 'bg-warning-subtle text-warning border border-warning-subtle';
+    badgeText = 'NEUTRAL';
+    iconClass = 'bi bi-dash-circle me-1';
+    progressBarClass = 'bg-warning';
+  }
+
+  const score = Math.max(10, Math.min(100, Math.round(confidenceScore || 67)));
+
+  return (
+    <td className="text-center" style={{ width: '130px' }}>
+      <span className={`badge ${badgeClass} w-100 py-1 mb-1 font-mono`} style={{ fontSize: '0.65rem' }}>
+        <i className={iconClass}></i> {badgeText}
+      </span>
+      <div className="progress bg-dark border border-secondary" style={{ height: '4px' }}>
+        <div className={`progress-bar ${progressBarClass}`} style={{ width: `${score}%` }}></div>
+      </div>
+      <span className="text-secondary font-monospace" style={{ fontSize: '0.65rem' }}>
+        {score}% Score
+      </span>
+    </td>
+  );
+};
 
 interface TopStrategiesRiskRewardListProps {
   activeStrategies?: GoogleSheetStrategyRow[];
@@ -482,185 +560,229 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
       </div>
 
       {/* TABLA DE ALTA DENSIDAD ORDENADA POR R/B DE MAYOR A MENOR */}
-      <div className="crypto-table-container shadow-xl">
-        <table className="financial-table text-sm">
+      <div className="crypto-table-container shadow-xl" data-bs-theme="dark">
+        <table className="financial-table text-sm w-100">
           <thead>
-            <tr>
-              <th className="py-2.5 px-3 font-semibold text-center w-12 text-xs">Rank</th>
-              <th className="py-2.5 px-3 font-semibold text-xs">Par</th>
-              <th className="py-2.5 px-3 font-semibold text-xs">Tipo</th>
-              <th className="py-2.5 px-3 font-semibold min-w-[180px] text-xs">Estrategia</th>
-                  <th className="py-2.5 px-3 font-semibold min-w-[390px] lg:min-w-[460px] text-center bg-neutral-900/60 text-amber-300 border-x border-neutral-800 text-xs">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <Radio className="w-3 h-3 text-amber-400 animate-pulse" />
-                      <span>Barra de Precio (SL • E1 • Live • TP)</span>
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 font-semibold text-center min-w-[190px] bg-neutral-900/40 text-neutral-300 border-x border-neutral-800 text-xs">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <div className="flex items-center gap-0.5 px-1 py-0.5 rounded bg-neutral-950 border border-neutral-800">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <tr className="bg-neutral-950 text-neutral-400 text-xs border-b border-neutral-800">
+              <th
+                className="py-2.5 px-2 text-center text-secondary fw-bold font-monospace"
+                style={{ width: '45px' }}
+              >
+                #
+              </th>
+              <th className="py-2.5 px-3 text-start" style={{ minWidth: '240px' }}>
+                Par + Estrategia
+              </th>
+              <th className="py-2.5 px-3 text-center" style={{ minWidth: '380px' }}>
+                Barra de Rango Dinámico Reestructurada
+              </th>
+              <th className="py-2.5 px-2 text-center" style={{ width: '130px' }}>
+                Semáforo Confluencia Compacto
+              </th>
+              <th className="py-2.5 px-2 text-center" style={{ width: '80px' }}>
+                Ratio R:B
+              </th>
+              <th className="py-2.5 px-2 text-center" style={{ width: '90px' }}>
+                Acciones
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-neutral-800/80 font-mono text-sm">
+            {rankedStrategies.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-8 text-center text-xs text-neutral-500 font-sans">
+                  No hay estrategias activas disponibles en el catálogo.
+                </td>
+              </tr>
+            ) : (
+              rankedStrategies.map((item, index) => {
+                const strat = item.strategy;
+                const rank = index + 1;
+                const isClosestGlobal = closestInListId === strat.noEstrategia;
+                const isGlow = item.isVeryCloseToE1 || isClosestGlobal;
+                const isSelected =
+                  highlightSymbol &&
+                  highlightSymbol.toUpperCase() === strat.par.replace(/[^A-Z0-9]/g, '');
+
+                const baseEntry = item.entry1Price > 0 ? item.entry1Price : (item.livePrice || 1);
+                const slPrice =
+                  item.prices.slPrice || (item.isLong ? baseEntry * 0.985 : baseEntry * 1.015);
+                const tp1Price =
+                  item.prices.tp1Price || (item.isLong ? baseEntry * 1.045 : baseEntry * 0.955);
+                const livePrice = item.livePrice || baseEntry;
+
+                // Relative distances
+                const slDiffPct = baseEntry > 0 ? ((slPrice - baseEntry) / baseEntry) * 100 : -2.5;
+                const tpDiffPct = baseEntry > 0 ? ((tp1Price - baseEntry) / baseEntry) * 100 : 5.0;
+
+                const riskDollar = Math.abs(baseEntry - slPrice);
+                const rewardDollar = Math.abs(tp1Price - baseEntry);
+
+                // Proportional stacked bar widths
+                const validRatio = item.ratio > 0 ? item.ratio : 2.0;
+                const riskWidthPct = Math.max(
+                  20,
+                  Math.min(50, Math.round((1 / (1 + validRatio)) * 100))
+                );
+                const rewardWidthPct = 100 - riskWidthPct;
+
+                const inZone = item.isVeryCloseToE1 || item.absDiffPct <= 1.5;
+
+                return (
+                  <tr
+                    key={strat.noEstrategia}
+                    className={`transition-all duration-200 ${
+                      isGlow
+                        ? 'bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border-y border-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.2)]'
+                        : isSelected
+                        ? 'bg-neutral-850/90 border-amber-500/40'
+                        : 'hover:bg-neutral-850/60'
+                    }`}
+                  >
+                    {/* 1. Rank */}
+                    <td
+                      className="text-center text-secondary fw-bold font-monospace"
+                      style={{ width: '45px' }}
+                    >
+                      #{rank}
+                    </td>
+
+                    {/* 2. Par + Estrategia unificados */}
+                    <td style={{ minWidth: '240px' }}>
+                      <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                        <span className="fw-bold text-white fs-6">{strat.par}</span>
+                        {item.isLong ? (
+                          <span
+                            className="badge bg-success-subtle text-success border border-success-subtle"
+                            style={{ fontSize: '0.65rem' }}
+                          >
+                            LONG
+                          </span>
+                        ) : (
+                          <span
+                            className="badge bg-danger-subtle text-danger border border-danger-subtle"
+                            style={{ fontSize: '0.65rem' }}
+                          >
+                            SHORT
+                          </span>
+                        )}
+                        {/* Si estuviera en zona: */}
+                        {inZone && (
+                          <span
+                            className="badge bg-warning text-dark font-bold"
+                            style={{ fontSize: '0.65rem' }}
+                          >
+                            E1: {item.diffPct >= 0 ? '+' : ''}
+                            {item.diffPct.toFixed(2)}%
+                          </span>
+                        )}
                       </div>
-                      <span>Semáforo Confluencia</span>
-                    </div>
-                  </th>
-                  <th className="py-2.5 px-3 font-semibold text-center bg-emerald-500/5 text-emerald-300 border-x border-emerald-500/20 text-xs">
-                    Ratio R:B 🔽
-                  </th>
-                  <th className="py-2.5 px-3 font-semibold text-right min-w-[90px] text-xs">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-800/80 font-mono text-sm">
-                {rankedStrategies.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-8 text-center text-xs text-neutral-500 font-sans">
-                      No hay estrategias activas disponibles en el catálogo.
+                      <div
+                        className="text-secondary small text-truncate"
+                        style={{ maxWidth: '220px' }}
+                        title={strat.nombreEstrategia || ''}
+                      >
+                        {strat.nombreEstrategia || 'Estrategia de Google Sheets'}
+                      </div>
+                    </td>
+
+                    {/* 3. Barra de Rango Dinámico Reestructurada */}
+                    <td style={{ minWidth: '380px' }}>
+                      {/* Metadatos sobre la barra */}
+                      <div
+                        className="d-flex justify-content-between small font-monospace mb-1"
+                        style={{ fontSize: '0.72rem' }}
+                      >
+                        <span className="text-danger">
+                          SL: ${formatPriceVal(slPrice)}{' '}
+                          <span className="text-secondary">
+                            ({slDiffPct > 0 ? `-${slDiffPct.toFixed(1)}` : `${slDiffPct.toFixed(1)}`}%)
+                          </span>
+                        </span>
+                        <span className="text-warning fw-bold">
+                          <i className="bi bi-geo-alt-fill"></i> Live: ${formatPriceVal(livePrice)}
+                        </span>
+                        <span className="text-success">
+                          TP1: ${formatPriceVal(tp1Price)}{' '}
+                          <span className="text-secondary">
+                            ({tpDiffPct >= 0 ? `+${tpDiffPct.toFixed(1)}` : `${tpDiffPct.toFixed(1)}`}%)
+                          </span>
+                        </span>
+                      </div>
+
+                      {/* Barra visual dividida */}
+                      <div className="progress-stacked" style={{ height: '8px' }}>
+                        <div
+                          className="progress"
+                          role="progressbar"
+                          style={{ width: `${riskWidthPct}%` }}
+                          title="Zona SL a Entrada"
+                        >
+                          <div className="progress-bar bg-danger opacity-75"></div>
+                        </div>
+                        <div
+                          className="progress"
+                          role="progressbar"
+                          style={{ width: `${rewardWidthPct}%` }}
+                          title="Zona Entrada a TP1"
+                        >
+                          <div className="progress-bar bg-success opacity-75"></div>
+                        </div>
+                      </div>
+
+                      {/* Referencia de Entrada bajo la barra */}
+                      <div
+                        className="d-flex justify-content-between text-secondary small font-monospace mt-1"
+                        style={{ fontSize: '0.7rem' }}
+                      >
+                        <span>Riesgo: ${formatDollarVal(riskDollar)}</span>
+                        <span className="text-info font-bold">
+                          Entrada 1: ${formatPriceVal(baseEntry)}
+                        </span>
+                        <span>Obj. Net: +${formatDollarVal(rewardDollar)}</span>
+                      </div>
+                    </td>
+
+                    {/* 4. Semáforo Confluencia Compacto */}
+                    <StrategyConfluenceSemaphoreCell symbol={strat.par} isLong={item.isLong} />
+
+                    {/* 5. Ratio R:B */}
+                    <td className="text-center font-monospace" style={{ width: '80px' }}>
+                      <span className="badge bg-dark border border-success text-success fs-6 px-2 py-1">
+                        1:{item.ratio.toFixed(1)}
+                      </span>
+                    </td>
+
+                    {/* 6. Acciones */}
+                    <td className="text-center" style={{ width: '90px' }}>
+                      <div className="btn-group btn-group-sm">
+                        <button
+                          type="button"
+                          className="btn btn-outline-warning text-warning"
+                          title="Ver Gráfico"
+                          onClick={() => {
+                            binanceWs.setSymbol(strat.par.replace(/[^A-Z0-9]/g, ''));
+                            if (onOpenDetails) onOpenDetails(strat);
+                          }}
+                        >
+                          <i className="bi bi-eye"></i>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-warning text-dark"
+                          title="Ejecutar Trade"
+                          onClick={() => handleExecute(item)}
+                        >
+                          <i className="bi bi-lightning-fill"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ) : (
-                  rankedStrategies.map((item, index) => {
-                    const strat = item.strategy;
-                    const rank = index + 1;
-                    const isClosestGlobal = closestInListId === strat.noEstrategia;
-                    const isGlow = item.isVeryCloseToE1 || isClosestGlobal;
-                    const isSelected = highlightSymbol && highlightSymbol.toUpperCase() === strat.par.replace(/[^A-Z0-9]/g, '');
-                    const decimalPlaces = item.entry1Price < 10 || item.livePrice < 10 ? 4 : 2;
-
-                    return (
-                      <tr
-                        key={strat.noEstrategia}
-                        className={`transition-all duration-300 ${
-                          isGlow
-                            ? 'bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-amber-500/20 border-y border-amber-400/80 shadow-[0_0_20px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/50'
-                            : isSelected
-                            ? 'bg-neutral-850/90 border-amber-500/40'
-                            : 'hover:bg-neutral-850/60'
-                        }`}
-                      >
-                        {/* RANK BADGE */}
-                        <td className="py-2.5 px-3 text-center">
-                          <span
-                            className={`inline-flex items-center justify-center w-6 h-6 rounded-md font-black text-xs ${
-                              rank === 1
-                                ? 'bg-gradient-to-b from-amber-300 to-amber-500 text-neutral-950 shadow-[0_0_8px_rgba(251,191,36,0.6)]'
-                                : rank === 2
-                                ? 'bg-sky-400 text-neutral-950'
-                                : rank === 3
-                                ? 'bg-emerald-400 text-neutral-950'
-                                : 'bg-neutral-800 text-neutral-300 border border-neutral-700'
-                            }`}
-                          >
-                            #{rank}
-                          </span>
-                        </td>
-
-                        {/* PAR */}
-                        <td className="py-2.5 px-3 font-bold text-white text-xs">
-                          <div className="flex items-center gap-1">
-                            <span>{strat.par}</span>
-                            {isGlow && (
-                              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" title="¡Muy cerca de E1!" />
-                            )}
-                          </div>
-                        </td>
-
-                        {/* TIPO */}
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                              item.isLong ? 'text-emerald-300 bg-emerald-500/20 border border-emerald-500/40' : 'text-rose-300 bg-rose-500/20 border border-rose-500/40'
-                            }`}
-                          >
-                            {item.isLong ? 'LONG ↗' : 'SHORT ↘'}
-                          </span>
-                        </td>
-
-                        {/* NOMBRE ESTRATEGIA + BADGE BRILLANTE SI ESTÁ PRÓXIMA A E1 */}
-                        <td className="py-2.5 px-3 font-sans">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-white text-xs truncate max-w-[180px]" title={strat.nombreEstrategia}>
-                              {strat.nombreEstrategia}
-                            </span>
-
-                            {/* EFECTO BRILLANTE CUANDO EL PRECIO LIVE ESTÁ MUY CERCA DE E1 */}
-                            {isGlow && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-400 to-yellow-300 text-neutral-950 shadow-[0_0_12px_rgba(250,204,21,0.8)] animate-pulse">
-                                <Sparkles className="w-3 h-3 text-neutral-950 fill-neutral-950" />
-                                <span>PRÓXIMA A E1 ({item.diffPct >= 0 ? '+' : ''}{item.diffPct.toFixed(2)}%)</span>
-                              </span>
-                            )}
-                          </div>
-                          {strat.noEstrategia && (
-                            <span className="text-[10px] text-neutral-500 font-mono">ID: {strat.noEstrategia}</span>
-                          )}
-                        </td>
-
-                        {/* BARRA DE PRECIO CON TODOS LOS DATOS INCORPORADOS (SL, E1, PRECIO LIVE, PROXIMIDAD, TP) */}
-                        <td className="py-2 px-3 border-x border-neutral-800/80 min-w-[390px] lg:min-w-[460px]">
-                          <StrategyRowPriceBar
-                            livePrice={item.livePrice}
-                            entry1Price={item.entry1Price}
-                            slPrice={item.prices.slPrice || 0}
-                            tpPrice={item.prices.tp1Price || 0}
-                            diffPct={item.diffPct}
-                            absDiffPct={item.absDiffPct}
-                            diffDollar={item.diffDollar}
-                            isPricePositive={item.isPricePositive}
-                            change24h={item.liveData.change24hPercent || 0}
-                            isLong={item.isLong}
-                            isGlow={isGlow}
-                            decimalPlaces={decimalPlaces}
-                          />
-                        </td>
-
-                        {/* SEMÁFORO DE CONFLUENCIA DE FUTUROS */}
-                        <td className="py-2 px-3 border-x border-neutral-800/80 text-center">
-                          <div className="flex items-center justify-center">
-                            <StrategyFuturesConfluenceBadge
-                              symbol={strat.par}
-                              isLong={item.isLong}
-                            />
-                          </div>
-                        </td>
-
-                        {/* RATIO R:B (ORDENADO DE MAYOR A MENOR) */}
-                        <td className="py-2.5 px-3 text-center bg-emerald-500/5 border-x border-emerald-500/20">
-                          <span className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 font-black text-xs font-mono border border-emerald-500/40 shadow-xs">
-                            1:{item.ratio.toFixed(1)}
-                          </span>
-                        </td>
-
-                        {/* ACCIÓN: CARGAR ORDEN (ICONO SOLAMENTE) */}
-                        <td className="py-2.5 px-3 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {onOpenDetails && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenDetails(strat)}
-                                className="p-2 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 transition-colors cursor-pointer active:scale-95"
-                                title="Ver detalles de estrategia"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleExecute(item)}
-                              className="p-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-neutral-950 font-black inline-flex items-center justify-center shadow-md transition-all active:scale-95 cursor-pointer"
-                              title="Cargar orden de esta estrategia en Binance Futures"
-                            >
-                              <Zap className="w-4 h-4 fill-neutral-950" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

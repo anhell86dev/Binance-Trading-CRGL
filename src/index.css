@@ -700,5 +700,82 @@ canvas {
     text-decoration: none;
 }
 
+/* Bootstrap Progress Stacked & Bars */
+.progress-stacked {
+    display: flex;
+    overflow: hidden;
+    background-color: #1e293b;
+    border-radius: 9999px;
+}
+.progress-stacked .progress {
+    display: flex;
+    overflow: hidden;
+    height: 100%;
+}
+.progress {
+    display: flex;
+    height: 1rem;
+    overflow: hidden;
+    font-size: 0.75rem;
+    background-color: #1e293b;
+    border-radius: 0.375rem;
+}
+.progress-bar {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    transition: width 0.3s ease;
+}
+
+/* Bootstrap Button Groups */
+.btn-group {
+    display: inline-flex;
+    vertical-align: middle;
+}
+.btn-group > .btn {
+    position: relative;
+    flex: 1 1 auto;
+}
+.btn-group > .btn:not(:last-child) {
+    border-top-right-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+.btn-group > .btn:not(:first-child) {
+    border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    margin-left: -1px;
+}
+.btn-group-sm > .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.btn-outline-warning {
+    background-color: transparent;
+    color: #f59e0b !important;
+    border: 1px solid rgba(245, 158, 11, 0.4) !important;
+}
+.btn-outline-warning:hover {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    color: #fbbf24 !important;
+    border-color: #f59e0b !important;
+}
+
+.btn-warning {
+    background-color: #f59e0b !important;
+    border-color: #f59e0b !important;
+    color: #0f172a !important;
+    font-weight: 700;
+}
+.btn-warning:hover {
+    background-color: #d97706 !important;
+    border-color: #d97706 !important;
+}
+
+
 
 
