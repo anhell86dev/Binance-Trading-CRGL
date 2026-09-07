@@ -26,6 +26,7 @@ import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
+import { PositionTacticalDetailRow } from './PositionTacticalDetailRow';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 
 interface OpenPositionsTableProps {
@@ -567,16 +568,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </td>
                     </tr>
 
-                    {/* Subfila Desplegable de Seguimiento Visual de la Estrategia */}
+                    {/* Subfila Desplegable de Seguimiento Visual y Gráfico del Trade */}
                     {expandedSymbols.has(pos.symbol) && (
-                      <tr className="bg-neutral-950 border-b border-neutral-800">
-                        <td colSpan={8} className="p-3 sm:p-4 bg-neutral-950">
-                          <StrategyPositionTracker
-                            position={pos}
-                            onLinkStrategy={(p) => setLinkPos(p)}
-                          />
-                        </td>
-                      </tr>
+                      <PositionTacticalDetailRow
+                        position={pos}
+                        openOrders={openOrders}
+                        onOpenEditModal={(p) => openEditModal(p)}
+                        onLinkStrategy={(p) => setLinkPos(p)}
+                      />
                     )}
                   </React.Fragment>
                 );
