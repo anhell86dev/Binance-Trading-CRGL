@@ -248,27 +248,23 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
 
       {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
       <div className="overflow-x-auto w-full" style={{ minHeight: '520px' }}>
-        <table className="w-full text-left text-sm font-mono min-w-[1280px]">
+        <table className="w-full text-left text-sm font-mono min-w-[1200px]">
           <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-xs">
             <tr>
-              <th className="py-3 px-4">Par</th>
-              <th className="py-3 px-4">Estrategia Ligada</th>
-              <th className="py-3 px-4">Estado del Trade</th>
-              <th className="py-3 px-4">Apalancamiento</th>
-              <th className="py-3 px-4">Margen</th>
-              <th className="py-3 px-4">Tamaño</th>
-              <th className="py-3 px-4">Precio Entrada</th>
-              <th className="py-3 px-4">Precio de Mercado</th>
-              <th className="py-3 px-4">Precio Liq.</th>
-              <th className="py-3 px-4">PnL No Realizado</th>
-              <th className="py-3 px-4">TP / SL</th>
-              <th className="py-3 px-4 text-right">Acción</th>
+              <th className="py-3 px-3.5">PAR</th>
+              <th className="py-3 px-3.5">Estrategia</th>
+              <th className="py-3 px-3.5">Apalancamiento Margen</th>
+              <th className="py-3 px-3.5">Tamaño</th>
+              <th className="py-3 px-3.5">Precio Entrada</th>
+              <th className="py-3 px-3.5">Precio de Mercado</th>
+              <th className="py-3 px-3.5">PnL</th>
+              <th className="py-3 px-3.5 text-right">Estado del trade</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800/60">
             {fixedPositions.length === 0 ? (
               <tr>
-                <td colSpan={12} className="py-12 px-4 text-center">
+                <td colSpan={8} className="py-12 px-4 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <div className="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-neutral-500 mb-3 shadow-inner">
                       <ShieldCheck className="w-6 h-6 text-emerald-400/80" />
@@ -338,235 +334,255 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                   return price.toFixed(6);
                 };
 
+                const notionalUsd = qty * (pos.entryPrice || effectiveMarketPrice);
+
                 return (
                   <React.Fragment key={pos.symbol}>
                     <tr
                       onClick={() => onSelectPosition && onSelectPosition(pos)}
                       className="hover:bg-neutral-800/40 transition-colors cursor-pointer"
                     >
-                    {/* Par y Dirección */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-xs">{pos.symbol}</span>
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            isLong
-                              ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                              : 'bg-rose-950 text-rose-400 border border-rose-800'
-                          }`}
-                        >
-                          {isLong ? 'LONG' : 'SHORT'}
-                        </span>
-                      </div>
-                    </td>
+                      {/* 1. PAR */}
+                      <td className="py-3.5 px-3.5">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-white text-xs tracking-wide">{pos.symbol}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider ${
+                                isLong
+                                  ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
+                                  : 'bg-rose-950/80 text-rose-400 border border-rose-800/80'
+                              }`}
+                            >
+                              {isLong ? 'LONG' : 'SHORT'}
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-mono text-neutral-500">
+                            {pos.liquidationPrice > 0 ? (
+                              <span className="text-rose-400/90 font-medium" title="Precio de Liquidación">
+                                Liq: ${formatPrice(pos.liquidationPrice)}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-500">Liq: Segura (0.00)</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
 
-                    {/* Estrategia Ligada & Hitos */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* 2. Estrategia */}
+                      <td className="py-3.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {(() => {
+                            const effStratId = pos.strategyId || binanceWs.getLinkedStrategyForSymbol(pos.symbol)?.strategyId;
+                            return effStratId ? (
+                              <button
+                                type="button"
+                                onClick={() => setLinkPos(pos)}
+                                title={`Estrategia: ${effStratId} - Clic para cambiar`}
+                                className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                <span>{effStratId}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setLinkPos(pos)}
+                                className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                                <span>Ligar Estrategia</span>
+                              </button>
+                            );
+                          })()}
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpand(pos.symbol);
+                            }}
+                            title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                              expandedSymbols.has(pos.symbol)
+                                ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
+                                : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
+                            }`}
+                          >
+                            <Layers className="w-2.5 h-2.5" />
+                            <span>Hitos</span>
+                            {expandedSymbols.has(pos.symbol) ? (
+                              <ChevronUp className="w-2.5 h-2.5" />
+                            ) : (
+                              <ChevronDown className="w-2.5 h-2.5" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+
+                      {/* 3. Apalancamiento Margen */}
+                      <td className="py-3.5 px-3.5">
+                        <div className="flex flex-col gap-0.5 font-mono">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-1.5 py-0.2 rounded bg-neutral-950 text-amber-300 border border-neutral-700 font-bold text-[11px]">
+                              {safeLeverage}x
+                            </span>
+                            <span className="px-1.5 py-0.2 rounded bg-blue-500/15 text-blue-300 border border-blue-500/30 text-[9px] font-semibold">
+                              ISOLATED
+                            </span>
+                          </div>
+                          <span className="text-white font-semibold text-xs">
+                            ${(pos.isolatedMargin || margin || 0).toFixed(2)} USDT
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 4. Tamaño */}
+                      <td className="py-3.5 px-3.5 font-mono">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-white text-xs">
+                            {qty.toFixed(3)} {pos.symbol.replace('USDT', '')}
+                          </span>
+                          <span className="text-[10px] text-neutral-400">
+                            ~${notionalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* 5. Precio Entrada */}
+                      <td className="py-3.5 px-3.5 text-neutral-200 font-mono text-xs">
+                        ${formatPrice(pos.entryPrice || 0)}
+                      </td>
+
+                      {/* 6. Precio de Mercado */}
+                      <td className="py-3.5 px-3.5 font-mono">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+                            <span className="text-amber-400 font-bold text-xs">
+                              ${formatPrice(effectiveMarketPrice)}
+                            </span>
+                          </div>
+                          {pos.entryPrice > 0 && effectiveMarketPrice > 0 && (
+                            <span className={`text-[10px] font-semibold ${isProfit ? 'text-emerald-400/90' : 'text-rose-400/90'}`}>
+                              {isLong
+                                ? (effectiveMarketPrice >= pos.entryPrice ? '+' : '') + formatPrice(effectiveMarketPrice - pos.entryPrice)
+                                : (pos.entryPrice >= effectiveMarketPrice ? '+' : '-') + formatPrice(Math.abs(pos.entryPrice - effectiveMarketPrice))}
+                              {' (' + (isLong ? '+' : '') + (((effectiveMarketPrice - pos.entryPrice) / pos.entryPrice) * 100).toFixed(2) + '%)'}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* 7. PnL */}
+                      <td className="py-3.5 px-3.5 font-mono" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`font-bold text-sm ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
+                            </span>
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
+                              isProfit
+                                ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/80'
+                                : 'bg-rose-950/80 text-rose-300 border border-rose-800/80'
+                            }`}>
+                              {isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE
+                            </span>
+                          </div>
+
+                          {/* Quick TP / SL with Edit Pencil */}
+                          <div className="flex items-center gap-1 text-[10px] text-neutral-400 flex-wrap">
+                            {tpValue ? (
+                              <span className="text-emerald-400 font-semibold" title="Take Profit">
+                                TP: ${tpValue.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-500 italic">Sin TP</span>
+                            )}
+                            <span className="text-neutral-600">•</span>
+                            {slValue ? (
+                              <span className="text-rose-400 font-semibold" title="Stop Loss">
+                                SL: ${slValue.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-neutral-500 italic">Sin SL</span>
+                            )}
+
+                            <button
+                              onClick={() => openEditModal(pos)}
+                              className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors ml-0.5 cursor-pointer"
+                              title="Configurar / Editar TP y SL (Órdenes Condicionales en Binance)"
+                            >
+                              <Edit2 className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 8. Estado del trade */}
+                      <td className="py-3.5 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         {(() => {
-                          const effStratId = pos.strategyId || binanceWs.getLinkedStrategyForSymbol(pos.symbol)?.strategyId;
-                          return effStratId ? (
-                            <button
-                              type="button"
-                              onClick={() => setLinkPos(pos)}
-                              title={`Estrategia: ${effStratId} - Clic para cambiar`}
-                              className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                              <span>{effStratId}</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setLinkPos(pos)}
-                              className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                              <span>Ligar Estrategia</span>
-                            </button>
+                          const tradeStatus = getTradeStatusAndPhase(pos, openOrders);
+                          return (
+                            <div className="flex items-center justify-end gap-3">
+                              <div className="flex flex-col gap-0.5 text-left min-w-[170px]">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span
+                                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 shadow-2xs ${tradeStatus.badgeClass}`}
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
+                                    {tradeStatus.phaseBadge}
+                                  </span>
+                                  {tradeStatus.hasHitMilestone && (
+                                    <span
+                                      className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
+                                      title="Hito alcanzado en la posición"
+                                    >
+                                      Hito Tocado
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="text-[11px] font-semibold text-neutral-200">
+                                  {tradeStatus.milestonesHitText}
+                                </div>
+                                <div className="text-[10px] text-neutral-400 font-mono">
+                                  {tradeStatus.nextMilestoneText}
+                                </div>
+                              </div>
+
+                              {/* Emergency / Market Close Action */}
+                              <div className="shrink-0">
+                                <EmergencyCloseButton
+                                  symbol={pos.symbol}
+                                  positionSize={pos.positionAmt}
+                                  entryPrice={pos.entryPrice}
+                                  unrealizedPnl={pos.unRealizedProfit}
+                                  variant="danger"
+                                />
+                              </div>
+                            </div>
                           );
                         })()}
-
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleExpand(pos.symbol);
-                          }}
-                          title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-                            expandedSymbols.has(pos.symbol)
-                              ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
-                              : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
-                          }`}
-                        >
-                          <Layers className="w-2.5 h-2.5 text-amber-400" />
-                          <span>Hitos</span>
-                          {expandedSymbols.has(pos.symbol) ? (
-                            <ChevronUp className="w-2.5 h-2.5" />
-                          ) : (
-                            <ChevronDown className="w-2.5 h-2.5" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-
-                    {/* Estado del Trade (Fase y Hitos Tocados) */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      {(() => {
-                        const tradeStatus = getTradeStatusAndPhase(pos, openOrders);
-                        return (
-                          <div className="flex flex-col gap-1 min-w-[190px]">
-                            {/* Fase Badge */}
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 shadow-2xs ${tradeStatus.badgeClass}`}
-                              >
-                                <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"></span>
-                                {tradeStatus.phaseBadge}
-                              </span>
-                              {tradeStatus.hasHitMilestone && (
-                                <span
-                                  className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold"
-                                  title="Hito alcanzado en la posición"
-                                >
-                                  Hito Tocado
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Detalle de Hitos Alcanzados */}
-                            <div className="flex items-center gap-1 text-[11px]">
-                              <span className={`font-semibold ${tradeStatus.textClass}`}>
-                                {tradeStatus.milestonesHitText}
-                              </span>
-                            </div>
-
-                            {/* Próximo Paso / Hito Siguiente */}
-                            <div className="text-[10px] text-neutral-400 font-mono">
-                              {tradeStatus.nextMilestoneText}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </td>
-
-                    {/* Apalancamiento Máx 5x */}
-                    <td className="py-3 px-3 font-bold">
-                      <span className="px-1.5 py-0.5 rounded bg-neutral-950 text-amber-300 border border-neutral-700">
-                        {safeLeverage}x
-                      </span>
-                    </td>
-
-                    {/* Margen Isolated */}
-                    <td className="py-3 px-3">
-                      <div className="flex flex-col">
-                        <span className="text-white font-semibold">${(pos.isolatedMargin || 0).toFixed(2)} USDT</span>
-                        <span className="text-[10px] text-blue-400 font-mono">ISOLATED</span>
-                      </div>
-                    </td>
-
-                    {/* Tamaño */}
-                    <td className="py-3 px-3 font-semibold text-neutral-200">
-                      {Math.abs(pos.positionAmt || 0).toFixed(3)} {pos.symbol.replace('USDT', '')}
-                    </td>
-
-                    {/* Precio Entrada */}
-                    <td className="py-3 px-3 text-neutral-300 font-mono">${formatPrice(pos.entryPrice || 0)}</td>
-
-                    {/* Precio de Mercado */}
-                    <td className="py-3 px-3">
-                      <div className="flex items-center gap-1.5 font-mono">
-                        <span className="text-amber-400 font-bold text-xs">
-                          ${formatPrice(effectiveMarketPrice)}
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* Precio Liquidación */}
-                    <td className="py-3 px-3 text-rose-400 font-bold font-mono">
-                      ${pos.liquidationPrice > 0 ? formatPrice(pos.liquidationPrice) : '0.00'}
-                    </td>
-
-                    {/* PnL No Realizado */}
-                    <td className="py-3 px-3 font-mono">
-                      <div className="flex flex-col">
-                        <span className={`font-bold text-xs ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)}
-                        </span>
-                        <span className={`text-[10px] font-semibold ${isProfit ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-                          {isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE
-                        </span>
-                      </div>
-                    </td>
-
-                    {/* TP / SL Dinámicos */}
-                    <td className="py-3 px-3" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {tpValue ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 text-[11px] font-mono">
-                            <span className="text-emerald-300 font-bold">TP:</span> ${tpValue.toFixed(2)}
-                            {tpOrder && (
-                              <span className="text-[9px] px-1 py-0.2 bg-emerald-800/60 text-emerald-200 rounded font-sans" title="Orden condicional activa en Binance">
-                                Cond.
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-neutral-500 italic">Sin TP</span>
-                        )}
-
-                        {slValue ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/60 border border-rose-800/60 text-rose-400 text-[11px] font-mono">
-                            <span className="text-rose-300 font-bold">SL:</span> ${slValue.toFixed(2)}
-                            {slOrder && (
-                              <span className="text-[9px] px-1 py-0.2 bg-rose-800/60 text-rose-200 rounded font-sans" title="Orden condicional activa en Binance">
-                                Cond.
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-neutral-500 italic">Sin SL</span>
-                        )}
-
-                        <button
-                          onClick={() => openEditModal(pos)}
-                          className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors ml-0.5"
-                          title="Configurar / Editar TP y SL (Órdenes Condicionales)"
-                        >
-                          <Edit2 className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </td>
-
-                    {/* Acción de Emergencia */}
-                    <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <EmergencyCloseButton
-                        symbol={pos.symbol}
-                        positionSize={pos.positionAmt}
-                        entryPrice={pos.entryPrice}
-                        unrealizedPnl={pos.unRealizedProfit}
-                        variant="danger"
-                      />
-                    </td>
-                  </tr>
-
-                  {/* Subfila Desplegable de Seguimiento Visual de la Estrategia */}
-                  {expandedSymbols.has(pos.symbol) && (
-                    <tr className="bg-neutral-950 border-b border-neutral-800">
-                      <td colSpan={12} className="p-3 sm:p-4 bg-neutral-950">
-                        <StrategyPositionTracker
-                          position={pos}
-                          onLinkStrategy={(p) => setLinkPos(p)}
-                        />
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              );
-            })
-          )}
-        </tbody>
+
+                    {/* Subfila Desplegable de Seguimiento Visual de la Estrategia */}
+                    {expandedSymbols.has(pos.symbol) && (
+                      <tr className="bg-neutral-950 border-b border-neutral-800">
+                        <td colSpan={8} className="p-3 sm:p-4 bg-neutral-950">
+                          <StrategyPositionTracker
+                            position={pos}
+                            onLinkStrategy={(p) => setLinkPos(p)}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })
+            )}
+          </tbody>
         </table>
       </div>
 
