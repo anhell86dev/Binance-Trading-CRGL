@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { PositionRisk, OpenOrder } from '../types/binance';
 import { binanceWs } from '../services/binanceWs';
 import { livePriceService } from '../services/livePriceService';
@@ -23,6 +23,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 }) => {
   const [showAdvancedTools, setShowAdvancedTools] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isLong = position.positionAmt > 0;
   const qty = Math.abs(position.positionAmt || 0);
@@ -102,12 +103,10 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const roe = margin > 0 ? (pnl / margin) * 100 : (position.roePercent || 0);
 
   const notionalUsd = qty * entryPrice;
-  const riskDollar = qty * Math.abs(entryPrice - slPrice);
 
   // Porcentajes de distancia respecto a la entrada
   const slDiffPct = entryPrice > 0 ? ((slPrice - entryPrice) / entryPrice) * 100 : -1.83;
   const tp1DiffPct = entryPrice > 0 ? ((tp1Price - entryPrice) / entryPrice) * 100 : 2.67;
-  const tp2DiffPct = entryPrice > 0 ? ((tp2Price - entryPrice) / entryPrice) * 100 : 5.17;
 
   // Distancia restante a TP1
   const remainingToTp1 = isLong
@@ -117,7 +116,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   // Ratio R:B
   const riskDistance = Math.abs(entryPrice - slPrice);
   const rewardDistance = Math.abs(tp1Price - entryPrice);
-  const rewardRiskRatio = riskDistance > 0 ? rewardDistance / riskDistance : 3.3;
+  const rewardRiskRatio = riskDistance > 0 ? rewardDistance / riskDistance : 2.5;
 
   // Diagnóstico de Hitos
   const tradeStatus = getTradeStatusAndPhase(position, openOrders);
@@ -132,6 +131,190 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return val.toFixed(2);
   };
+
+  // Motor de Renderizado en Canvas con Coordenadas (X, Y) Reales
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const render = () => {
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      ctx.scale(dpr, dpr);
+      const w = rect.width;
+      const h = rect.height;
+
+      ctx.clearRect(0, 0, w, h);
+
+      const live = currentLivePrice;
+      const entry = entryPrice;
+      const sl = slPrice;
+      const tp1 = tp1Price;
+      const tp2 = tp2Price || (isLong ? entry * 1.05 : entry * 0.95);
+
+      // Límites dinámicos con padding proporcional
+      const allPrices = [live, entry, sl, tp1, tp2].filter((p) => p > 0);
+      const minRaw = Math.min(...allPrices);
+      const maxRaw = Math.max(...allPrices);
+      const priceRange = Math.max(0.0001, maxRaw - minRaw);
+      const pad = priceRange * 0.14;
+      const minP = minRaw - pad;
+      const maxP = maxRaw + pad;
+
+      const getY = (price: number) => {
+        const clamped = Math.max(minP, Math.min(maxP, price));
+        return h - ((clamped - minP) / (maxP - minP)) * h;
+      };
+
+      // 1. Sombrear Zona Verde de Beneficio (Entry a TP2/TP1)
+      if (isLong) {
+        const yTopProfit = getY(tp2);
+        const yBottomProfit = getY(entry);
+        const profitHeight = yBottomProfit - yTopProfit;
+        if (profitHeight > 0) {
+          ctx.fillStyle = 'rgba(46, 189, 133, 0.08)';
+          ctx.fillRect(0, yTopProfit, w, profitHeight);
+        }
+
+        // Sombrear Zona Roja de Riesgo (SL a Entry)
+        const yTopRisk = getY(entry);
+        const yBottomRisk = getY(sl);
+        const riskHeight = yBottomRisk - yTopRisk;
+        if (riskHeight > 0) {
+          ctx.fillStyle = 'rgba(246, 70, 93, 0.08)';
+          ctx.fillRect(0, yTopRisk, w, riskHeight);
+        }
+      } else {
+        // En SHORT: Beneficio debajo de la entrada
+        const yTopProfit = getY(entry);
+        const yBottomProfit = getY(tp2);
+        const profitHeight = yBottomProfit - yTopProfit;
+        if (profitHeight > 0) {
+          ctx.fillStyle = 'rgba(46, 189, 133, 0.08)';
+          ctx.fillRect(0, yTopProfit, w, profitHeight);
+        }
+
+        // Riesgo por encima de la entrada
+        const yTopRisk = getY(sl);
+        const yBottomRisk = getY(entry);
+        const riskHeight = yBottomRisk - yTopRisk;
+        if (riskHeight > 0) {
+          ctx.fillStyle = 'rgba(246, 70, 93, 0.08)';
+          ctx.fillRect(0, yTopRisk, w, riskHeight);
+        }
+      }
+
+      // Guías de cuadrícula sutiles
+      ctx.strokeStyle = '#1e2638';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 4]);
+      for (let i = 1; i <= 3; i++) {
+        const gridY = (h / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, gridY);
+        ctx.lineTo(w, gridY);
+        ctx.stroke();
+      }
+
+      // Función para trazar líneas de nivel
+      function drawLevel(price: number, label: string, color: string, dashed = false) {
+        const y = getY(price);
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.2;
+        if (dashed) ctx.setLineDash([4, 4]);
+        else ctx.setLineDash([]);
+        ctx.moveTo(0, y);
+        ctx.lineTo(w - 95, y);
+        ctx.stroke();
+
+        // Etiqueta lateral derecha
+        ctx.fillStyle = color;
+        ctx.font = 'bold 10px monospace';
+        ctx.fillText(`${label} $${formatVal(price)}`, w - 90, y + 3);
+      }
+
+      if (tp2Price) drawLevel(tp2, 'TP2', '#2ebd85', true);
+      drawLevel(tp1, 'TP1', '#2ebd85', true);
+      drawLevel(entry, 'E1', '#00b8d9');
+      drawLevel(sl, 'SL', '#f6465d');
+
+      // 3. Trayectoria reciente simulada de velas / sparkline hasta Live
+      const liveX = Math.max(60, Math.min(w - 110, w * 0.7));
+      const liveY = getY(live);
+      const entryY = getY(entry);
+
+      ctx.beginPath();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+
+      const step = liveX / 5;
+      const diff = live - entry;
+      const pts = [
+        { x: 15, y: entryY },
+        { x: step * 1, y: getY(entry + diff * 0.25 + (isLong ? 0.05 : -0.05) * entry * 0.002) },
+        { x: step * 2, y: getY(entry + diff * 0.65 - (isLong ? 0.04 : -0.04) * entry * 0.002) },
+        { x: step * 3, y: getY(entry + diff * 0.45 + (isLong ? 0.03 : -0.03) * entry * 0.002) },
+        { x: step * 4, y: getY(entry + diff * 0.85) },
+        { x: liveX, y: liveY },
+      ];
+
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        ctx.lineTo(pts[i].x, pts[i].y);
+      }
+      ctx.stroke();
+
+      // Halo sutil bajo la curva
+      ctx.lineTo(liveX, h);
+      ctx.lineTo(pts[0].x, h);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(0, Math.min(entryY, liveY), 0, h);
+      grad.addColorStop(0, 'rgba(240, 185, 11, 0.08)');
+      grad.addColorStop(1, 'rgba(240, 185, 11, 0)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // 4. Marcador puntual de la posición actual (LIVE)
+      ctx.beginPath();
+      ctx.arc(liveX, liveY, 9, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(240, 185, 11, 0.25)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(liveX, liveY, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#f0b90b';
+      ctx.fill();
+
+      ctx.fillStyle = '#f0b90b';
+      ctx.font = 'bold 11px monospace';
+      const liveText = `LIVE: $${formatVal(live)}`;
+      const textW = ctx.measureText(liveText).width;
+      const textX = Math.max(10, Math.min(w - textW - 10, liveX - textW / 2));
+      const textY = liveY < 30 ? liveY + 18 : liveY - 10;
+      ctx.fillText(liveText, textX, textY);
+    };
+
+    render();
+
+    const ro = new ResizeObserver(() => {
+      render();
+    });
+    ro.observe(canvas);
+
+    return () => {
+      ro.disconnect();
+    };
+  }, [currentLivePrice, entryPrice, slPrice, tp1Price, tp2Price, isLong]);
 
   // Acciones Rápidas
   const handleMoveToBE = async () => {
@@ -170,325 +353,426 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   };
 
   return (
-    <tr className="bg-dark-subtle border-start border-4 border-info">
-      <td colSpan={8} className="p-3">
-        {/* BARRA SUPERIOR DE CONTEXTO DEL TRADE */}
-        <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary gap-2">
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span className="fs-5 fw-bold text-white font-monospace">{position.symbol}</span>
-            <span className={`badge ${isLong ? 'bg-success' : 'bg-danger'}`}>
-              {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x
-            </span>
-            <span
-              className="badge bg-dark border border-secondary text-secondary"
-              title={linkedStrategy?.nombreEstrategia || ''}
-            >
-              ID: {effectiveStrategyId}
-            </span>
-            <span className="badge bg-info-subtle text-info border border-info-subtle">
-              <i className="bi bi-play-circle me-1"></i>
-              {isTp1Reached
-                ? 'Fase 3: TP1 Alcanzado'
-                : isSlBreached
-                ? 'Fase 4: SL Amenazado'
-                : 'Fase 2: En Desarrollo'}
-            </span>
-            {actionFeedback && (
-              <span className="badge bg-warning text-dark font-sans animate-pulse">
-                {actionFeedback}
+    <tr style={{ backgroundColor: '#07090e', borderBottom: '1px solid #1e2638' }}>
+      <td colSpan={8} style={{ padding: '8px 12px', border: 'none', backgroundColor: '#07090e' }}>
+        {/* CONTENEDOR EXPEDIENTE TOTALMENTE ENCAPSULADO */}
+        <div
+          style={{
+            backgroundColor: '#0b0e14',
+            border: '1px solid #1e2638',
+            borderRadius: '8px',
+            padding: '16px',
+            margin: '4px 0',
+            color: '#d1d4dc',
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            boxSizing: 'border-box',
+            width: '100%',
+          }}
+        >
+          {/* 1. HEADER DEL TRADE */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              borderBottom: '1px solid #1e2638',
+              paddingBottom: '12px',
+              marginBottom: '14px',
+              flexWrap: 'wrap',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#ffffff', fontFamily: 'monospace' }}>
+                {position.symbol}
               </span>
-            )}
-          </div>
-          <div className="d-flex align-items-center gap-2 flex-wrap">
-            <div className="text-end font-monospace me-2">
-              <div className="text-secondary small" style={{ fontSize: '0.7rem' }}>
-                Riesgo / Beneficio:
-              </div>
-              <span className="text-success fw-bold">1 : {rewardRiskRatio.toFixed(1)}</span>
-            </div>
-            <div className="btn-group btn-group-sm">
-              <button
-                type="button"
-                className="btn btn-outline-secondary"
-                onClick={handleMoveToBE}
-                title="Mover Stop Loss al precio de entrada"
+              <span
+                style={{
+                  background: isLong ? 'rgba(46, 189, 133, 0.15)' : 'rgba(246, 70, 93, 0.15)',
+                  color: isLong ? '#2ebd85' : '#f6465d',
+                  border: `1px solid ${isLong ? '#2ebd85' : '#f6465d'}`,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                }}
               >
-                <i className="bi bi-shield-check me-1"></i>Mover a BE (${formatVal(entryPrice)})
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline-warning"
-                onClick={() => onOpenEditModal(position)}
-                title="Ajustar valores de Take Profit y Stop Loss"
+                {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x
+              </span>
+              <span
+                style={{
+                  background: '#161b26',
+                  color: '#848e9c',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontFamily: 'monospace',
+                }}
               >
-                <i className="bi bi-pencil-square me-1"></i>Ajustar TP/SL
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger text-white"
-                onClick={handlePanicClose}
-                title="Cerrar posición completa a mercado inmediatamente"
+                ID: {effectiveStrategyId}
+              </span>
+              <span
+                style={{
+                  background: isTp1Reached
+                    ? 'rgba(46, 189, 133, 0.15)'
+                    : isSlBreached
+                    ? 'rgba(246, 70, 93, 0.15)'
+                    : 'rgba(13, 110, 253, 0.15)',
+                  color: isTp1Reached ? '#2ebd85' : isSlBreached ? '#f6465d' : '#3b82f6',
+                  border: `1px solid ${isTp1Reached ? '#2ebd85' : isSlBreached ? '#f6465d' : '#3b82f6'}`,
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                }}
               >
-                <i className="bi bi-x-circle me-1"></i>Cierre Pánico
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="row g-3">
-          {/* COLUMNA IZQUIERDA: GRÁFICO DINÁMICO + VOLATILIDAD */}
-          <div className="col-12 col-xl-8">
-            <div className="card card-outline card-secondary h-100 mb-0 shadow-sm">
-              <div className="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <span className="small fw-bold text-uppercase">
-                  <i className="bi bi-graph-up me-1 text-info"></i> Canal Táctico de Ejecución
-                </span>
-                <div className="d-flex align-items-center gap-2 font-monospace small flex-wrap">
-                  <span className="text-danger">
-                    <i className="bi bi-dash-circle me-1"></i>SL: {formatVal(slPrice)}
-                  </span>
-                  <span className="text-info">
-                    <i className="bi bi-arrow-right-circle me-1"></i>Entrada: {formatVal(entryPrice)}
-                  </span>
-                  <span className="text-success">
-                    <i className="bi bi-check-circle me-1"></i>TP1: {formatVal(tp1Price)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Contenedor del Gráfico (Canvas / SVG / TradingView Lightweight Chart) */}
-              <div className="card-body p-2 position-relative bg-black" style={{ minHeight: '260px' }}>
-                <div
-                  className="w-100 h-100 d-flex flex-column justify-content-between py-2 px-3 font-monospace rounded"
+                {isTp1Reached
+                  ? 'Fase 3: TP1 Alcanzado'
+                  : isSlBreached
+                  ? 'Fase 4: SL Amenazado'
+                  : 'Fase 2: En Desarrollo'}
+              </span>
+              {actionFeedback && (
+                <span
                   style={{
-                    minHeight: '250px',
-                    background:
-                      'linear-gradient(180deg, rgba(25,135,84,0.08) 0%, rgba(13,110,253,0.02) 50%, rgba(220,53,69,0.08) 100%)',
+                    background: '#f59e0b',
+                    color: '#0b0e14',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: 'bold',
                   }}
                 >
-                  {/* Nivel Superior TP */}
-                  <div className="d-flex justify-content-between align-items-center border-bottom border-success border-opacity-50 pb-1">
-                    <span
-                      className="badge bg-success-subtle text-success border border-success-subtle"
-                      style={{ fontSize: '0.65rem' }}
-                    >
-                      TP2: ${formatVal(tp2Price)} ({tp2DiffPct >= 0 ? '+' : ''}
-                      {tp2DiffPct.toFixed(2)}%)
-                    </span>
-                    <span className="text-secondary small" style={{ fontSize: '0.7rem' }}>
-                      Objetivo Final
-                    </span>
-                  </div>
+                  {actionFeedback}
+                </span>
+              )}
+            </div>
 
-                  <div className="d-flex justify-content-between align-items-center border-bottom border-success border-opacity-25 pb-1">
-                    <span
-                      className="badge bg-success-subtle text-success border border-success-subtle"
-                      style={{ fontSize: '0.65rem' }}
-                    >
-                      TP1: ${formatVal(tp1Price)} ({tp1DiffPct >= 0 ? '+' : ''}
-                      {tp1DiffPct.toFixed(2)}%)
-                    </span>
-                    <span
-                      className={`small ${isTp1Reached ? 'text-success fw-bold' : 'text-success'}`}
-                      style={{ fontSize: '0.7rem' }}
-                    >
-                      {isTp1Reached
-                        ? '¡Objetivo Alcanzado!'
-                        : `Faltan ${Math.max(0, remainingToTp1).toFixed(1)}%`}
-                    </span>
-                  </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                <span style={{ color: '#848e9c' }}>Riesgo / Beneficio: </span>
+                <strong style={{ color: '#2ebd85' }}>1 : {rewardRiskRatio.toFixed(1)}</strong>
+              </div>
+              <button
+                type="button"
+                onClick={handleMoveToBE}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #474d57',
+                  color: '#d1d4dc',
+                  padding: '5px 10px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Mover a BE (${formatVal(entryPrice)})
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenEditModal(position)}
+                style={{
+                  background: '#1e2638',
+                  border: '1px solid #334155',
+                  color: '#fbbf24',
+                  padding: '5px 10px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Ajustar TP/SL
+              </button>
+              <button
+                type="button"
+                onClick={handlePanicClose}
+                style={{
+                  background: '#e02424',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '5px 12px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                }}
+              >
+                Cierre Pánico
+              </button>
+            </div>
+          </div>
 
-                  {/* Posición Actual / Precio Live */}
-                  <div className="d-flex justify-content-between align-items-center py-2 px-2 rounded bg-warning bg-opacity-10 border border-warning my-1">
-                    <span className="text-warning fw-bold small">
-                      <i className="bi bi-geo-alt-fill me-1"></i>PRECIO LIVE: ${formatVal(currentLivePrice)}
-                    </span>
-                    <span
-                      className={`badge font-sans fw-bold ${
-                        isProfit ? 'bg-success text-white' : 'bg-warning text-dark'
-                      }`}
-                    >
-                      PnL: {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} ({isProfit ? '+' : '-'}
-                      {Math.abs(roe).toFixed(2)}% ROE)
-                    </span>
-                  </div>
+          {/* 2. GRID PRINCIPAL (GRÁFICO A LA IZQ, TIMELINE A LA DER) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '16px',
+              alignItems: 'start',
+            }}
+          >
+            {/* COLUMNA IZQUIERDA: GRÁFICO REAL + VOLATILIDAD */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
+              <div style={{ background: '#121722', border: '1px solid #1e2638', borderRadius: '6px', overflow: 'hidden' }}>
+                {/* Header de niveles */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#161c28',
+                    padding: '8px 12px',
+                    fontSize: '0.75rem',
+                    borderBottom: '1px solid #1e2638',
+                    fontFamily: 'monospace',
+                    flexWrap: 'wrap',
+                    gap: '6px',
+                  }}
+                >
+                  <span style={{ color: '#f6465d', fontWeight: 'bold' }}>
+                    SL: ${formatVal(slPrice)} ({slDiffPct >= 0 ? '+' : ''}{slDiffPct.toFixed(2)}%)
+                  </span>
+                  <span style={{ color: '#00b8d9', fontWeight: 'bold' }}>
+                    ENTRADA: ${formatVal(entryPrice)}
+                  </span>
+                  <span style={{ color: '#2ebd85', fontWeight: 'bold' }}>
+                    TP1: ${formatVal(tp1Price)} ({tp1DiffPct >= 0 ? '+' : ''}{tp1DiffPct.toFixed(2)}%)
+                  </span>
+                </div>
 
-                  {/* Nivel de Entrada */}
-                  <div className="d-flex justify-content-between align-items-center border-top border-info border-opacity-50 pt-1">
-                    <span
-                      className="badge bg-info-subtle text-info border border-info-subtle"
-                      style={{ fontSize: '0.65rem' }}
-                    >
-                      ENTRADA PROMEDIO: ${formatVal(entryPrice)}
-                    </span>
-                    <span className="text-secondary small" style={{ fontSize: '0.7rem' }}>
-                      Volumen: ${notionalUsd.toFixed(2)} USDT
-                    </span>
-                  </div>
+                {/* CANVAS INTERACTIVO (DIBUJA EL TRADE) */}
+                <div style={{ position: 'relative', height: '260px', width: '100%', background: '#07090e' }}>
+                  <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+                </div>
 
-                  {/* Nivel Stop Loss */}
-                  <div className="d-flex justify-content-between align-items-center border-top border-danger border-opacity-50 pt-1">
-                    <span
-                      className="badge bg-danger-subtle text-danger border border-danger-subtle"
-                      style={{ fontSize: '0.65rem' }}
-                    >
-                      STOP LOSS: ${formatVal(slPrice)} ({slDiffPct >= 0 ? '+' : ''}
-                      {slDiffPct.toFixed(2)}%)
-                    </span>
-                    <span className="text-danger small" style={{ fontSize: '0.7rem' }}>
-                      Riesgo Máx: ${riskDollar.toFixed(2)}
-                    </span>
-                  </div>
+                {/* Footer métricas */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    background: '#161c28',
+                    padding: '6px 12px',
+                    fontSize: '0.75rem',
+                    color: '#848e9c',
+                    borderTop: '1px solid #1e2638',
+                    flexWrap: 'wrap',
+                    gap: '8px',
+                  }}
+                >
+                  <span>
+                    ATR (15m): <strong style={{ color: '#f0b90b' }}>27.67%</strong>
+                  </span>
+                  <span>
+                    Volumen Posición: <strong style={{ color: '#ffffff' }}>${notionalUsd.toFixed(2)} USDT</strong>
+                  </span>
+                  <span>
+                    PnL:{' '}
+                    <strong style={{ color: isProfit ? '#2ebd85' : '#f6465d' }}>
+                      {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} ({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)
+                    </strong>
+                  </span>
                 </div>
               </div>
 
-              {/* Micro Barra de Volatilidad Integrada al pie del gráfico */}
-              <div className="card-footer py-2 bg-dark d-flex justify-content-between align-items-center small text-secondary flex-wrap gap-1">
-                <span>
-                  <i className="bi bi-activity text-warning me-1"></i> ATR 15m:{' '}
-                  <strong className="text-white">27.67%</strong> (Expansión moderada)
-                </span>
-                <span className="font-monospace text-light">
-                  Ventana 24h: Velas con probabilidad de barrido antes de rebote
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* COLUMNA DERECHA: LÍNEA DE TIEMPO DEL PLAN & DISCIPLINA */}
-          <div className="col-12 col-xl-4">
-            {/* Tarjeta de Disciplina / Diagnóstico */}
-            <div className="callout callout-info bg-dark-subtle p-3 mb-3 border-start border-4 border-info rounded">
-              <div className="fw-bold text-info small text-uppercase mb-1">
-                <i className="bi bi-lightbulb-fill me-1"></i> Diagnóstico Táctico
-              </div>
-              <p className="small text-light mb-2" style={{ fontSize: '0.8rem' }}>
-                {isTp1Reached
-                  ? 'El precio alcanzó exitosamente la zona de Take Profit 1. Aplica el protocolo de Break-Even para proteger capital.'
-                  : isSlBreached
-                  ? 'Atención: el precio está amenazando la zona de Stop Loss. Respeta la disciplina sin promediar pérdidas.'
-                  : 'El precio retrocedió a zona de consolidación sin amenazar el SL global. No existe divergencia bajista en 15m.'}
-              </p>
+              {/* Alerta de Diagnóstico */}
               <div
-                className="p-2 rounded bg-dark border border-secondary text-warning small"
-                style={{ fontSize: '0.75rem' }}
+                style={{
+                  background: 'rgba(13, 110, 253, 0.08)',
+                  borderLeft: '4px solid #3b82f6',
+                  borderRadius: '4px',
+                  padding: '10px 14px',
+                  fontSize: '0.8rem',
+                }}
               >
-                <i className="bi bi-shield-exclamation me-1"></i> <strong>Regla #8:</strong>{' '}
-                Mantén la orden condicional; no cierres antes de TP1 por ansiedad de fluctuación.
+                <div style={{ color: '#3b82f6', fontWeight: 'bold', marginBottom: '4px' }}>
+                  Diagnóstico Táctico &amp; Disciplina
+                </div>
+                <div style={{ color: '#d1d4dc' }}>
+                  {isTp1Reached
+                    ? 'El precio alcanzó la zona de TP1. Activa el protocolo de Break-Even para blindar la operación.'
+                    : isSlBreached
+                    ? 'Atención: El precio está en proximidad de Stop Loss. Respeta la salida sin promediar.'
+                    : 'El precio consolida dentro del rango esperado sin tocar zona de stop loss.'}
+                </div>
+                <div style={{ marginTop: '6px', color: '#f0b90b', fontSize: '0.75rem' }}>
+                  ⚠️ <strong>Regla #8:</strong> Mantén la orden condicional; no cierres por ansiedad antes de tocar TP1.
+                </div>
               </div>
             </div>
 
-            {/* Timeline Histórico de la Orden */}
-            <div className="card card-outline card-secondary shadow-sm mb-0">
-              <div className="card-header py-2 d-flex justify-content-between align-items-center">
-                <span className="small fw-bold text-uppercase">
-                  <i className="bi bi-clock-history me-1"></i> Cronología del Trade
-                </span>
+            {/* COLUMNA DERECHA: CRONOLOGÍA (TIMELINE) */}
+            <div style={{ background: '#121722', border: '1px solid #1e2638', borderRadius: '6px', padding: '14px' }}>
+              <div
+                style={{
+                  fontSize: '0.8rem',
+                  fontWeight: 'bold',
+                  color: '#848e9c',
+                  textTransform: 'uppercase',
+                  marginBottom: '14px',
+                  borderBottom: '1px solid #1e2638',
+                  paddingBottom: '6px',
+                }}
+              >
+                Cronología del Trade
               </div>
-              <div className="card-body p-3">
-                <ul
-                  className="list-unstyled position-relative border-start border-secondary ms-2 ps-3 mb-0"
-                  style={{ fontSize: '0.8rem' }}
-                >
-                  {/* Evento 1: Completado */}
-                  <li className="mb-3 position-relative">
-                    <i
-                      className="bi bi-check-circle-fill text-success position-absolute"
-                      style={{ left: '-22px', top: '0' }}
-                    ></i>
-                    <div className="fw-bold text-white">Entrada Ejecutada (100%)</div>
-                    <div className="text-secondary font-monospace" style={{ fontSize: '0.72rem' }}>
-                      05 Sept 20:00 · ${formatVal(entryPrice)}
-                    </div>
-                  </li>
 
-                  {/* Evento 2: Activo */}
-                  <li className="mb-3 position-relative">
-                    <i
-                      className={`bi bi-record-circle-fill ${
-                        isTp1Reached ? 'text-success' : 'text-warning'
-                      } position-absolute`}
-                      style={{ left: '-22px', top: '0' }}
-                    ></i>
-                    <div className={`fw-bold ${isTp1Reached ? 'text-success' : 'text-warning'}`}>
-                      {isTp1Reached ? 'TP1 Alcanzado (100%)' : 'En Desarrollo hacia TP1'}
-                    </div>
-                    <div className="text-secondary" style={{ fontSize: '0.72rem' }}>
-                      {isTp1Reached
-                        ? 'Ganancia asegurada al primer hito'
-                        : `Distancia: ${Math.max(0, remainingToTp1).toFixed(1)}% pendiente`}
-                    </div>
-                  </li>
+              {/* Items del Timeline con líneas nativas */}
+              <div
+                style={{
+                  position: 'relative',
+                  paddingLeft: '20px',
+                  borderLeft: '2px solid #232a3b',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '18px',
+                  fontSize: '0.8rem',
+                }}
+              >
+                {/* Hito 1: Completado */}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '-26px',
+                      top: '2px',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: '#2ebd85',
+                    }}
+                  />
+                  <div style={{ fontWeight: 'bold', color: '#ffffff' }}>Entrada Ejecutada (100%)</div>
+                  <div style={{ color: '#848e9c', fontSize: '0.72rem', fontFamily: 'monospace' }}>
+                    05 Sept 20:00 · ${formatVal(entryPrice)}
+                  </div>
+                </div>
 
-                  {/* Evento 3: Pendiente */}
-                  <li
-                    className={`mb-3 position-relative ${
-                      isTp1Reached ? '' : 'opacity-50'
-                    }`}
-                  >
-                    <i
-                      className={`bi ${
-                        isTp1Reached ? 'bi-check-circle-fill text-info' : 'bi-circle text-secondary'
-                      } position-absolute`}
-                      style={{ left: '-22px', top: '0' }}
-                    ></i>
-                    <div className="fw-bold text-light">Mover SL a Break-Even</div>
-                    <div className="text-secondary" style={{ fontSize: '0.72rem' }}>
-                      {isTp1Reached
-                        ? 'Recomendado inmediatamente'
-                        : 'Trigger automático al tocar TP1'}
-                    </div>
-                  </li>
+                {/* Hito 2: En Desarrollo */}
+                <div style={{ position: 'relative' }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '-26px',
+                      top: '2px',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: '#f0b90b',
+                      boxShadow: '0 0 6px #f0b90b',
+                    }}
+                  />
+                  <div style={{ fontWeight: 'bold', color: '#f0b90b' }}>
+                    {isTp1Reached ? 'TP1 Alcanzado (100%)' : 'En Desarrollo a TP1'}
+                  </div>
+                  <div style={{ color: '#848e9c', fontSize: '0.72rem', fontFamily: 'monospace' }}>
+                    Precio actual: ${formatVal(currentLivePrice)}{' '}
+                    {isTp1Reached
+                      ? '(¡Objetivo Logrado!)'
+                      : `(Faltan ${Math.max(0, remainingToTp1).toFixed(1)}%)`}
+                  </div>
+                </div>
 
-                  {/* Evento 4: Pendiente */}
-                  <li className="position-relative opacity-50">
-                    <i
-                      className="bi bi-circle text-secondary position-absolute"
-                      style={{ left: '-22px', top: '0' }}
-                    ></i>
-                    <div className="fw-bold text-light">Toma de Beneficios Final (TP2)</div>
-                    <div className="text-secondary" style={{ fontSize: '0.72rem' }}>
-                      Objetivo: ${formatVal(tp2Price)}
-                    </div>
-                  </li>
-                </ul>
+                {/* Hito 3: Pendiente o Activo */}
+                <div style={{ position: 'relative', opacity: isTp1Reached ? 1 : 0.4 }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '-26px',
+                      top: '2px',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: isTp1Reached ? '#3b82f6' : '#474d57',
+                    }}
+                  />
+                  <div style={{ color: '#ffffff', fontWeight: isTp1Reached ? 'bold' : 'normal' }}>
+                    Mover a Break-Even
+                  </div>
+                  <div style={{ color: '#848e9c', fontSize: '0.72rem' }}>
+                    {isTp1Reached ? '¡Listo para activar BE!' : 'Trigger automático en TP1'}
+                  </div>
+                </div>
+
+                {/* Hito 4: Objetivo Final */}
+                <div style={{ position: 'relative', opacity: 0.4 }}>
+                  <div
+                    style={{
+                      position: 'absolute',
+                      left: '-26px',
+                      top: '2px',
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      background: '#474d57',
+                    }}
+                  />
+                  <div style={{ color: '#ffffff' }}>TP2 (${formatVal(tp2Price)})</div>
+                  <div style={{ color: '#848e9c', fontSize: '0.72rem' }}>Salida final del trade</div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Acordeón Opcional para Herramientas Avanzadas (Órdenes Condicionales y Disciplinas) */}
-        <div className="mt-3 pt-2 border-top border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-            className="btn btn-outline-secondary btn-sm"
+          {/* Acordeón Opcional para Herramientas Avanzadas */}
+          <div
+            style={{
+              marginTop: '14px',
+              paddingTop: '10px',
+              borderTop: '1px solid #1e2638',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '8px',
+            }}
           >
-            <i className={`bi ${showAdvancedTools ? 'bi-chevron-up' : 'bi-sliders'} me-1`}></i>
-            {showAdvancedTools
-              ? 'Ocultar Herramientas Avanzadas y Órdenes Condicionales'
-              : 'Ver Órdenes Condicionales, 8 Disciplinas & Hoja Oficial'}
-          </button>
-
-          {onLinkStrategy && (
             <button
               type="button"
-              onClick={() => onLinkStrategy(position)}
-              className="btn btn-outline-warning btn-sm"
+              onClick={() => setShowAdvancedTools(!showAdvancedTools)}
+              style={{
+                background: 'transparent',
+                border: '1px solid #334155',
+                color: '#94a3b8',
+                padding: '4px 10px',
+                borderRadius: '4px',
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+              }}
             >
-              <i className="bi bi-link-45deg me-1"></i> Vincular / Cambiar Estrategia
+              {showAdvancedTools
+                ? '▲ Ocultar Herramientas Avanzadas & Órdenes Condicionales'
+                : '▼ Ver Órdenes Condicionales, 8 Disciplinas & Hoja Oficial'}
             </button>
+
+            {onLinkStrategy && (
+              <button
+                type="button"
+                onClick={() => onLinkStrategy(position)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #f59e0b',
+                  color: '#f59e0b',
+                  padding: '4px 10px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+              >
+                Vincular / Cambiar Estrategia
+              </button>
+            )}
+          </div>
+
+          {showAdvancedTools && (
+            <div style={{ marginTop: '12px' }}>
+              <StrategyPositionTracker
+                position={position}
+                onLinkStrategy={onLinkStrategy}
+              />
+            </div>
           )}
         </div>
-
-        {showAdvancedTools && (
-          <div className="mt-3">
-            <StrategyPositionTracker
-              position={position}
-              onLinkStrategy={onLinkStrategy}
-            />
-          </div>
-        )}
       </td>
     </tr>
   );
