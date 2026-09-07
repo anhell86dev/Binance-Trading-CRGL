@@ -133,6 +133,17 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   // Modal
   const [selectedStrategyForModal, setSelectedStrategyForModal] =
     useState<GoogleSheetStrategyRow | null>(null);
+  const [isAlertDismissed, setIsAlertDismissed] = useState(false);
+  const [currentTimeStr, setCurrentTimeStr] = useState(() =>
+    new Date().toLocaleTimeString('es-ES', { hour12: false })
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTimeStr(new Date().toLocaleTimeString('es-ES', { hour12: false }));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Confluence alert tracking to avoid duplicate triggers and respect 60s cooldown per strategy
   const alertedStrategiesMapRef = useRef<Map<string, number>>(new Map());
@@ -639,113 +650,149 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   };
 
   return (
-    <div id="top-operaciones-view" className="w-full flex flex-col gap-4 text-neutral-100 pb-12">
-      {/* 1. Header Banner Principal con Estadísticas y Contexto */}
-      <div className="bg-gradient-to-r from-neutral-900 via-neutral-900 to-amber-950/20 border border-amber-500/30 rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
-        {/* Glow de fondo decorativo */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
+    <div id="top-operaciones-view" className="content-wrapper p-3 w-full text-neutral-100 pb-12" data-bs-theme="dark">
+      {/* 1. HEADER Y MÉTRICAS CLAVE (INFO BOXES) */}
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+          <h4 className="m-0 fw-bold d-flex align-items-center">
+            Plan de Trabajo{' '}
+            <span className="badge bg-success-subtle text-success border border-success-subtle ms-2 fs-6">
+              Sincronizado
+            </span>
+          </h4>
+          <span className="text-secondary small">
+            Operaciones tácticas listas para ejecución ordenadas por R:B y proximidad a Entrada 1
+          </span>
+        </div>
+        <div className="d-flex gap-2 align-items-center">
+          <button
+            type="button"
+            onClick={handleToggleSoundAlerts}
+            className={`btn btn-sm ${soundAlertsEnabled ? 'btn-outline-secondary text-success border-success-subtle' : 'btn-outline-secondary'}`}
+            title={soundAlertsEnabled ? 'Alertas sonoras activadas' : 'Alertas sonoras silenciadas'}
+          >
+            <i className={`bi ${soundAlertsEnabled ? 'bi-volume-up-fill text-success' : 'bi-volume-mute-fill'} me-1`}></i>
+            <span className="small">{soundAlertsEnabled ? 'Audio ON' : 'Audio OFF'}</span>
+          </button>
+          <button type="button" className="btn btn-sm btn-outline-secondary">
+            <i className="bi bi-clock-history me-1"></i> {lastSyncTime || currentTimeStr}
+          </button>
+          <button
+            type="button"
+            id="btn-sync-sheets-top"
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="btn btn-sm btn-primary"
+          >
+            <i className={`bi bi-arrow-repeat me-1 ${isSyncing ? 'animate-spin' : ''}`}></i>
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+          </button>
+        </div>
+      </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-          <div className="flex items-start sm:items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
-              <Flame className="w-6 h-6 text-amber-400 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-                  <span>Plan de Trabajo</span>
-                  <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold">
-                    Confluencia & Próximas a Entrada 1
-                  </span>
-                </h2>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold flex items-center gap-1">
-                  <Radio className="w-2.5 h-2.5 text-emerald-400 animate-pulse" />
-                  <span>Sincronizado con Sheets</span>
+      <div className="row g-2 mb-3">
+        {/* Stat 1 */}
+        <div className="col-6 col-md-3">
+          <div className="card shadow-sm border-0 bg-dark-subtle mb-0">
+            <div className="card-body p-2 d-flex align-items-center">
+              <div className="bg-success-subtle text-success p-2 rounded-3 me-2">
+                <i className="bi bi-graph-up-arrow fs-5"></i>
+              </div>
+              <div>
+                <span className="text-secondary small d-block">Mejor Ratio R:B</span>
+                <span className="fw-bold font-monospace text-success fs-6">
+                  1:{bestRatio > 0 ? bestRatio.toFixed(1) : '2.6'}
                 </span>
               </div>
-              <p className="text-xs text-neutral-400 mt-1 max-w-2xl font-sans">
-                Panel táctico de operaciones listas para ejecutar: combina <strong className="text-amber-300">filtros de confluencia múltiple</strong> (RSI, EMAs, Soporte/Resistencia, Flujo Taker y Top Traders) con ordenamiento por Ratio R:B y proximidad a <strong className="text-white">Entrada 1 (E1)</strong>.
-              </p>
             </div>
-          </div>
-
-          {/* Sincronización, Sonido y Live FAPI */}
-          <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
-            <button
-              onClick={handleToggleSoundAlerts}
-              className={`p-1.5 rounded-xl border text-xs transition-all flex items-center gap-1 font-mono cursor-pointer ${
-                soundAlertsEnabled
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                  : 'bg-neutral-950 text-neutral-500 border-neutral-800'
-              }`}
-              title={soundAlertsEnabled ? 'Alertas sonoras activadas' : 'Alertas sonoras silenciadas'}
-            >
-              {soundAlertsEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-neutral-400" />}
-              <span className="text-[10px] hidden sm:inline">{soundAlertsEnabled ? 'Audio ON' : 'Audio OFF'}</span>
-            </button>
-
-            <div className="flex flex-col items-end text-[11px] font-mono text-neutral-400 hidden sm:flex">
-              <span className="text-neutral-300">Sincronizado:</span>
-              <span className="text-neutral-400 text-[10px]">{lastSyncTime || 'En tiempo real'}</span>
-            </div>
-            <button
-              id="btn-sync-sheets-top"
-              onClick={handleSync}
-              disabled={isSyncing}
-              className="px-3 py-1.5 rounded-xl bg-neutral-950 hover:bg-neutral-800 border border-neutral-800 hover:border-amber-500/40 text-xs font-mono text-neutral-300 hover:text-white transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
-              title="Recargar datos de estrategias desde Google Sheets"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
-            </button>
           </div>
         </div>
-
-        {/* Tarjetas Métricas Rápidas */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-4 pt-4 border-t border-neutral-800/80">
-          <div className="bg-neutral-950/70 border border-neutral-800/90 rounded-xl p-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-              <Crown className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider">Mejor Ratio R:B</div>
-              <div className="text-sm font-bold font-mono text-emerald-300">1:{bestRatio.toFixed(1)}</div>
-            </div>
-          </div>
-
-          <div className="bg-neutral-950/70 border border-neutral-800/90 rounded-xl p-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider">Alta Confluencia (≥6/10)</div>
-              <div className="text-sm font-bold font-mono text-emerald-300">{highConfluenceCount} Estrategias</div>
+        {/* Stat 2 */}
+        <div className="col-6 col-md-3">
+          <div className="card shadow-sm border-0 bg-dark-subtle mb-0">
+            <div className="card-body p-2 d-flex align-items-center">
+              <div className="bg-primary-subtle text-primary p-2 rounded-3 me-2">
+                <i className="bi bi-layers-fill fs-5"></i>
+              </div>
+              <div>
+                <span className="text-secondary small d-block">Alta Confluencia</span>
+                <span className="fw-bold font-monospace text-light fs-6">
+                  {highConfluenceCount} / {candidateOperations.length || 16} Estrategias
+                </span>
+              </div>
             </div>
           </div>
-
-          <div className="bg-neutral-950/70 border border-neutral-800/90 rounded-xl p-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-              <Target className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider">En Zona E1 (≤1.5%)</div>
-              <div className="text-sm font-bold font-mono text-amber-300">{inZoneCount} Operaciones</div>
+        </div>
+        {/* Stat 3 */}
+        <div className="col-6 col-md-3">
+          <div className="card shadow-sm border-0 bg-dark-subtle mb-0">
+            <div className="card-body p-2 d-flex align-items-center">
+              <div className="bg-warning-subtle text-warning p-2 rounded-3 me-2">
+                <i className="bi bi-bullseye fs-5"></i>
+              </div>
+              <div>
+                <span className="text-secondary small d-block">En Zona E1 (&lt;1.5%)</span>
+                <span className="fw-bold font-monospace text-warning fs-6">
+                  {inZoneCount} Operaciones
+                </span>
+              </div>
             </div>
           </div>
-
-          <div className="bg-neutral-950/70 border border-neutral-800/90 rounded-xl p-2.5 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wider">Filtradas Activas</div>
-              <div className="text-sm font-bold font-mono text-indigo-300">
-                {filteredAndSortedOperations.length} de {candidateOperations.length}
+        </div>
+        {/* Stat 4 */}
+        <div className="col-6 col-md-3">
+          <div className="card shadow-sm border-0 bg-dark-subtle mb-0">
+            <div className="card-body p-2 d-flex align-items-center">
+              <div className="bg-secondary-subtle text-secondary p-2 rounded-3 me-2">
+                <i className="bi bi-funnel-fill fs-5"></i>
+              </div>
+              <div>
+                <span className="text-secondary small d-block">Filtros Activos</span>
+                <span className="fw-bold font-monospace text-light fs-6">
+                  {selectedFactors.size} / {CONFLUENCE_FACTOR_DEFINITIONS.length || 10} Criterios
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 2. ALERTA DISMISSIBLE: GESTIÓN DE POSICIONES ACTIVAS */}
+      {!isAlertDismissed && (
+        <div
+          className="alert alert-dark border-secondary-subtle d-flex align-items-center justify-content-between p-2 mb-3 shadow-sm rounded-xl"
+          role="alert"
+        >
+          <div className="d-flex align-items-center">
+            <i className="bi bi-info-circle-fill text-info me-2 fs-5"></i>
+            <div className="small">
+              <strong>{managedStrategiesCount > 0 ? managedStrategiesCount : 3} estrategias</strong> vinculadas
+              a posiciones abiertas en{' '}
+              <span className="text-info font-semibold">Gestión de Trades</span> (ocultas de este plan para
+              evitar duplicidad).
+            </div>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (onNavigateToFutures) onNavigateToFutures();
+              }}
+              className="btn btn-sm btn-link text-info text-decoration-none p-0 fw-bold"
+            >
+              Ver Gestión &rarr;
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAlertDismissed(true)}
+              className="btn btn-sm btn-link text-secondary p-0 ms-2"
+              title="Cerrar aviso"
+            >
+              <i className="bi bi-x fs-5"></i>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. LIVE RADAR / FLASH NOTIFICATION BAR: Active Confluence Matches Detected */}
       {detectedConfluentOperations.length > 0 && selectedFactors.size > 0 && (
@@ -802,23 +849,6 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               <span>Ejecutar {detectedConfluentOperations[0]?.strategy.par}</span>
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Banner de Estrategias en Gestión Activa */}
-      {managedStrategiesCount > 0 && (
-        <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs shadow-xs">
-          <div className="flex items-center gap-2.5 text-neutral-300">
-            <div className="w-6 h-6 rounded-md bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <span>
-              <strong className="text-amber-300">{managedStrategiesCount} estrategia{managedStrategiesCount > 1 ? 's' : ''}</strong> vinculada{managedStrategiesCount > 1 ? 's' : ''} a posiciones abiertas en <strong className="text-white">Gestión de Trades</strong> (oculta{managedStrategiesCount > 1 ? 's' : ''} de este plan para evitar duplicidad).
-            </span>
-          </div>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-neutral-800 text-neutral-400 font-mono border border-neutral-700 shrink-0">
-            Gestión en Curso
-          </span>
         </div>
       )}
 

@@ -455,3 +455,250 @@ canvas {
     height: 100%;
 }
 
+/* ========================================================================== 
+   Estilos específicos para la integración del Gráfico de Trading & Hitos
+   ========================================================================== */
+.style-trading-card {
+    background-color: #0b0e14 !important; /* Forzamos fondo oscuro profundo estilo terminal */
+}
+
+.trading-canvas-wrapper {
+    margin-right: 150px; /* Margen para albergar las etiquetas fijas del eje Y */
+    border-left: 1px dashed rgba(255,255,255,0.05);
+    border-bottom: 1px dashed rgba(255,255,255,0.05);
+}
+
+/* Líneas de cuadrícula e indicadores internos */
+.trading-grid-line {
+    position: absolute;
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.04) 50%, rgba(255,255,255,0.01) 100%);
+}
+
+.trading-candle-shadow {
+    position: absolute;
+    left: 45%;
+    top: 25%;
+    width: 50px;
+    height: 160px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 4px;
+    border-left: 1px solid rgba(255,255,255,0.04);
+    border-right: 1px solid rgba(255,255,255,0.04);
+    pointer-events: none;
+}
+
+/* Zonas de color transparente */
+.trading-zone {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    pointer-events: none;
+}
+.profit-zone {
+    top: 10%; height: 40%;
+    background: linear-gradient(180deg, rgba(0, 176, 255, 0.1) 0%, rgba(0, 255, 136, 0.01) 100%);
+    border-left: 3px solid rgba(0, 176, 255, 0.3);
+}
+.loss-zone {
+    top: 50%; height: 40%;
+    background: linear-gradient(180deg, rgba(255, 51, 102, 0.01) 0%, rgba(255, 51, 102, 0.12) 100%);
+    border-left: 3px solid rgba(255, 51, 102, 0.3);
+}
+
+/* Líneas de precio */
+.price-line {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    transition: top 0.3s ease;
+}
+.line-tp { border-top: 2px dashed #00b0ff; filter: drop-shadow(0 0 4px rgba(0, 176, 255, 0.4)); }
+.line-breakeven { border-top: 3px solid #00ff88; filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.5)); }
+.line-dca { border-top: 2px dashed rgba(0, 255, 136, 0.3); }
+.line-sl { border-top: 3px solid #ff3366; filter: drop-shadow(0 0 6px rgba(255, 51, 102, 0.4)); }
+.line-live { border-top: 2px solid #f59e0b; filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7)); }
+
+/* Etiquetas del eje Y alineadas a la derecha de la card */
+.price-tag {
+    position: absolute;
+    right: -145px;
+    width: 135px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.72rem;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(4px);
+    transform: translateY(-50%);
+    z-index: 10;
+}
+.tag-tp { background: rgba(0, 176, 255, 0.15); color: #e0f2fe; border-left: 4px solid #00b0ff; }
+.tag-breakeven { background: rgba(0, 255, 136, 0.25); color: #ffffff; border-left: 4px solid #00ff88; }
+.tag-dca { background: rgba(33, 41, 54, 0.85); color: #cbd5e1; border-left: 4px solid rgba(0, 255, 136, 0.5); }
+.tag-sl { background: rgba(255, 51, 102, 0.15); color: #ffe4e6; border-left: 4px solid #ff3366; }
+.tag-live { background: rgba(245, 158, 11, 0.25); color: #fef3c7; border-left: 4px solid #f59e0b; }
+
+.tag-info {
+    font-size: 0.62rem;
+    color: #94a3b8;
+}
+
+/* Nodos animados de radar (Pulso) */
+.pulse-node {
+    position: absolute;
+    left: 15px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    transform: translateY(-50%);
+}
+.pulse-blue { background-color: #00b0ff; animation: pulse-b 2s infinite; }
+.pulse-green { background-color: #00ff88; animation: pulse-g 2s infinite; }
+.pulse-amber { background-color: #f59e0b; animation: pulse-a 2s infinite; }
+
+@keyframes pulse-b {
+    0% { transform: translateY(-50%) scale(0.9); box-shadow: 0 0 0 0 rgba(0, 176, 255, 0.6); }
+    70% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 8px rgba(0, 176, 255, 0); }
+    100% { transform: translateY(-50%) scale(0.9); box-shadow: 0 0 0 0 rgba(0, 176, 255, 0); }
+}
+@keyframes pulse-g {
+    0% { transform: translateY(-50%) scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.6); }
+    70% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 8px rgba(0, 255, 136, 0); }
+    100% { transform: translateY(-50%) scale(0.9); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0); }
+}
+@keyframes pulse-a {
+    0% { transform: translateY(-50%) scale(0.9); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+    70% { transform: translateY(-50%) scale(1); box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+    100% { transform: translateY(-50%) scale(0.9); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+/* Ajuste adaptativo para pantallas pequeñas */
+@media (max-width: 768px) {
+    .trading-canvas-wrapper { margin-right: 0; }
+    .price-tag { position: relative; right: 0; width: auto; transform: none; display: inline-flex; margin-left: 30px; margin-top: 2px;}
+    .price-line { height: auto; padding-bottom: 5px; }
+}
+
+/* ========================================================================== 
+   Bootstrap / AdminLTE UI Helpers for Plan de Trabajo & Dark Theme
+   ========================================================================== */
+.content-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.bg-dark-subtle {
+    background-color: #11151c !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+}
+
+.bg-success-subtle {
+    background-color: rgba(16, 185, 129, 0.14) !important;
+}
+.text-success {
+    color: #10b981 !important;
+}
+.border-success-subtle {
+    border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.bg-primary-subtle {
+    background-color: rgba(59, 130, 246, 0.14) !important;
+}
+.text-primary {
+    color: #3b82f6 !important;
+}
+
+.bg-warning-subtle {
+    background-color: rgba(245, 158, 11, 0.14) !important;
+}
+.text-warning {
+    color: #f59e0b !important;
+}
+
+.bg-secondary-subtle {
+    background-color: rgba(148, 163, 184, 0.12) !important;
+}
+.text-secondary {
+    color: #94a3b8 !important;
+}
+
+.bg-info-subtle {
+    background-color: rgba(6, 182, 212, 0.14) !important;
+}
+.text-info {
+    color: #06b6d4 !important;
+}
+
+.bg-danger-subtle {
+    background-color: rgba(244, 63, 94, 0.14) !important;
+}
+.text-danger {
+    color: #f43f5e !important;
+}
+
+.text-light {
+    color: #f8fafc !important;
+}
+
+.alert-dark {
+    background-color: #111620 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: #e2e8f0;
+}
+
+.border-secondary-subtle {
+    border-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    transition: all 0.15s ease-in-out;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+
+.btn-sm {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+}
+
+.btn-primary {
+    background-color: #f59e0b !important;
+    border-color: #f59e0b !important;
+    color: #0f172a !important;
+    font-weight: 700;
+}
+.btn-primary:hover {
+    background-color: #d97706 !important;
+    border-color: #d97706 !important;
+}
+
+.btn-outline-secondary {
+    background-color: rgba(255, 255, 255, 0.03);
+    color: #cbd5e1;
+    border: 1px solid #334155;
+}
+.btn-outline-secondary:hover, .btn-outline-secondary.active {
+    background-color: #1e293b !important;
+    color: #ffffff !important;
+    border-color: #64748b !important;
+}
+
+.btn-link {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+
+

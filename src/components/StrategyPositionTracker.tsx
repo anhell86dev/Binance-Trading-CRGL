@@ -766,6 +766,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
         slPrice={slPrice}
         tp1Price={tp1Price}
         tp2Price={tp2Price}
+        tpFinalPrice={tpFinalPrice}
         isSlHit={isSlHit}
         isSlAtBreakEven={isSlAtBreakEven}
         isTp1Hit={isTp1Hit}
