@@ -57,15 +57,8 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [linkPos, setLinkPos] = useState<PositionRisk | null>(null);
 
   // Expanded symbols for visual strategy tracking (E2, E3, TP1, TP2, SL)
-  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(() => {
-    const initial = new Set<string>();
-    binanceWs.getPositions().forEach((p) => {
-      if (p.strategyId || p.symbol) {
-        initial.add(p.symbol);
-      }
-    });
-    return initial;
-  });
+  // Requerimiento: todas las posiciones inician comprimidas por defecto
+  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(() => new Set<string>());
 
   const seenSymbolsRef = React.useRef<Set<string>>(
     new Set(binanceWs.getPositions().map((p) => p.symbol))
@@ -81,6 +74,15 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       }
       return next;
     });
+  };
+
+  const handleExpandAll = () => {
+    const allSymbols = new Set(positions.map((p) => p.symbol));
+    setExpandedSymbols(allSymbols);
+  };
+
+  const handleCollapseAll = () => {
+    setExpandedSymbols(new Set());
   };
 
   useEffect(() => {
@@ -103,22 +105,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         return [...preserved, ...added];
       });
 
-      // Auto-expand only newly opened positions that have a strategy attached (do not re-expand if user collapsed)
+      // Track newly seen positions without forcing auto-expansion
       const brandNewPositions = curPositions.filter((p) => !seenSymbolsRef.current.has(p.symbol));
       if (brandNewPositions.length > 0) {
         brandNewPositions.forEach((p) => seenSymbolsRef.current.add(p.symbol));
-        setExpandedSymbols((prev) => {
-          let changed = false;
-          const next = new Set(prev);
-          brandNewPositions.forEach((p) => {
-            const stratId = p.strategyId || binanceWs.getLinkedStrategyForSymbol(p.symbol)?.strategyId;
-            if (stratId && !prev.has(p.symbol)) {
-              next.add(p.symbol);
-              changed = true;
-            }
-          });
-          return changed ? next : prev;
-        });
       }
     });
 
@@ -224,6 +214,39 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         </div>
 
         <div className="flex items-center gap-2">
+          {fixedPositions.length > 0 && (
+            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 shadow-xs">
+              <button
+                type="button"
+                id="btn-expand-all-positions"
+                onClick={handleExpandAll}
+                className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  expandedSymbols.size === fixedPositions.length
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                    : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                }`}
+                title="Expandir el seguimiento e hitos de todas las posiciones"
+              >
+                <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Expandir todas</span>
+              </button>
+              <button
+                type="button"
+                id="btn-collapse-all-positions"
+                onClick={handleCollapseAll}
+                className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  expandedSymbols.size === 0
+                    ? 'bg-neutral-800 text-white border border-neutral-700 font-bold'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
+                }`}
+                title="Comprimir todas las posiciones para vista compacta"
+              >
+                <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                <span>Comprimir todas</span>
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             id="btn-sync-open-positions"
@@ -301,6 +324,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
             ) : (
               fixedPositions.map((pos) => {
                 const isLong = pos.positionAmt > 0;
+                const isExpanded = expandedSymbols.has(pos.symbol);
                 const livePrice = livePriceService.getPrice(pos.symbol);
                 const currentMarketPrice = (livePrice && livePrice > 0)
                   ? livePrice
@@ -340,13 +364,32 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 return (
                   <React.Fragment key={pos.symbol}>
                     <tr
-                      onClick={() => onSelectPosition && onSelectPosition(pos)}
-                      className="hover:bg-neutral-800/40 transition-colors cursor-pointer"
+                      id={`position-row-${pos.symbol}`}
+                      onClick={() => {
+                        toggleExpand(pos.symbol);
+                        if (onSelectPosition) onSelectPosition(pos);
+                      }}
+                      className={`group transition-colors cursor-pointer select-none ${
+                        isExpanded
+                          ? 'bg-neutral-900/90 border-l-2 border-amber-400 hover:bg-neutral-850'
+                          : 'hover:bg-neutral-800/40'
+                      }`}
+                      title="Haz clic en cualquier parte de la fila para expandir o comprimir el seguimiento de hitos"
                     >
                       {/* 1. PAR */}
                       <td className="py-3.5 px-3.5">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
+                            <span
+                              className="text-neutral-500 group-hover:text-amber-400 transition-colors p-0.5"
+                              title={isExpanded ? 'Comprimir posición' : 'Expandir posición'}
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                              ) : (
+                                <ChevronDown className="w-3.5 h-3.5 text-neutral-400" />
+                              )}
+                            </span>
                             <span className="font-bold text-white text-xs tracking-wide">{pos.symbol}</span>
                             <span
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider ${
@@ -358,7 +401,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                               {isLong ? 'LONG' : 'SHORT'}
                             </span>
                           </div>
-                          <div className="text-[10px] font-mono text-neutral-500">
+                          <div className="text-[10px] font-mono text-neutral-500 pl-5">
                             {pos.liquidationPrice > 0 ? (
                               <span className="text-rose-400/90 font-medium" title="Precio de Liquidación">
                                 Liq: ${formatPrice(pos.liquidationPrice)}
@@ -371,14 +414,17 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </td>
 
                       {/* 2. Estrategia */}
-                      <td className="py-3.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3.5 px-3.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {(() => {
                             const effStratId = pos.strategyId || binanceWs.getLinkedStrategyForSymbol(pos.symbol)?.strategyId;
                             return effStratId ? (
                               <button
                                 type="button"
-                                onClick={() => setLinkPos(pos)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLinkPos(pos);
+                                }}
                                 title={`Estrategia: ${effStratId} - Clic para cambiar`}
                                 className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
                               >
@@ -388,7 +434,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                             ) : (
                               <button
                                 type="button"
-                                onClick={() => setLinkPos(pos)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLinkPos(pos);
+                                }}
                                 className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
                               >
                                 <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
@@ -405,14 +454,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                             }}
                             title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
                             className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-                              expandedSymbols.has(pos.symbol)
+                              isExpanded
                                 ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
                                 : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
                             }`}
                           >
                             <Layers className="w-2.5 h-2.5" />
                             <span>Hitos</span>
-                            {expandedSymbols.has(pos.symbol) ? (
+                            {isExpanded ? (
                               <ChevronUp className="w-2.5 h-2.5" />
                             ) : (
                               <ChevronDown className="w-2.5 h-2.5" />
@@ -476,7 +525,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </td>
 
                       {/* 7. PnL */}
-                      <td className="py-3.5 px-3.5 font-mono" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3.5 px-3.5 font-mono">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-1.5">
                             <span className={`font-bold text-sm ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -510,7 +559,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                             )}
 
                             <button
-                              onClick={() => openEditModal(pos)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditModal(pos);
+                              }}
                               className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors ml-0.5 cursor-pointer"
                               title="Configurar / Editar TP y SL (Órdenes Condicionales en Binance)"
                             >
@@ -521,7 +573,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </td>
 
                       {/* 8. Estado del trade */}
-                      <td className="py-3.5 px-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3.5 px-3.5 text-right">
                         {(() => {
                           const tradeStatus = getTradeStatusAndPhase(pos, openOrders);
                           return (
@@ -553,7 +605,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                               </div>
 
                               {/* Emergency / Market Close Action */}
-                              <div className="shrink-0">
+                              <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                                 <EmergencyCloseButton
                                   symbol={pos.symbol}
                                   positionSize={pos.positionAmt}
@@ -569,7 +621,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                     </tr>
 
                     {/* Subfila Desplegable de Seguimiento Visual y Gráfico del Trade */}
-                    {expandedSymbols.has(pos.symbol) && (
+                    {isExpanded && (
                       <PositionTacticalDetailRow
                         position={pos}
                         openOrders={openOrders}
