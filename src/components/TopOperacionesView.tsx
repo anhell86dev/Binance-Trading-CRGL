@@ -118,7 +118,9 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [activePreset, setActivePreset] = useState<ConfluencePreset>('CLEAR');
   const [matchMode, setMatchMode] = useState<ConfluenceMatchMode>('ALL_SELECTED');
   const [minMetCount, setMinMetCount] = useState<number>(3);
-  const [soundAlertsEnabled, setSoundAlertsEnabled] = useState<boolean>(true);
+  const [soundAlertsEnabled, setSoundAlertsEnabled] = useState<boolean>(() => notificationService.soundEnabled);
+  const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState<boolean>(() => notificationService.hasPushPermission());
+  const [confluenceChimeType, setConfluenceChimeType] = useState<'harmonic' | 'crystal' | 'radar'>(() => notificationService.confluenceSoundType);
 
   // Standard Filters & Controls
   const [searchTerm, setSearchTerm] = useState('');
@@ -132,8 +134,8 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [selectedStrategyForModal, setSelectedStrategyForModal] =
     useState<GoogleSheetStrategyRow | null>(null);
 
-  // Sound chime debounce tracking
-  const prevConfluentSymbolsRef = useRef<string>('');
+  // Confluence alert tracking to avoid duplicate triggers and respect 60s cooldown per strategy
+  const alertedStrategiesMapRef = useRef<Map<string, number>>(new Map());
 
   // Subscriptions to live prices and strategies
   useEffect(() => {
@@ -305,23 +307,103 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
     return candidateOperations.filter((op) => op.isFullConfluenceMatch);
   }, [candidateOperations]);
 
-  // Play audio chime when a new asset matches confluence
+  // Trigger audio chime, browser notification and in-app toast ONLY when an operation achieves 100% confluence match
   useEffect(() => {
-    if (!soundAlertsEnabled || selectedFactors.size === 0) return;
-    const currentSymbolsKey = detectedConfluentOperations
-      .map((op) => op.strategy.par)
-      .sort()
-      .join(',');
+    // Strictly verify: Only activate when confluence filters are actively selected
+    if (selectedFactors.size === 0 || detectedConfluentOperations.length === 0) return;
 
-    if (
-      currentSymbolsKey &&
-      currentSymbolsKey !== prevConfluentSymbolsRef.current &&
-      prevConfluentSymbolsRef.current !== ''
-    ) {
-      notificationService.playChime('fill');
+    const now = Date.now();
+    const COOLDOWN_MS = 60000; // 60 seconds debounce per strategy to prevent sound/alert flooding
+
+    detectedConfluentOperations.forEach((op) => {
+      const key = `${op.strategy.noEstrategia}-${op.strategy.par}`;
+      const lastAlertTime = alertedStrategiesMapRef.current.get(key) || 0;
+
+      if (now - lastAlertTime > COOLDOWN_MS) {
+        alertedStrategiesMapRef.current.set(key, now);
+
+        const matchedFactorNames = Object.values(op.confluenceResult.factors)
+          .filter((f) => f.isMet)
+          .map((f) => {
+            const def = CONFLUENCE_FACTOR_DEFINITIONS.find((d) => d.key === f.factorKey);
+            return def?.shortName || f.factorKey;
+          });
+
+        // Dispatches sound chime, native browser push notification, and activity toast
+        notificationService.notifyConfluenceMatch({
+          symbol: op.strategy.par,
+          strategyId: op.strategy.noEstrategia,
+          strategyName: op.strategy.nombreEstrategia,
+          isLong: op.isLong,
+          ratio: op.ratio,
+          price: op.livePrice,
+          matchedFactorNames,
+          totalSelectedFactors: selectedFactors.size,
+        });
+      }
+    });
+  }, [detectedConfluentOperations, selectedFactors.size]);
+
+  // Alert Handlers
+  const handleToggleSoundAlerts = () => {
+    const nextState = !soundAlertsEnabled;
+    setSoundAlertsEnabled(nextState);
+    notificationService.setSoundEnabled(nextState);
+    if (nextState) {
+      notificationService.playChime(confluenceChimeType || 'confluence');
     }
-    prevConfluentSymbolsRef.current = currentSymbolsKey;
-  }, [detectedConfluentOperations, soundAlertsEnabled, selectedFactors.size]);
+  };
+
+  const handleToggleBrowserNotifications = async () => {
+    if (!browserNotificationsEnabled) {
+      const granted = await notificationService.requestPushPermission();
+      setBrowserNotificationsEnabled(granted);
+      if (granted) {
+        notificationService.notify(
+          'CONFLUENCE_MATCH',
+          '🔔 Notificaciones de Navegador Activadas',
+          'Recibirás alertas en tu escritorio cada vez que un par cumpla al 100% los filtros de confluencia seleccionados.',
+          'normal'
+        );
+      }
+    } else {
+      setBrowserNotificationsEnabled(false);
+    }
+  };
+
+  const handleChangeConfluenceChimeType = (type: 'harmonic' | 'crystal' | 'radar') => {
+    setConfluenceChimeType(type);
+    notificationService.setConfluenceSoundType(type);
+    notificationService.playChime(type);
+  };
+
+  const handleTestAlert = () => {
+    const sampleOp = detectedConfluentOperations[0] || candidateOperations[0];
+    const sampleSymbol = sampleOp ? sampleOp.strategy.par : 'BTCUSDT';
+    const sampleId = sampleOp ? sampleOp.strategy.noEstrategia : '01';
+    const sampleName = sampleOp ? sampleOp.strategy.nombreEstrategia : 'Rompimiento y Soporte E1';
+    const sampleIsLong = sampleOp ? sampleOp.isLong : true;
+    const sampleRatio = sampleOp ? sampleOp.ratio : 3.2;
+    const samplePrice = sampleOp ? sampleOp.livePrice : 88500.0;
+
+    const sampleFactors =
+      selectedFactors.size > 0
+        ? Array.from(selectedFactors).map(
+            (k) => CONFLUENCE_FACTOR_DEFINITIONS.find((d) => d.key === k)?.shortName || k
+          )
+        : ['RSI Sobreventa', 'EMA 20/50', 'Soporte E1', 'Flujo Taker Binance'];
+
+    notificationService.notifyConfluenceMatch({
+      symbol: sampleSymbol,
+      strategyId: sampleId,
+      strategyName: sampleName,
+      isLong: sampleIsLong,
+      ratio: sampleRatio,
+      price: samplePrice,
+      matchedFactorNames: sampleFactors,
+      totalSelectedFactors: selectedFactors.size || sampleFactors.length,
+    });
+  };
 
   // Count strategies currently linked to active positions and being managed
   const managedStrategiesCount = useMemo(() => {
@@ -590,15 +672,15 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           {/* Sincronización, Sonido y Live FAPI */}
           <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
             <button
-              onClick={() => setSoundAlertsEnabled(!soundAlertsEnabled)}
-              className={`p-1.5 rounded-xl border text-xs transition-all flex items-center gap-1 font-mono ${
+              onClick={handleToggleSoundAlerts}
+              className={`p-1.5 rounded-xl border text-xs transition-all flex items-center gap-1 font-mono cursor-pointer ${
                 soundAlertsEnabled
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
                   : 'bg-neutral-950 text-neutral-500 border-neutral-800'
               }`}
               title={soundAlertsEnabled ? 'Alertas sonoras activadas' : 'Alertas sonoras silenciadas'}
             >
-              {soundAlertsEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+              {soundAlertsEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 text-neutral-400" />}
               <span className="text-[10px] hidden sm:inline">{soundAlertsEnabled ? 'Audio ON' : 'Audio OFF'}</span>
             </button>
 
@@ -755,6 +837,14 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
         factorMatchCounts={factorMatchCounts}
         totalStrategiesCount={candidateOperations.length}
         filteredStrategiesCount={filteredAndSortedOperations.length}
+        soundAlertsEnabled={soundAlertsEnabled}
+        onToggleSoundAlerts={handleToggleSoundAlerts}
+        browserNotificationsEnabled={browserNotificationsEnabled}
+        onToggleBrowserNotifications={handleToggleBrowserNotifications}
+        confluenceChimeType={confluenceChimeType}
+        onChangeConfluenceChimeType={handleChangeConfluenceChimeType}
+        onTestAlert={handleTestAlert}
+        detectedMatchesCount={detectedConfluentOperations.length}
       />
 
       {/* 4. Barra de Búsqueda, Dirección, Proximidad y Ordenamiento */}
