@@ -206,7 +206,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   };
 
   return (
-    <div id="open-positions-table-container" className="w-full flex flex-col bg-neutral-900/90 rounded-xl border border-neutral-800 overflow-hidden shadow-lg">
+    <div id="open-positions-table-container" className="trading-card border-accent-warning w-full flex flex-col overflow-hidden shadow-lg mb-4">
       {/* Table Header Controls */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-neutral-950/90 border-b border-neutral-800">
         <div className="flex items-center gap-2">
@@ -249,7 +249,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
 
       {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
       <div className="overflow-x-auto w-full" style={{ minHeight: '520px' }}>
-        <table className="w-full text-left text-sm font-mono min-w-[1200px]">
+        <table className="table table-dark table-trading w-full text-left text-sm font-mono min-w-[1200px] mb-0">
           <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-xs">
             <tr>
               <th className="py-3 px-3.5">PAR</th>

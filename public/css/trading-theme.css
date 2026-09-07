@@ -1,0 +1,63 @@
+/* ============================================================
+   TEMA GLOBAL DE TRADING (COMPATIBLE CON ADMINLTE 4)
+   ============================================================ */
+
+:root {
+  --bs-body-bg: #0b0e14;         /* Fondo grafito ultra-oscuro */
+  --bs-body-color: #d1d4dc;      /* Texto suave de baja fatiga */
+  --bs-border-color: #1e2638;    /* Bordes sutiles para tarjetas */
+}
+
+/* Tipografía global y monoespaciada para balances y precios */
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bs-body-bg) !important;
+  color: var(--bs-body-color) !important;
+}
+
+.font-mono, .price-val, .pnl-val {
+  font-family: 'JetBrains Mono', monospace !important;
+}
+
+/* Tarjetas estándar de trading */
+.trading-card {
+  background-color: #121722 !important;
+  border: 1px solid #1e2638 !important;
+  border-radius: 6px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: #d1d4dc;
+}
+
+.trading-card.border-accent-warning { border-top: 3px solid #f0b90b !important; }
+.trading-card.border-accent-danger  { border-top: 3px solid #f6465d !important; }
+.trading-card.border-accent-success { border-top: 3px solid #2ebd85 !important; }
+.trading-card.border-accent-info    { border-top: 3px solid #00b8d9 !important; }
+.trading-card.border-accent-primary { border-top: 3px solid #3b82f6 !important; }
+
+/* Ajustes de tablas de operaciones */
+.table-trading {
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
+  font-size: 0.85rem;
+  color: #d1d4dc !important;
+}
+
+.table-trading th {
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  color: #848e9c !important;
+  border-bottom: 1px solid #1e2638 !important;
+  background-color: #121722 !important;
+}
+
+.table-trading td {
+  border-bottom: 1px solid #161c28 !important;
+  vertical-align: middle;
+  background-color: transparent !important;
+}
+
+.table-trading tr:hover td {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}

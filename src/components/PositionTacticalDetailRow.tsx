@@ -356,74 +356,35 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     <tr style={{ backgroundColor: '#07090e', borderBottom: '1px solid #1e2638' }}>
       <td colSpan={8} style={{ padding: '8px 12px', border: 'none', backgroundColor: '#07090e' }}>
         {/* CONTENEDOR EXPEDIENTE TOTALMENTE ENCAPSULADO */}
-        <div
-          style={{
-            backgroundColor: '#0b0e14',
-            border: '1px solid #1e2638',
-            borderRadius: '8px',
-            padding: '16px',
-            margin: '4px 0',
-            color: '#d1d4dc',
-            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-            boxSizing: 'border-box',
-            width: '100%',
-          }}
-        >
+        <div className="trading-card border-accent-warning p-3 w-100 my-1">
           {/* 1. HEADER DEL TRADE */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              borderBottom: '1px solid #1e2638',
-              paddingBottom: '12px',
-              marginBottom: '14px',
-              flexWrap: 'wrap',
-              gap: '10px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '1.15rem', fontWeight: 700, color: '#ffffff', fontFamily: 'monospace' }}>
+          <div className="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-3 flex-wrap gap-2">
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <span className="fs-5 fw-bold text-white font-mono">
                 {position.symbol}
               </span>
               <span
-                style={{
-                  background: isLong ? 'rgba(46, 189, 133, 0.15)' : 'rgba(246, 70, 93, 0.15)',
-                  color: isLong ? '#2ebd85' : '#f6465d',
-                  border: `1px solid ${isLong ? '#2ebd85' : '#f6465d'}`,
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  fontWeight: 'bold',
-                }}
+                className={`badge px-2 py-1 font-mono fw-bold ${
+                  isLong
+                    ? 'bg-success-subtle text-success border border-success'
+                    : 'bg-danger-subtle text-danger border border-danger'
+                }`}
+                style={{ fontSize: '0.75rem' }}
               >
                 {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x
               </span>
-              <span
-                style={{
-                  background: '#161b26',
-                  color: '#848e9c',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  fontFamily: 'monospace',
-                }}
-              >
+              <span className="badge bg-dark border border-secondary text-secondary font-mono" style={{ fontSize: '0.75rem' }}>
                 ID: {effectiveStrategyId}
               </span>
               <span
-                style={{
-                  background: isTp1Reached
-                    ? 'rgba(46, 189, 133, 0.15)'
+                className={`badge px-2 py-1 ${
+                  isTp1Reached
+                    ? 'bg-success-subtle text-success border border-success'
                     : isSlBreached
-                    ? 'rgba(246, 70, 93, 0.15)'
-                    : 'rgba(13, 110, 253, 0.15)',
-                  color: isTp1Reached ? '#2ebd85' : isSlBreached ? '#f6465d' : '#3b82f6',
-                  border: `1px solid ${isTp1Reached ? '#2ebd85' : isSlBreached ? '#f6465d' : '#3b82f6'}`,
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                }}
+                    ? 'bg-danger-subtle text-danger border border-danger'
+                    : 'bg-primary-subtle text-primary border border-primary'
+                }`}
+                style={{ fontSize: '0.75rem' }}
               >
                 {isTp1Reached
                   ? 'Fase 3: TP1 Alcanzado'
@@ -432,143 +393,84 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
                   : 'Fase 2: En Desarrollo'}
               </span>
               {actionFeedback && (
-                <span
-                  style={{
-                    background: '#f59e0b',
-                    color: '#0b0e14',
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 'bold',
-                  }}
-                >
+                <span className="badge bg-warning text-dark fw-bold font-mono">
                   {actionFeedback}
                 </span>
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <div style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: '0.8rem' }}>
-                <span style={{ color: '#848e9c' }}>Riesgo / Beneficio: </span>
-                <strong style={{ color: '#2ebd85' }}>1 : {rewardRiskRatio.toFixed(1)}</strong>
+            <div className="d-flex align-items-center gap-2 flex-wrap">
+              <div className="text-end font-mono small me-1">
+                <span className="text-secondary">R/B: </span>
+                <strong className="text-success">1 : {rewardRiskRatio.toFixed(1)}</strong>
               </div>
               <button
                 type="button"
                 onClick={handleMoveToBE}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #474d57',
-                  color: '#d1d4dc',
-                  padding: '5px 10px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                  fontWeight: 500,
-                }}
+                className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono"
+                style={{ fontSize: '0.75rem' }}
               >
+                <i className="bi bi-shield-check me-1 text-success"></i>
                 Mover a BE (${formatVal(entryPrice)})
               </button>
               <button
                 type="button"
                 onClick={() => onOpenEditModal(position)}
-                style={{
-                  background: '#1e2638',
-                  border: '1px solid #334155',
-                  color: '#fbbf24',
-                  padding: '5px 10px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
+                className="btn btn-sm btn-outline-warning py-1 px-2 fw-semibold font-mono"
+                style={{ fontSize: '0.75rem' }}
               >
+                <i className="bi bi-pencil-square me-1"></i>
                 Ajustar TP/SL
               </button>
               <button
                 type="button"
                 onClick={handlePanicClose}
-                style={{
-                  background: '#e02424',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '5px 12px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                }}
+                className="btn btn-sm btn-danger fw-bold text-white py-1 px-2"
+                style={{ fontSize: '0.75rem' }}
               >
+                <i className="bi bi-exclamation-triangle-fill me-1"></i>
                 Cierre Pánico
               </button>
             </div>
           </div>
 
           {/* 2. GRID PRINCIPAL (GRÁFICO A LA IZQ, TIMELINE A LA DER) */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: '16px',
-              alignItems: 'start',
-            }}
-          >
+          <div className="row g-3 align-items-start">
             {/* COLUMNA IZQUIERDA: GRÁFICO REAL + VOLATILIDAD */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minWidth: 0 }}>
-              <div style={{ background: '#121722', border: '1px solid #1e2638', borderRadius: '6px', overflow: 'hidden' }}>
+            <div className="col-12 col-lg-7 d-flex flex-column gap-3">
+              <div className="trading-card p-0 overflow-hidden">
                 {/* Header de niveles */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    background: '#161c28',
-                    padding: '8px 12px',
-                    fontSize: '0.75rem',
-                    borderBottom: '1px solid #1e2638',
-                    fontFamily: 'monospace',
-                    flexWrap: 'wrap',
-                    gap: '6px',
-                  }}
-                >
-                  <span style={{ color: '#f6465d', fontWeight: 'bold' }}>
+                <div className="d-flex justify-content-between align-items-center bg-dark p-2 px-3 small border-bottom border-secondary font-mono flex-wrap gap-2">
+                  <span className="text-danger fw-bold">
+                    <i className="bi bi-arrow-down-circle me-1"></i>
                     SL: ${formatVal(slPrice)} ({slDiffPct >= 0 ? '+' : ''}{slDiffPct.toFixed(2)}%)
                   </span>
-                  <span style={{ color: '#00b8d9', fontWeight: 'bold' }}>
+                  <span className="text-info fw-bold">
+                    <i className="bi bi-record-circle me-1"></i>
                     ENTRADA: ${formatVal(entryPrice)}
                   </span>
-                  <span style={{ color: '#2ebd85', fontWeight: 'bold' }}>
+                  <span className="text-success fw-bold">
+                    <i className="bi bi-arrow-up-circle me-1"></i>
                     TP1: ${formatVal(tp1Price)} ({tp1DiffPct >= 0 ? '+' : ''}{tp1DiffPct.toFixed(2)}%)
                   </span>
                 </div>
 
                 {/* CANVAS INTERACTIVO (DIBUJA EL TRADE) */}
-                <div style={{ position: 'relative', height: '260px', width: '100%', background: '#07090e' }}>
-                  <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+                <div className="position-relative w-100 bg-black" style={{ height: '260px' }}>
+                  <canvas ref={canvasRef} className="w-100 h-100 d-block" />
                 </div>
 
                 {/* Footer métricas */}
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    background: '#161c28',
-                    padding: '6px 12px',
-                    fontSize: '0.75rem',
-                    color: '#848e9c',
-                    borderTop: '1px solid #1e2638',
-                    flexWrap: 'wrap',
-                    gap: '8px',
-                  }}
-                >
+                <div className="d-flex justify-content-between align-items-center bg-dark p-2 px-3 small text-secondary border-top border-secondary font-mono flex-wrap gap-2">
                   <span>
-                    ATR (15m): <strong style={{ color: '#f0b90b' }}>27.67%</strong>
+                    ATR (15m): <strong className="text-warning">27.67%</strong>
                   </span>
                   <span>
-                    Volumen Posición: <strong style={{ color: '#ffffff' }}>${notionalUsd.toFixed(2)} USDT</strong>
+                    Volumen Posición: <strong className="text-white">${notionalUsd.toFixed(2)} USDT</strong>
                   </span>
                   <span>
                     PnL:{' '}
-                    <strong style={{ color: isProfit ? '#2ebd85' : '#f6465d' }}>
+                    <strong className={isProfit ? 'text-success' : 'text-danger'}>
                       {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} ({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)
                     </strong>
                   </span>
@@ -576,169 +478,138 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               </div>
 
               {/* Alerta de Diagnóstico */}
-              <div
-                style={{
-                  background: 'rgba(13, 110, 253, 0.08)',
-                  borderLeft: '4px solid #3b82f6',
-                  borderRadius: '4px',
-                  padding: '10px 14px',
-                  fontSize: '0.8rem',
-                }}
-              >
-                <div style={{ color: '#3b82f6', fontWeight: 'bold', marginBottom: '4px' }}>
+              <div className="p-3 rounded border-start border-4 border-primary bg-primary-subtle text-light small">
+                <div className="text-primary fw-bold mb-1 d-flex align-items-center gap-1">
+                  <i className="bi bi-info-circle-fill"></i>
                   Diagnóstico Táctico &amp; Disciplina
                 </div>
-                <div style={{ color: '#d1d4dc' }}>
+                <div className="text-secondary">
                   {isTp1Reached
                     ? 'El precio alcanzó la zona de TP1. Activa el protocolo de Break-Even para blindar la operación.'
                     : isSlBreached
                     ? 'Atención: El precio está en proximidad de Stop Loss. Respeta la salida sin promediar.'
                     : 'El precio consolida dentro del rango esperado sin tocar zona de stop loss.'}
                 </div>
-                <div style={{ marginTop: '6px', color: '#f0b90b', fontSize: '0.75rem' }}>
-                  ⚠️ <strong>Regla #8:</strong> Mantén la orden condicional; no cierres por ansiedad antes de tocar TP1.
+                <div className="mt-2 text-warning small font-mono">
+                  <i className="bi bi-shield-exclamation me-1"></i>
+                  <strong>Regla #8:</strong> Mantén la orden condicional; no cierres por ansiedad antes de tocar TP1.
                 </div>
               </div>
             </div>
 
             {/* COLUMNA DERECHA: CRONOLOGÍA (TIMELINE) */}
-            <div style={{ background: '#121722', border: '1px solid #1e2638', borderRadius: '6px', padding: '14px' }}>
-              <div
-                style={{
-                  fontSize: '0.8rem',
-                  fontWeight: 'bold',
-                  color: '#848e9c',
-                  textTransform: 'uppercase',
-                  marginBottom: '14px',
-                  borderBottom: '1px solid #1e2638',
-                  paddingBottom: '6px',
-                }}
-              >
-                Cronología del Trade
-              </div>
-
-              {/* Items del Timeline con líneas nativas */}
-              <div
-                style={{
-                  position: 'relative',
-                  paddingLeft: '20px',
-                  borderLeft: '2px solid #232a3b',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '18px',
-                  fontSize: '0.8rem',
-                }}
-              >
-                {/* Hito 1: Completado */}
-                <div style={{ position: 'relative' }}>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '-26px',
-                      top: '2px',
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: '#2ebd85',
-                    }}
-                  />
-                  <div style={{ fontWeight: 'bold', color: '#ffffff' }}>Entrada Ejecutada (100%)</div>
-                  <div style={{ color: '#848e9c', fontSize: '0.72rem', fontFamily: 'monospace' }}>
-                    05 Sept 20:00 · ${formatVal(entryPrice)}
-                  </div>
+            <div className="col-12 col-lg-5">
+              <div className="trading-card p-3 h-100">
+                <div className="small fw-bold text-secondary text-uppercase mb-3 border-bottom border-secondary pb-2 d-flex justify-content-between align-items-center">
+                  <span>Cronología del Trade</span>
+                  <span className="badge bg-dark border border-secondary text-secondary font-mono">En Vivo</span>
                 </div>
 
-                {/* Hito 2: En Desarrollo */}
-                <div style={{ position: 'relative' }}>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '-26px',
-                      top: '2px',
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: '#f0b90b',
-                      boxShadow: '0 0 6px #f0b90b',
-                    }}
-                  />
-                  <div style={{ fontWeight: 'bold', color: '#f0b90b' }}>
-                    {isTp1Reached ? 'TP1 Alcanzado (100%)' : 'En Desarrollo a TP1'}
+                {/* Items del Timeline con líneas nativas */}
+                <div
+                  style={{
+                    position: 'relative',
+                    paddingLeft: '20px',
+                    borderLeft: '2px solid #232a3b',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '18px',
+                    fontSize: '0.8rem',
+                  }}
+                >
+                  {/* Hito 1: Completado */}
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '-26px',
+                        top: '2px',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: '#2ebd85',
+                      }}
+                    />
+                    <div className="fw-bold text-white">Entrada Ejecutada (100%)</div>
+                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>
+                      05 Sept 20:00 · ${formatVal(entryPrice)}
+                    </div>
                   </div>
-                  <div style={{ color: '#848e9c', fontSize: '0.72rem', fontFamily: 'monospace' }}>
-                    Precio actual: ${formatVal(currentLivePrice)}{' '}
-                    {isTp1Reached
-                      ? '(¡Objetivo Logrado!)'
-                      : `(Faltan ${Math.max(0, remainingToTp1).toFixed(1)}%)`}
-                  </div>
-                </div>
 
-                {/* Hito 3: Pendiente o Activo */}
-                <div style={{ position: 'relative', opacity: isTp1Reached ? 1 : 0.4 }}>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '-26px',
-                      top: '2px',
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: isTp1Reached ? '#3b82f6' : '#474d57',
-                    }}
-                  />
-                  <div style={{ color: '#ffffff', fontWeight: isTp1Reached ? 'bold' : 'normal' }}>
-                    Mover a Break-Even
+                  {/* Hito 2: En Desarrollo */}
+                  <div style={{ position: 'relative' }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '-26px',
+                        top: '2px',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: '#f0b90b',
+                        boxShadow: '0 0 6px #f0b90b',
+                      }}
+                    />
+                    <div className="fw-bold text-warning">
+                      {isTp1Reached ? 'TP1 Alcanzado (100%)' : 'En Desarrollo a TP1'}
+                    </div>
+                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>
+                      Precio actual: ${formatVal(currentLivePrice)}{' '}
+                      {isTp1Reached
+                        ? '(¡Objetivo Logrado!)'
+                        : `(Faltan ${Math.max(0, remainingToTp1).toFixed(1)}%)`}
+                    </div>
                   </div>
-                  <div style={{ color: '#848e9c', fontSize: '0.72rem' }}>
-                    {isTp1Reached ? '¡Listo para activar BE!' : 'Trigger automático en TP1'}
-                  </div>
-                </div>
 
-                {/* Hito 4: Objetivo Final */}
-                <div style={{ position: 'relative', opacity: 0.4 }}>
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: '-26px',
-                      top: '2px',
-                      width: '10px',
-                      height: '10px',
-                      borderRadius: '50%',
-                      background: '#474d57',
-                    }}
-                  />
-                  <div style={{ color: '#ffffff' }}>TP2 (${formatVal(tp2Price)})</div>
-                  <div style={{ color: '#848e9c', fontSize: '0.72rem' }}>Salida final del trade</div>
+                  {/* Hito 3: Pendiente o Activo */}
+                  <div style={{ position: 'relative', opacity: isTp1Reached ? 1 : 0.4 }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '-26px',
+                        top: '2px',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: isTp1Reached ? '#3b82f6' : '#474d57',
+                      }}
+                    />
+                    <div className="text-white" style={{ fontWeight: isTp1Reached ? 'bold' : 'normal' }}>
+                      Mover a Break-Even
+                    </div>
+                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>
+                      {isTp1Reached ? '¡Listo para activar BE!' : 'Trigger automático en TP1'}
+                    </div>
+                  </div>
+
+                  {/* Hito 4: Objetivo Final */}
+                  <div style={{ position: 'relative', opacity: 0.4 }}>
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: '-26px',
+                        top: '2px',
+                        width: '10px',
+                        height: '10px',
+                        borderRadius: '50%',
+                        background: '#474d57',
+                      }}
+                    />
+                    <div className="text-white">TP2 (${formatVal(tp2Price)})</div>
+                    <div className="text-secondary font-mono" style={{ fontSize: '0.72rem' }}>Salida final del trade</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Acordeón Opcional para Herramientas Avanzadas */}
-          <div
-            style={{
-              marginTop: '14px',
-              paddingTop: '10px',
-              borderTop: '1px solid #1e2638',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '8px',
-            }}
-          >
+          <div className="mt-3 pt-2 border-top border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-              style={{
-                background: 'transparent',
-                border: '1px solid #334155',
-                color: '#94a3b8',
-                padding: '4px 10px',
-                borderRadius: '4px',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-              }}
+              className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono"
+              style={{ fontSize: '0.75rem' }}
             >
               {showAdvancedTools
                 ? '▲ Ocultar Herramientas Avanzadas & Órdenes Condicionales'
@@ -749,23 +620,17 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               <button
                 type="button"
                 onClick={() => onLinkStrategy(position)}
-                style={{
-                  background: 'transparent',
-                  border: '1px solid #f59e0b',
-                  color: '#f59e0b',
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  fontSize: '0.75rem',
-                  cursor: 'pointer',
-                }}
+                className="btn btn-sm btn-outline-warning py-1 px-2 font-mono"
+                style={{ fontSize: '0.75rem' }}
               >
+                <i className="bi bi-link-45deg me-1"></i>
                 Vincular / Cambiar Estrategia
               </button>
             )}
           </div>
 
           {showAdvancedTools && (
-            <div style={{ marginTop: '12px' }}>
+            <div className="mt-3">
               <StrategyPositionTracker
                 position={position}
                 onLinkStrategy={onLinkStrategy}

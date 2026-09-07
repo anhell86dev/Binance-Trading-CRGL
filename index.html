@@ -1,22 +1,39 @@
-<!doctype html>
-<html lang="es" class="dark" style="color-scheme: dark; background-color: #0b0e11;">
+<!DOCTYPE html>
+<!-- data-bs-theme="dark" activa el modo oscuro nativo de Bootstrap 5 / AdminLTE 4 en toda la app -->
+<html lang="es" data-bs-theme="dark">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Binance USDⓈ-M Futures Terminal</title>
     <meta name="description" content="Terminal de trading de futuros USDⓈ-M de Binance con WebSocket WS-FAPI v1, explorador de mercados con todos los pares de futuros USDT y activos TradFi (Oro PAXG, Forex EUR/GBP/BRL/TRY, Bonos del Tesoro ONDO, RWA), creador de estrategia sincronizado con Google Sheets, Diario de Estrategias con indicadores y análisis de mercado en vivo de DiarioBitcoin, autorización manual explícita de órdenes, apalancamiento restringido (1-5x Isolated) y simulador PnL." />
     <meta property="og:title" content="Binance USDⓈ-M Futures Terminal" />
     <meta property="og:description" content="Terminal de trading de futuros USDⓈ-M de Binance con WebSocket WS-FAPI v1, explorador de mercados con todos los pares de futuros USDT y activos TradFi (Oro PAXG, Forex EUR/GBP/BRL/TRY, Bonos del Tesoro ONDO, RWA), creador de estrategia sincronizado con Google Sheets, Diario de Estrategias con indicadores y análisis de mercado en vivo de DiarioBitcoin, autorización manual explícita de órdenes, apalancamiento restringido (1-5x Isolated) y simulador PnL." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Noto+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <!-- 1. Bootstrap Icons (Iconografía oficial) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+    <!-- 2. AdminLTE 4 CSS (Incluye Bootstrap 5.3 completo) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta3/dist/css/adminlte.min.css" />
+
+    <!-- 3. Fuente recomendada para trading (Inter o Roboto) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+
+    <!-- 4. Estilos Custom de Trading (Paso 2) -->
+    <link rel="stylesheet" href="/css/trading-theme.css" />
   </head>
-  <body class="antialiased overflow-x-hidden selection:bg-amber-500/20 selection:text-amber-300 bg-[#0b0e11] text-[#eaecef]">
+  <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- Bootstrap 5 Bundle (Popper incluido para dropdowns y tooltips) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- AdminLTE 4 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta3/dist/js/adminlte.min.js"></script>
   </body>
 </html>
 

@@ -284,83 +284,75 @@ export const WalletView: React.FC<WalletViewProps> = ({
             <div className="row g-2">
               {/* Saldo Total Margen */}
               <div className="col-sm-6">
-                <div className="card card-outline card-warning shadow-sm h-100 mb-0">
-                  <div className="card-body p-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <span className="text-secondary small fw-semibold text-uppercase" style={{ fontSize: '0.75rem' }}>
-                        Saldo Total Margen
-                      </span>
-                      <i className="bi bi-currency-dollar text-warning fs-5"></i>
-                    </div>
-                    <div className="fs-3 fw-bold font-monospace text-white">
-                      ${displayTotalWallet.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                      <span className="fs-6 text-secondary font-sans">USDT</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-monospace" style={{ fontSize: '0.75rem' }}>
-                      <span className="text-secondary">Disponible:</span>
-                      <span className="text-success fw-bold">${displayAvailable.toFixed(2)} USDT</span>
-                    </div>
+                <div className="trading-card border-accent-warning p-3 h-100 mb-0">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                      Saldo Total Margen
+                    </span>
+                    <i className="bi bi-currency-dollar text-warning fs-5"></i>
+                  </div>
+                  <div className="fs-3 fw-bold font-mono text-white">
+                    ${displayTotalWallet.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                    <span className="fs-6 text-secondary font-sans">USDT</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-mono" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary">Disponible:</span>
+                    <span className="text-success fw-bold">${displayAvailable.toFixed(2)} USDT</span>
                   </div>
                 </div>
               </div>
 
               {/* Garantía Comprometida */}
               <div className="col-sm-6">
-                <div className="card shadow-sm h-100 mb-0 border-0 bg-dark-subtle">
-                  <div className="card-body p-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <span className="text-secondary small fw-semibold text-uppercase" style={{ fontSize: '0.75rem' }}>
-                        Garantía Aislada
-                      </span>
-                      <i className="bi bi-lock-fill text-info fs-5"></i>
-                    </div>
-                    <div className="fs-3 fw-bold font-monospace text-white">
-                      ${displayIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
-                      <span className="fs-6 text-secondary font-sans">USDT</span>
-                    </div>
-                    <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-monospace" style={{ fontSize: '0.75rem' }}>
-                      <span className="text-secondary">En posiciones:</span>
-                      <span className="text-info">{displayActivePositions} activas</span>
-                    </div>
+                <div className="trading-card p-3 h-100 mb-0">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                      Garantía Aislada
+                    </span>
+                    <i className="bi bi-lock-fill text-info fs-5"></i>
+                  </div>
+                  <div className="fs-3 fw-bold font-mono text-white">
+                    ${displayIsolatedMargin.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+                    <span className="fs-6 text-secondary font-sans">USDT</span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary font-mono" style={{ fontSize: '0.75rem' }}>
+                    <span className="text-secondary">En posiciones:</span>
+                    <span className="text-info">{displayActivePositions} activas</span>
                   </div>
                 </div>
               </div>
 
               {/* PnL No Realizado Total */}
               <div className="col-sm-6">
-                <div className="card shadow-sm h-100 mb-0 border-0 bg-dark-subtle">
-                  <div className="card-body p-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <span className="text-secondary small fw-semibold text-uppercase" style={{ fontSize: '0.75rem' }}>
-                        PnL No Realizado
-                      </span>
-                      <i className={`bi ${displayUnrealizedPnl >= 0 ? 'bi-graph-up-arrow text-success' : 'bi-graph-down-arrow text-danger'} fs-5`}></i>
-                    </div>
-                    <div className={`fs-3 fw-bold font-monospace ${displayUnrealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
-                      {displayUnrealizedPnl >= 0 ? '+' : ''}${displayUnrealizedPnl.toFixed(2)}{' '}
-                      <span className="fs-6 text-secondary font-sans">USDT</span>
-                    </div>
-                    <div className="text-secondary small mt-2 pt-2 border-top border-secondary" style={{ fontSize: '0.75rem' }}>
-                      {displayUnrealizedPnl >= 0 ? 'Rendimiento positivo en posiciones' : 'Exposición acotada por SL'}
-                    </div>
+                <div className="trading-card p-3 h-100 mb-0">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                      PnL No Realizado
+                    </span>
+                    <i className={`bi ${displayUnrealizedPnl >= 0 ? 'bi-graph-up-arrow text-success' : 'bi-graph-down-arrow text-danger'} fs-5`}></i>
+                  </div>
+                  <div className={`fs-3 fw-bold font-mono ${displayUnrealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                    {displayUnrealizedPnl >= 0 ? '+' : ''}${displayUnrealizedPnl.toFixed(2)}{' '}
+                    <span className="fs-6 text-secondary font-sans">USDT</span>
+                  </div>
+                  <div className="text-secondary small mt-2 pt-2 border-top border-secondary" style={{ fontSize: '0.75rem' }}>
+                    {displayUnrealizedPnl >= 0 ? 'Rendimiento positivo en posiciones' : 'Exposición acotada por SL'}
                   </div>
                 </div>
               </div>
 
               {/* Protección y Apalancamiento */}
               <div className="col-sm-6">
-                <div className="card shadow-sm h-100 mb-0 border-0 bg-dark-subtle">
-                  <div className="card-body p-3">
-                    <div className="d-flex justify-content-between align-items-center mb-2">
-                      <span className="text-secondary small fw-semibold text-uppercase" style={{ fontSize: '0.75rem' }}>
-                        Protección / Apalancamiento
-                      </span>
-                      <i className="bi bi-shield-check text-success fs-5"></i>
-                    </div>
-                    <div className="fs-3 fw-bold font-monospace text-success">1x – 5x</div>
-                    <div className="text-secondary small mt-2 pt-2 border-top border-secondary" style={{ fontSize: '0.75rem' }}>
-                      <i className="bi bi-check2 me-1 text-success"></i> Sin contagio cruzado (Isolated)
-                    </div>
+                <div className="trading-card p-3 h-100 mb-0">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <span className="text-secondary small fw-bold text-uppercase" style={{ fontSize: '0.75rem' }}>
+                      Protección / Apalancamiento
+                    </span>
+                    <i className="bi bi-shield-check text-success fs-5"></i>
+                  </div>
+                  <div className="fs-3 fw-bold font-mono text-success">1x – 5x</div>
+                  <div className="text-secondary small mt-2 pt-2 border-top border-secondary" style={{ fontSize: '0.75rem' }}>
+                    <i className="bi bi-check2 me-1 text-success"></i> Sin contagio cruzado (Isolated)
                   </div>
                 </div>
               </div>
@@ -369,8 +361,8 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
           {/* COLUMNA DERECHA: PANEL DE RIESGO UNIFICADO */}
           <div className="col-12 col-xl-5">
-            <div className={`card card-outline ${isCriticalRisk ? 'card-danger' : isWarningRisk ? 'card-warning' : 'card-info'} shadow-sm h-100 mb-0`}>
-              <div className="card-header py-2 d-flex justify-content-between align-items-center">
+            <div className={`trading-card ${isCriticalRisk ? 'border-accent-danger' : isWarningRisk ? 'border-accent-warning' : 'border-accent-info'} p-3 h-100 mb-0`}>
+              <div className="d-flex justify-content-between align-items-center mb-2 border-bottom border-secondary pb-2">
                 <div className="d-flex align-items-center gap-2">
                   <i className={`bi ${isCriticalRisk ? 'bi-exclamation-octagon-fill text-danger' : 'bi-shield-check text-success'}`}></i>
                   <span className="fw-bold small text-uppercase">Riesgo &amp; Margen Isolated</span>
@@ -380,7 +372,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     type="button"
                     onClick={handleManualSync}
                     disabled={isRefreshing}
-                    className="btn btn-xs btn-outline-secondary py-0 px-1"
+                    className="btn btn-sm btn-outline-secondary py-0 px-1"
                     title="Recargar métricas"
                   >
                     <i className={`bi bi-arrow-clockwise ${isRefreshing ? 'animate-spin' : ''}`}></i>
@@ -388,7 +380,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsDepositModalOpen(true)}
-                    className="btn btn-xs btn-outline-secondary py-0 px-1"
+                    className="btn btn-sm btn-outline-secondary py-0 px-1"
                     title="Ajustes"
                   >
                     <i className="bi bi-gear"></i>
@@ -396,21 +388,21 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </div>
               </div>
 
-              <div className="card-body p-3">
+              <div>
                 {/* Fila de Ratios Clave */}
                 <div className="d-flex justify-content-between align-items-baseline mb-2">
                   <div>
                     <span className="text-secondary small text-uppercase fw-semibold" style={{ fontSize: '0.75rem' }}>
                       Ratio de Margen:
                     </span>
-                    <div className={`fs-3 fw-bold font-monospace ${isCriticalRisk ? 'text-danger' : isWarningRisk ? 'text-warning' : 'text-success'}`}>
+                    <div className={`fs-3 fw-bold font-mono ${isCriticalRisk ? 'text-danger' : isWarningRisk ? 'text-warning' : 'text-success'}`}>
                       {displayMarginRatio.toFixed(1)}%{' '}
                       <span className={`badge ${isCriticalRisk ? 'bg-danger' : isWarningRisk ? 'bg-warning text-dark' : 'bg-success'} text-uppercase fs-6`}>
                         {isCriticalRisk ? 'Crítico' : isWarningRisk ? 'Precaución' : 'Normal'}
                       </span>
                     </div>
                   </div>
-                  <div className="text-end font-monospace">
+                  <div className="text-end font-mono">
                     <span className="text-secondary small" style={{ fontSize: '0.75rem' }}>Margen Libre:</span>
                     <div className={`fs-5 fw-bold ${displayAvailable <= 0.05 ? 'text-danger' : 'text-success'}`}>
                       ${displayAvailable.toFixed(2)}
@@ -419,7 +411,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                 </div>
 
                 {/* Mini Grid 2 Columnas */}
-                <div className="row g-2 py-2 my-2 border-top border-bottom border-secondary font-monospace" style={{ fontSize: '0.8rem' }}>
+                <div className="row g-2 py-2 my-2 border-top border-bottom border-secondary font-mono" style={{ fontSize: '0.8rem' }}>
                   <div className="col-6">
                     <span className="text-secondary">Balance Total:</span>
                     <div className="fw-bold text-white">${displayTotalWallet.toFixed(2)} USDT</div>
@@ -432,7 +424,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
 
                 {/* Distribución del Margen */}
                 <div className="mb-3">
-                  <div className="d-flex justify-content-between small font-monospace mb-1" style={{ fontSize: '0.75rem' }}>
+                  <div className="d-flex justify-content-between small font-mono mb-1" style={{ fontSize: '0.75rem' }}>
                     <span className="text-secondary">Uso del Capital:</span>
                     <span className={`${isCriticalRisk ? 'text-danger' : 'text-success'} fw-bold`}>
                       {displayMarginUsage.toFixed(1)}% Comprometido
@@ -450,7 +442,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                       title={`Posiciones: $${displayPositionsMargin.toFixed(1)}`}
                     ></div>
                   </div>
-                  <div className="d-flex justify-content-between text-secondary small font-monospace mt-1" style={{ fontSize: '0.7rem' }}>
+                  <div className="d-flex justify-content-between text-secondary small font-mono mt-1" style={{ fontSize: '0.7rem' }}>
                     <span>Órdenes: ${displayOrdersMargin.toFixed(1)}</span>
                     <span>Posiciones: ${displayPositionsMargin.toFixed(1)}</span>
                     <span className={freePct < 5 ? 'text-danger' : 'text-success'}>
@@ -465,7 +457,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
                     <i className={`bi ${isCriticalRisk ? 'bi-shield-slash-fill' : 'bi-shield-check'} me-1`}></i>
                     {isCriticalRisk ? 'Cuenta en límite prudente (>80%)' : 'Margen en rango de seguridad normal'}
                   </span>
-                  <span className="fw-bold font-monospace">Max. 5x</span>
+                  <span className="fw-bold font-mono">Max. 5x</span>
                 </div>
               </div>
             </div>
@@ -555,7 +547,7 @@ export const WalletView: React.FC<WalletViewProps> = ({
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
+              <table className="table table-dark table-trading w-full text-left text-xs mb-0">
                 <thead>
                   <tr className="border-b border-neutral-800 text-neutral-400 uppercase font-mono text-[11px]">
                     <th className="py-2.5 px-3">Activo</th>
