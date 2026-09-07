@@ -85,3 +85,21 @@ export interface MarketAnalysisArticle {
   description?: string;
   symbol?: DiarioBitcoinSymbol;
 }
+
+export type NewsSentiment = 'bullish' | 'bearish' | 'neutral';
+
+export interface NewsHeadlineItem {
+  id: string;
+  title: string;
+  link: string;
+  pubDate: string;
+  publishedTimestamp: number;
+  ageText: string;
+  summary: string;
+  author?: string;
+  category?: string;
+  imageUrl?: string;
+  relatedSymbols: string[];
+  sentiment: NewsSentiment;
+  isMatchingStrategy?: boolean;
+}

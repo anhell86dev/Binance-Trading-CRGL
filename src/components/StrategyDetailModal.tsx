@@ -31,6 +31,7 @@ import { strategyService } from '../services/strategyService';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
+import { StrategyNewsContextWidget } from './StrategyNewsContextWidget';
 
 interface StrategyDetailModalProps {
   strategy: GoogleSheetStrategyRow;
@@ -392,6 +393,14 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* 6. SECCIÓN: CONTEXTO DE NOTICIAS & CATALIZADORES DIARIOBITCOIN */}
+          <StrategyNewsContextWidget
+            currentSymbol={strategy.par}
+            strategyName={strategy.nombreEstrategia}
+            strategyId={strategy.noEstrategia}
+            maxHeight="max-h-64 sm:max-h-72"
+          />
         </div>
 
         {/* Modal Action Footer */}

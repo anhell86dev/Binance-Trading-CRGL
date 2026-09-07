@@ -45,6 +45,7 @@ import { StrategyDetailModal } from './StrategyDetailModal';
 import { GoogleAuthModal } from './GoogleAuthModal';
 import { StrategyBreakdownModal } from './StrategyBreakdownModal';
 import { AssetSelectorModal } from './AssetSelectorModal';
+import { StrategyNewsContextWidget } from './StrategyNewsContextWidget';
 
 const formatOrderPrice = (p: number) => {
   if (!p || isNaN(p)) return '0.00';
@@ -605,6 +606,13 @@ export const StrategyExecutionEngine: React.FC = () => {
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
+
+      {/* 4. Contexto de Mercado: Titulares y Catalizadores de DiarioBitcoin */}
+      <StrategyNewsContextWidget
+        currentSymbol={strategy?.par || symbol}
+        strategyName={strategy?.nombreEstrategia}
+        strategyId={strategy?.noEstrategia}
+      />
 
       {/* Execution Success Banner if just executed */}
       {executionSuccessIds && (
