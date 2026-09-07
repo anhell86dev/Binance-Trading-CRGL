@@ -29,6 +29,8 @@ import {
 import { binanceWs } from '../services/binanceWs';
 import { strategyService } from '../services/strategyService';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
+import { strategyManagedTradesService } from '../services/strategyManagedTradesService';
+import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
 import { StrategyNewsContextWidget } from './StrategyNewsContextWidget';
@@ -39,6 +41,7 @@ interface StrategyDetailModalProps {
   onClose: () => void;
   onPlotOnChart?: (strategy: GoogleSheetStrategyRow) => void;
   onApplyToOrderForm?: (strategy: GoogleSheetStrategyRow) => void;
+  onNavigateToGestionTrades?: (symbol?: string) => void;
 }
 
 const formatPrice = (p: number | undefined | null) => {
@@ -54,6 +57,7 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
   onClose,
   onPlotOnChart,
   onApplyToOrderForm,
+  onNavigateToGestionTrades,
 }) => {
   if (!isOpen || !strategy) return null;
 
@@ -63,6 +67,7 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
   const rr = calculateStrategyRewardToRisk(strategy);
   const stageInfo = getTradeProcessStageInfo(strategy.estado || 'Activa');
   const normalizedSymbol = normalizeBinanceSymbol(strategy.par);
+  const managedTradeContext = strategyManagedTradesService.getManagedTradeContext(strategy);
   const isLong =
     !strategy.tipoDeOrden?.toLowerCase().includes('short') &&
     !strategy.tipoDeOrden?.toLowerCase().includes('venta');
@@ -122,6 +127,16 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
                 >
                   {strategy.estado || 'Activa'}
                 </span>
+                {managedTradeContext?.isManaged && (
+                  <StrategyManagedBadge
+                    tradeContext={managedTradeContext}
+                    onNavigateToGestionTrades={(sym) => {
+                      onClose();
+                      if (onNavigateToGestionTrades) onNavigateToGestionTrades(sym);
+                    }}
+                    showNavigationButton={false}
+                  />
+                )}
               </div>
               <p className="text-xs text-neutral-400 font-medium">
                 {strategy.nombreEstrategia} • <span className="text-amber-400 font-mono">{strategy.temporalidad}</span>
@@ -404,13 +419,30 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
         </div>
 
         {/* Modal Action Footer */}
-        <div className="px-4 py-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between gap-3 shrink-0">
-          <button
-            onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-750 transition-colors"
-          >
-            Cerrar
-          </button>
+        <div className="px-4 py-3 bg-neutral-950 border-t border-neutral-800 flex items-center justify-between gap-3 shrink-0 flex-wrap">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-750 transition-colors"
+            >
+              Cerrar
+            </button>
+
+            {managedTradeContext?.isManaged && onNavigateToGestionTrades && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onNavigateToGestionTrades(strategy.par);
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 flex items-center gap-1.5 transition-all shadow-sm"
+                title="Supervisar posición u órdenes en la pestaña Gestión de Trades"
+              >
+                <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                <span>En Gestión de Trades</span>
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <button

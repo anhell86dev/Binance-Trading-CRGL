@@ -67,6 +67,7 @@ import { StrategyDetailModal } from './StrategyDetailModal';
 interface TopOperacionesViewProps {
   onOpenOrderModal?: () => void;
   onNavigateToFutures?: () => void;
+  onNavigateToGestionTrades?: (symbol?: string) => void;
 }
 
 export interface CandidateTradeOperation {
@@ -101,6 +102,7 @@ export interface CandidateTradeOperation {
 export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   onOpenOrderModal,
   onNavigateToFutures,
+  onNavigateToGestionTrades,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() =>
     strategyService.getStrategies()
@@ -1489,6 +1491,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           strategy={selectedStrategyForModal}
           isOpen={!!selectedStrategyForModal}
           onClose={() => setSelectedStrategyForModal(null)}
+          onNavigateToGestionTrades={onNavigateToGestionTrades}
           onApplyToOrderForm={() => {
             const op = candidateOperations.find(
               (o) => o.strategy.noEstrategia === selectedStrategyForModal.noEstrategia

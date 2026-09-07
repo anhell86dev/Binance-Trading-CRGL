@@ -12,11 +12,13 @@ import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
 interface TradingStrategiesViewProps {
   onOpenOrderModal?: () => void;
   onNavigateToFutures?: () => void;
+  onNavigateToGestionTrades?: (symbol?: string) => void;
 }
 
 export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
   onOpenOrderModal,
   onNavigateToFutures,
+  onNavigateToGestionTrades,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => strategyService.getIsSyncing());
@@ -103,6 +105,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
         onSync={handleSync}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
+        onNavigateToGestionTrades={onNavigateToGestionTrades}
       />
 
       {/* Detail Modal */}
@@ -112,6 +115,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
           isOpen={!!selectedStrategy}
           onClose={() => setSelectedStrategy(null)}
           onApplyToOrderForm={handleSelectStrategyForExecution}
+          onNavigateToGestionTrades={onNavigateToGestionTrades}
         />
       )}
 

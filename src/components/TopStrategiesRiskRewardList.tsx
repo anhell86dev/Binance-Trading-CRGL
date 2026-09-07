@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Eye,
   FileSpreadsheet,
+  Layers,
   Radio,
   RefreshCw,
   Shield,
@@ -21,6 +22,8 @@ import { livePriceService } from '../services/livePriceService';
 import { binanceWs } from '../services/binanceWs';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
+import { strategyManagedTradesService, ManagedTradeContext } from '../services/strategyManagedTradesService';
+import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
 import { futuresConfluenceService } from '../services/futuresConfluenceService';
@@ -111,6 +114,7 @@ interface TopStrategiesRiskRewardListProps {
   onSync?: () => void;
   isSyncing?: boolean;
   lastSyncTime?: string;
+  onNavigateToGestionTrades?: (symbol?: string) => void;
 }
 
 interface StrategyRowPriceBarProps {
@@ -357,9 +361,11 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
   onSync,
   isSyncing = false,
   lastSyncTime,
+  onNavigateToGestionTrades,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [, setPriceTick] = useState(0);
+  const [onlyManagedFilter, setOnlyManagedFilter] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubStrat = strategyService.subscribe(() => {
@@ -368,9 +374,13 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
     const unsubPrice = livePriceService.subscribe(() => {
       setPriceTick((prev) => prev + 1);
     });
+    const unsubManaged = strategyManagedTradesService.subscribe(() => {
+      setPriceTick((prev) => prev + 1);
+    });
     return () => {
       unsubStrat();
       unsubPrice();
+      unsubManaged();
     };
   }, []);
 
@@ -385,9 +395,19 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
     });
   }, [propsActiveStrategies, strategies]);
 
+  // Contar estrategias actualmente gestionadas en operaciones de Gestión de Trades
+  const managedStrategiesCount = useMemo(() => {
+    return strategyManagedTradesService.getManagedStrategiesCount(activeList);
+  }, [activeList, strategies]);
+
   // 2. Calcular R/B, precios y ordenar por mejor Ratio R:B para TODAS las estrategias
   const rankedStrategies = useMemo(() => {
-    const calculated = activeList.map((strat) => {
+    let sourceList = activeList;
+    if (onlyManagedFilter) {
+      sourceList = sourceList.filter((st) => strategyManagedTradesService.isStrategyManaged(st));
+    }
+
+    const calculated = sourceList.map((strat) => {
       const prices = parsePricesFromStrategy(strat);
       const rr = calculateStrategyRewardToRisk(strat);
       const isLong =
@@ -434,7 +454,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
     });
 
     return calculated;
-  }, [activeList]);
+  }, [activeList, onlyManagedFilter]);
 
   // 3. Encontrar cuál del catálogo está MÁS PRÓXIMA globalmente a Entrada 1
   const closestInListId = useMemo(() => {
@@ -500,6 +520,40 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
             <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold">
               {rankedStrategies.length} Activas
             </span>
+
+            {/* Selector de Filtro: Todas vs En Gestión de Trades */}
+            <div className="flex items-center gap-1 bg-neutral-950 p-0.5 rounded-lg border border-neutral-800 ml-1">
+              <button
+                type="button"
+                onClick={() => setOnlyManagedFilter(false)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
+                  !onlyManagedFilter
+                    ? 'bg-neutral-800 text-white font-bold shadow-xs'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                Todas ({activeList.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setOnlyManagedFilter(true)}
+                className={`px-2 py-0.5 rounded text-[10px] font-mono flex items-center gap-1 transition-all ${
+                  onlyManagedFilter
+                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                    : managedStrategiesCount > 0
+                    ? 'text-emerald-400 hover:bg-emerald-950/40 border border-emerald-500/30'
+                    : 'text-neutral-500 hover:text-neutral-400'
+                }`}
+                title="Mostrar exclusivamente las estrategias que están siendo gestionadas en las operaciones de Gestión de trades"
+              >
+                {managedStrategiesCount > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+                )}
+                <Layers className="w-3 h-3 text-emerald-400" />
+                <span>En Gestión ({managedStrategiesCount})</span>
+              </button>
+            </div>
+
             <span className="text-[10px] font-mono text-amber-300/90 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
               <span>Brillan las próximas a Entrada 1 (E1)</span>
@@ -604,6 +658,9 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                   highlightSymbol &&
                   highlightSymbol.toUpperCase() === strat.par.replace(/[^A-Z0-9]/g, '');
 
+                const managedCtx = strategyManagedTradesService.getManagedTradeContext(strat);
+                const isManaged = Boolean(managedCtx?.isManaged);
+
                 const baseEntry = item.entry1Price > 0 ? item.entry1Price : (item.livePrice || 1);
                 const slPrice =
                   item.prices.slPrice || (item.isLong ? baseEntry * 0.985 : baseEntry * 1.015);
@@ -632,7 +689,9 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                   <tr
                     key={strat.noEstrategia}
                     className={`transition-all duration-200 ${
-                      isGlow
+                      isManaged
+                        ? 'bg-emerald-950/30 border-y border-emerald-500/70 shadow-[0_0_15px_rgba(16,185,129,0.2)] ring-1 ring-emerald-500/40'
+                        : isGlow
                         ? 'bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/15 border-y border-amber-400/80 shadow-[0_0_15px_rgba(251,191,36,0.2)]'
                         : isSelected
                         ? 'bg-neutral-850/90 border-amber-500/40'
@@ -647,7 +706,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                       #{rank}
                     </td>
 
-                    {/* 2. Par + Estrategia unificados */}
+                    {/* 2. Par + Estrategia unificados + Marca Gestión de Trades */}
                     <td style={{ minWidth: '240px' }}>
                       <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
                         <span className="fw-bold text-white fs-6">{strat.par}</span>
@@ -677,6 +736,18 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                           </span>
                         )}
                       </div>
+
+                      {/* Marca destacada si está siendo gestionada en Gestión de Trades */}
+                      {isManaged && (
+                        <div className="mb-1">
+                          <StrategyManagedBadge
+                            tradeContext={managedCtx}
+                            onNavigateToGestionTrades={onNavigateToGestionTrades}
+                            showNavigationButton={true}
+                          />
+                        </div>
+                      )}
+
                       <div
                         className="text-secondary small text-truncate"
                         style={{ maxWidth: '220px' }}
@@ -754,8 +825,18 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                     </td>
 
                     {/* 6. Acciones */}
-                    <td className="text-center" style={{ width: '90px' }}>
+                    <td className="text-center" style={{ width: '120px' }}>
                       <div className="btn-group btn-group-sm">
+                        {isManaged && onNavigateToGestionTrades && (
+                          <button
+                            type="button"
+                            className="btn btn-success text-white shadow-xs"
+                            title="Operación activa: ir a Gestión de Trades para supervisar o modificar"
+                            onClick={() => onNavigateToGestionTrades(strat.par)}
+                          >
+                            <Layers className="w-3.5 h-3.5 inline-block" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn btn-outline-warning text-warning"

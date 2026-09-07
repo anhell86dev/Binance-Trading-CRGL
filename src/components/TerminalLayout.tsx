@@ -100,16 +100,18 @@ export default function TerminalLayout() {
           <TradingStrategiesView
             onOpenOrderModal={() => setIsOrderModalOpen(true)}
             onNavigateToFutures={() => setActiveTab('futuros')}
+            onNavigateToGestionTrades={() => setActiveTab('gestion-trades')}
           />
         </div>
       )}
 
-      {/* 5. Pestaña: Plan de Trabajo (Top R:B) */}
+      {/* 6. Pestaña: Plan de Trabajo (Top R:B) */}
       {activeTab === 'top-operaciones' && (
         <div className="w-full h-full p-2 sm:p-4 lg:p-6 overflow-y-auto">
           <TopOperacionesView
             onOpenOrderModal={() => setIsOrderModalOpen(true)}
             onNavigateToFutures={() => setActiveTab('futuros')}
+            onNavigateToGestionTrades={() => setActiveTab('gestion-trades')}
           />
         </div>
       )}
