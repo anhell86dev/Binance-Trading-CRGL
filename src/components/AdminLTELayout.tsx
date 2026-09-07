@@ -68,6 +68,7 @@ interface AdminLTELayoutProps {
   onOpenOrderModal: () => void;
   onOpenDisciplinesModal: () => void;
   onOpenPnlSimulator?: () => void;
+  onOpenNotifications?: () => void;
   onOpenConsole: () => void;
   isConsoleOpen?: boolean;
   children: React.ReactNode;
@@ -80,6 +81,7 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
   onOpenOrderModal,
   onOpenDisciplinesModal,
   onOpenPnlSimulator,
+  onOpenNotifications,
   onOpenConsole,
   isConsoleOpen = false,
   children,
@@ -96,6 +98,7 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
   const [mode, setMode] = useState<NetworkMode>(() => binanceWs.getMode());
   const [connectionStatus, setConnectionStatus] = useState(() => binanceWs.getConnectionStatus());
   const [soundOn, setSoundOn] = useState(() => notificationService.soundEnabled);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(() => notificationService.getUnreadCount());
   const [latencyMs, setLatencyMs] = useState(24);
   const [positionsCount, setPositionsCount] = useState(() => binanceWs.getPositions().length);
   const [ordersCount, setOrdersCount] = useState(() => binanceWs.getOpenOrders().length);
@@ -106,6 +109,15 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const notifDropdownRef = useRef<HTMLDivElement>(null);
   const modeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Subscribe to notification updates
+  useEffect(() => {
+    const unsubNotif = notificationService.subscribe(() => {
+      setUnreadNotifCount(notificationService.getUnreadCount());
+      setSoundOn(notificationService.soundEnabled);
+    });
+    return () => unsubNotif();
+  }, []);
 
   // Subscribe to Binance updates
   useEffect(() => {
@@ -253,6 +265,24 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
     {
       title: 'SISTEMA & HERRAMIENTAS',
       items: [
+        {
+          id: 'notificaciones' as const,
+          label: 'Notificaciones Consolidadas',
+          shortLabel: 'Notificaciones',
+          icon: Bell,
+          badge: unreadNotifCount > 0 ? `${unreadNotifCount} NUEVAS` : 'HISTORIAL',
+          badgeColor: unreadNotifCount > 0 ? 'bg-rose-600 text-white font-bold' : 'bg-neutral-800 text-neutral-400 font-mono',
+          category: 'Alertas',
+          isAction: true,
+          action: () => {
+            if (onOpenNotifications) {
+              onOpenNotifications();
+            } else {
+              notificationService.openConsolidatedWindow();
+            }
+          },
+          description: 'Centro consolidado de alertas de TP, Stop Loss, órdenes y confluencias 100%',
+        },
         {
           id: 'pnl-simulator' as const,
           label: 'Simulador de PnL & ROE',
@@ -736,6 +766,28 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
               title="Consola WS-FAPI"
             >
               <Terminal className="w-4 h-4" />
+            </button>
+
+            {/* Notifications Consolidated Center Bell */}
+            <button
+              type="button"
+              id="adminlte-btn-notifications"
+              onClick={() => {
+                if (onOpenNotifications) {
+                  onOpenNotifications();
+                } else {
+                  notificationService.openConsolidatedWindow();
+                }
+              }}
+              className="relative p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
+              title="Abrir Ventana de Notificaciones Consolidadas"
+            >
+              <Bell className={`w-4 h-4 transition-transform ${unreadNotifCount > 0 ? 'text-amber-400 scale-105' : 'text-neutral-400'}`} />
+              {unreadNotifCount > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-black font-mono shadow-sm animate-pulse">
+                  {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                </span>
+              )}
             </button>
 
             {/* New Order Primary Button (AdminLTE call-to-action) */}

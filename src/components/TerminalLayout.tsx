@@ -14,7 +14,9 @@ import { GestionTradesView } from './GestionTradesView';
 import { MarketsView } from './MarketsView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 import { PnlSimulatorModal } from './PnlSimulatorModal';
+import { ConsolidatedNotificationsModal } from './ConsolidatedNotificationsModal';
 import { AdminLTELayout } from './AdminLTELayout';
+import { notificationService } from '../services/notifications';
 
 export default function TerminalLayout() {
   // Pestaña activa por defecto: Billetera
@@ -24,6 +26,7 @@ export default function TerminalLayout() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [isDisciplinesModalOpen, setIsDisciplinesModalOpen] = useState(false);
   const [isPnlSimulatorOpen, setIsPnlSimulatorOpen] = useState(false);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
 
   useEffect(() => {
     // Escucha solicitudes automáticas de apertura de modal (ej. Autoejecutar de estrategia)
@@ -31,8 +34,14 @@ export default function TerminalLayout() {
       setIsOrderModalOpen(true);
     });
 
+    // Escucha solicitudes para abrir la ventana consolidada de notificaciones
+    const unsubNotifWindow = notificationService.subscribeToOpenWindow(() => {
+      setIsNotificationsModalOpen(true);
+    });
+
     return () => {
       unsubModal();
+      unsubNotifWindow();
     };
   }, []);
 
@@ -44,6 +53,7 @@ export default function TerminalLayout() {
       onOpenOrderModal={() => setIsOrderModalOpen(true)}
       onOpenDisciplinesModal={() => setIsDisciplinesModalOpen(true)}
       onOpenPnlSimulator={() => setIsPnlSimulatorOpen(true)}
+      onOpenNotifications={() => setIsNotificationsModalOpen(true)}
       onOpenConsole={() => setIsConsoleOpen(true)}
       isConsoleOpen={isConsoleOpen}
     >
@@ -131,6 +141,19 @@ export default function TerminalLayout() {
       />
       {isApiModalOpen && <ApiKeyModal onClose={() => setIsApiModalOpen(false)} />}
       {isConsoleOpen && <WebSocketConsole onClose={() => setIsConsoleOpen(false)} />}
+      <ConsolidatedNotificationsModal
+        isOpen={isNotificationsModalOpen}
+        onClose={() => setIsNotificationsModalOpen(false)}
+        onNavigateToTrades={(symbol) => {
+          setActiveTab('gestion-trades');
+        }}
+        onNavigateToTerminal={(symbol) => {
+          if (symbol) {
+            binanceWs.setSymbol(symbol);
+          }
+          setActiveTab('futuros');
+        }}
+      />
       <NotificationToasts />
     </AdminLTELayout>
   );

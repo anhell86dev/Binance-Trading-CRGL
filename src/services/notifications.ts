@@ -22,6 +22,7 @@ export interface AppNotification {
 
 class NotificationService {
   private listeners: ((notifications: AppNotification[]) => void)[] = [];
+  private openWindowListeners: (() => void)[] = [];
   private notifications: AppNotification[] = [];
   private audioCtx: AudioContext | null = null;
   public soundEnabled: boolean = true;
@@ -42,7 +43,31 @@ class NotificationService {
         if (savedChime === 'harmonic' || savedChime === 'crystal' || savedChime === 'radar') {
           this.confluenceSoundType = savedChime;
         }
+
+        // Cargar historial persistente de notificaciones consolidadas
+        const savedNotifications = localStorage.getItem('binance_consolidated_notifications');
+        if (savedNotifications) {
+          const parsed = JSON.parse(savedNotifications);
+          if (Array.isArray(parsed)) {
+            this.notifications = parsed.slice(0, 100);
+          }
+        }
       } catch {}
+
+      // Si no hay ninguna, sembrar una notificación inicial informativa de bienvenida
+      if (this.notifications.length === 0) {
+        this.notifications = [
+          {
+            id: `welcome-${Date.now()}`,
+            type: 'SYSTEM',
+            title: 'Centro de Notificaciones Consolidado Activo',
+            message: 'Todas las alertas de TP, Stop Loss, ejecuciones de órdenes y confluencias 100% aparecerán consolidadas en este panel.',
+            timestamp: Date.now(),
+            read: false,
+            priority: 'normal',
+          },
+        ];
+      }
     }
   }
 
@@ -192,7 +217,7 @@ class NotificationService {
       metadata,
     };
 
-    this.notifications = [item, ...this.notifications.slice(0, 49)];
+    this.notifications = [item, ...this.notifications.slice(0, 99)];
     this.notifyListeners();
 
     // Audio chime
@@ -260,6 +285,20 @@ class NotificationService {
     return this.notifications;
   }
 
+  public getUnreadCount(): number {
+    return this.notifications.filter(n => !n.read).length;
+  }
+
+  public markAsRead(id: string) {
+    this.notifications = this.notifications.map(n => (n.id === id ? { ...n, read: true } : n));
+    this.notifyListeners();
+  }
+
+  public markAsUnread(id: string) {
+    this.notifications = this.notifications.map(n => (n.id === id ? { ...n, read: false } : n));
+    this.notifyListeners();
+  }
+
   public markAllRead() {
     this.notifications = this.notifications.map(n => ({ ...n, read: true }));
     this.notifyListeners();
@@ -275,6 +314,21 @@ class NotificationService {
     this.notifyListeners();
   }
 
+  public openConsolidatedWindow() {
+    this.openWindowListeners.forEach(cb => {
+      try {
+        cb();
+      } catch {}
+    });
+  }
+
+  public subscribeToOpenWindow(cb: () => void) {
+    this.openWindowListeners.push(cb);
+    return () => {
+      this.openWindowListeners = this.openWindowListeners.filter(l => l !== cb);
+    };
+  }
+
   public subscribe(cb: (list: AppNotification[]) => void) {
     this.listeners.push(cb);
     cb(this.notifications);
@@ -284,6 +338,15 @@ class NotificationService {
   }
 
   private notifyListeners() {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          'binance_consolidated_notifications',
+          JSON.stringify(this.notifications.slice(0, 100))
+        );
+      }
+    } catch {}
+
     this.listeners.forEach(cb => cb(this.notifications));
   }
 }

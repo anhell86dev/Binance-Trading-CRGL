@@ -14,8 +14,10 @@ import {
   TrendingDown,
   RefreshCw,
   Clock,
+  Bell,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
+import { notificationService } from '../services/notifications';
 import { PositionRisk, OpenOrder, AccountBalance, NetworkMode, ConnectionStatus, ApiCredentials } from '../types/binance';
 import { PositionsAndOrders } from './PositionsAndOrders';
 
@@ -221,6 +223,18 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
               <span>Nueva Orden</span>
             </button>
           )}
+
+          {/* Botón Notificaciones Consolidadas */}
+          <button
+            type="button"
+            id="btn-gestion-open-notifs"
+            onClick={() => notificationService.openConsolidatedWindow()}
+            className="px-2.5 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Abrir Ventana de Notificaciones Consolidadas"
+          >
+            <Bell className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Notificaciones</span>
+          </button>
 
           {/* Botón Ir a Terminal */}
           {onGoToTrading && (
