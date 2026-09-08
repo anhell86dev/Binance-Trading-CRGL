@@ -43,21 +43,23 @@ export const StrategyManagedBadge: React.FC<StrategyManagedBadgeProps> = ({
     return (
       <span
         onClick={onNavigateToGestionTrades ? handleClick : undefined}
-        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border transition-all ${
+        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-mono font-bold border transition-all ${
           hasActivePosition
             ? isProfit
-              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-xs ring-1 ring-emerald-500/30 hover:border-emerald-400'
-              : 'bg-rose-950/80 text-rose-300 border-rose-500/50 shadow-xs ring-1 ring-rose-500/30 hover:border-rose-400'
-            : 'bg-amber-950/80 text-amber-300 border-amber-500/50 hover:border-amber-400'
-        } ${onNavigateToGestionTrades ? 'cursor-pointer' : ''} ${className}`}
-        title={`Estrategia activa en Gestión de Trades: ${
-          hasActivePosition ? `${side} ${leverage}x • PnL: ${pnlFormatted} (${roeFormatted})` : 'Órdenes abiertas'
+              ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.25)] ring-1 ring-emerald-500/30 hover:border-emerald-400'
+              : 'bg-rose-950/90 text-rose-300 border-rose-500/60 shadow-[0_0_8px_rgba(244,63,94,0.25)] ring-1 ring-rose-500/30 hover:border-rose-400'
+            : 'bg-amber-950/90 text-amber-300 border-amber-500/60 hover:border-amber-400'
+        } ${onNavigateToGestionTrades ? 'cursor-pointer hover:scale-105' : ''} ${className}`}
+        title={`Estrategia activa en Live Management: ${
+          hasActivePosition ? `${side} ${leverage}x • PnL: ${pnlFormatted} (${roeFormatted})` : 'Órdenes activas'
         } (clic para ver en Gestión de Trades)`}
       >
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-        <Layers className="w-2.5 h-2.5 text-emerald-400 shrink-0" />
+        <span className="font-extrabold tracking-wider text-[8px] bg-emerald-500/20 text-emerald-200 px-1 py-0.2 rounded border border-emerald-500/30">
+          LIVE
+        </span>
         <span className="truncate">
-          {hasActivePosition ? `${side} ${pnlFormatted}` : 'Órdenes en Gestión'}
+          {hasActivePosition ? `${side} ${pnlFormatted}` : 'ÓRDENES'}
         </span>
       </span>
     );
@@ -65,12 +67,12 @@ export const StrategyManagedBadge: React.FC<StrategyManagedBadgeProps> = ({
 
   return (
     <div
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border transition-all ${
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-mono font-bold border transition-all ${
         hasActivePosition
           ? isProfit
-            ? 'bg-emerald-950/70 text-emerald-300 border-emerald-500/50 ring-1 ring-emerald-500/20 shadow-xs hover:border-emerald-400'
-            : 'bg-rose-950/70 text-rose-300 border-rose-500/50 ring-1 ring-rose-500/20 shadow-xs hover:border-rose-400'
-          : 'bg-amber-950/70 text-amber-300 border-amber-500/50 ring-1 ring-amber-500/20 shadow-xs hover:border-amber-400'
+            ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/60 ring-1 ring-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:border-emerald-400'
+            : 'bg-rose-950/80 text-rose-300 border-rose-500/60 ring-1 ring-rose-500/30 shadow-[0_0_12px_rgba(244,63,94,0.25)] hover:border-rose-400'
+          : 'bg-amber-950/80 text-amber-300 border-amber-500/60 ring-1 ring-amber-500/30 shadow-xs hover:border-amber-400'
       } ${className}`}
     >
       <span className="relative flex h-2 w-2 shrink-0">
@@ -80,7 +82,9 @@ export const StrategyManagedBadge: React.FC<StrategyManagedBadgeProps> = ({
 
       <Layers className="w-3 h-3 text-emerald-400 shrink-0" />
 
-      <span className="text-white font-bold tracking-tight">EN GESTIÓN DE TRADES</span>
+      <span className="text-emerald-300 font-extrabold tracking-wide uppercase">
+        LIVE MANAGEMENT
+      </span>
 
       {hasActivePosition ? (
         <span className="flex items-center gap-1 border-l border-neutral-700/80 pl-1.5">
@@ -111,10 +115,10 @@ export const StrategyManagedBadge: React.FC<StrategyManagedBadgeProps> = ({
         <button
           type="button"
           onClick={handleClick}
-          className="ml-1 p-0.5 px-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700 text-[9px] flex items-center gap-0.5 transition-colors cursor-pointer"
+          className="ml-1 p-0.5 px-1.5 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700 text-[9px] flex items-center gap-1 transition-colors cursor-pointer"
           title="Abrir y supervisar esta posición en la pestaña Gestión de Trades"
         >
-          <span>Gestionar</span>
+          <span>Supervisar</span>
           <ArrowRight className="w-2.5 h-2.5 text-emerald-400" />
         </button>
       )}

@@ -146,19 +146,19 @@ class StrategyManagedTradesService {
     const pnlFormatted = `${pnlSign}$${Math.abs(unrealizedPnl).toFixed(2)}`;
     const roeFormatted = `${pnlSign}${Math.abs(roePct).toFixed(2)}%`;
 
-    let badgeLabel = 'EN GESTIÓN DE TRADES';
+    let badgeLabel = 'LIVE MANAGEMENT';
     let badgeClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
 
     if (hasActivePosition) {
       if (isProfit) {
-        badgeLabel = `EN GESTIÓN: ${side} ${leverage}x (${pnlFormatted})`;
+        badgeLabel = `LIVE MANAGEMENT: ${side} ${leverage}x (${pnlFormatted})`;
         badgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-xs';
       } else {
-        badgeLabel = `EN GESTIÓN: ${side} ${leverage}x (${pnlFormatted})`;
+        badgeLabel = `LIVE MANAGEMENT: ${side} ${leverage}x (${pnlFormatted})`;
         badgeClass = 'bg-rose-950/80 text-rose-300 border-rose-500/50 shadow-xs';
       }
     } else if (hasOpenOrders) {
-      badgeLabel = `GESTIÓN: ${relatedOrders.length} ÓRDEN(ES) PENDIENTE(S)`;
+      badgeLabel = `LIVE MANAGEMENT: ${relatedOrders.length} ÓRDEN(ES) PENDIENTE(S)`;
       badgeClass = 'bg-amber-950/80 text-amber-300 border-amber-500/50 shadow-xs';
     }
 

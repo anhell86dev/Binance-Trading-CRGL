@@ -20,6 +20,7 @@ import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
 import { PositionRisk, OpenOrder, AccountBalance, NetworkMode, ConnectionStatus, ApiCredentials } from '../types/binance';
 import { PositionsAndOrders } from './PositionsAndOrders';
+import { ExpandCollapseAllToggle } from './ExpandCollapseAllToggle';
 
 interface GestionTradesViewProps {
   onOpenOrderModal?: () => void;
@@ -402,12 +403,21 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Toggle Expand All / Collapse All con gestión de estado reactivo */}
+            {positions.length > 0 && (
+              <ExpandCollapseAllToggle
+                variant="smart-toggle"
+                symbols={positions.map((p) => p.symbol)}
+              />
+            )}
+
             <button
               type="button"
+              id="btn-gestion-sync-tray"
               onClick={handleManualSync}
               disabled={isSyncing}
-              className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95 shadow-xs"
+              className="px-2.5 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95 shadow-xs"
               title="Actualizar a demanda posiciones y órdenes"
             >
               <RefreshCw className={`w-3 h-3 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
