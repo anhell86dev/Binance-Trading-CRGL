@@ -28,8 +28,6 @@ import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { PositionTacticalDetailRow } from './PositionTacticalDetailRow';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
-import { positionsExpansionService } from '../services/positionsExpansionService';
-import { ExpandCollapseAllToggle } from './ExpandCollapseAllToggle';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -58,32 +56,33 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [auditPos, setAuditPos] = useState<PositionRisk | null>(null);
   const [linkPos, setLinkPos] = useState<PositionRisk | null>(null);
 
-  // Expanded symbols managed centrally by positionsExpansionService
-  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(() =>
-    positionsExpansionService.getExpandedSymbols()
-  );
+  // Expanded symbols for visual strategy tracking (E2, E3, TP1, TP2, SL)
+  // Requerimiento: todas las posiciones inician comprimidas por defecto
+  const [expandedSymbols, setExpandedSymbols] = useState<Set<string>>(() => new Set<string>());
 
   const seenSymbolsRef = React.useRef<Set<string>>(
     new Set(binanceWs.getPositions().map((p) => p.symbol))
   );
 
-  useEffect(() => {
-    const unsubExpansion = positionsExpansionService.subscribe(() => {
-      setExpandedSymbols(positionsExpansionService.getExpandedSymbols());
-    });
-    return () => unsubExpansion();
-  }, []);
-
   const toggleExpand = (sym: string) => {
-    positionsExpansionService.toggle(sym);
+    setExpandedSymbols((prev) => {
+      const next = new Set(prev);
+      if (next.has(sym)) {
+        next.delete(sym);
+      } else {
+        next.add(sym);
+      }
+      return next;
+    });
   };
 
   const handleExpandAll = () => {
-    positionsExpansionService.expandAll(positions.map((p) => p.symbol));
+    const allSymbols = new Set(positions.map((p) => p.symbol));
+    setExpandedSymbols(allSymbols);
   };
 
   const handleCollapseAll = () => {
-    positionsExpansionService.collapseAll();
+    setExpandedSymbols(new Set());
   };
 
   useEffect(() => {
@@ -216,10 +215,36 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
 
         <div className="flex items-center gap-2">
           {fixedPositions.length > 0 && (
-            <ExpandCollapseAllToggle
-              variant="segmented"
-              symbols={fixedPositions.map((p) => p.symbol)}
-            />
+            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5 shadow-xs">
+              <button
+                type="button"
+                id="btn-expand-all-positions"
+                onClick={handleExpandAll}
+                className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  expandedSymbols.size === fixedPositions.length
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                    : 'text-neutral-300 hover:text-white hover:bg-neutral-800'
+                }`}
+                title="Expandir el seguimiento e hitos de todas las posiciones"
+              >
+                <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Expandir todas</span>
+              </button>
+              <button
+                type="button"
+                id="btn-collapse-all-positions"
+                onClick={handleCollapseAll}
+                className={`px-2 py-1 rounded text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                  expandedSymbols.size === 0
+                    ? 'bg-neutral-800 text-white border border-neutral-700 font-bold'
+                    : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
+                }`}
+                title="Comprimir todas las posiciones para vista compacta"
+              >
+                <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
+                <span>Comprimir todas</span>
+              </button>
+            </div>
           )}
 
           <button

@@ -38,8 +38,6 @@ import {
 } from '../utils/sheetParser';
 import { BINANCE_POPULAR_PAIRS, normalizeBinanceSymbol } from '../data/binancePairs';
 import { TOP_3_STRATEGIES_CATALOG, strategyAutofillService } from '../services/strategyAutofillService';
-import { strategyManagedTradesService } from '../services/strategyManagedTradesService';
-import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { ExecuteStrategyButton } from './ExecuteStrategyButton';
 import { AssetSelectorModal } from './AssetSelectorModal';
 import { StrategyDetailModal } from './StrategyDetailModal';
@@ -73,14 +71,9 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
       setIsSyncingSheet(strategyService.getIsSyncing());
     });
 
-    const unsubManaged = strategyManagedTradesService.subscribe(() => {
-      setStrategies([...strategyService.getStrategies()]);
-    });
-
     return () => {
       unsubWs();
       unsubStrat();
-      unsubManaged();
     };
   }, []);
 
@@ -421,20 +414,6 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
                       {strat.estado || 'Activa'}
                     </span>
                   </div>
-
-                  {/* Live Management indicator if active */}
-                  {(() => {
-                    const managedCtx = strategyManagedTradesService.getManagedTradeContext(strat);
-                    if (!managedCtx?.isManaged) return null;
-                    return (
-                      <div className="flex items-center">
-                        <StrategyManagedBadge
-                          tradeContext={managedCtx}
-                          compact={true}
-                        />
-                      </div>
-                    );
-                  })()}
 
                   {/* Strategy Name & Date */}
                   <div className="flex items-center justify-between gap-1 text-[11px]">

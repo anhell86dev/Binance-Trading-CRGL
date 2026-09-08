@@ -123,7 +123,6 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
       <GoogleDocsManagerModal
         isOpen={isDocsManagerOpen}
         onClose={() => setIsDocsManagerOpen(false)}
-        onNavigateToGestionTrades={onNavigateToGestionTrades}
       />
     </div>
   );

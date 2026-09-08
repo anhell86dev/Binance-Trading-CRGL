@@ -39,16 +39,14 @@ import { auditOrderRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
-import { TradeMilestonesTimeline } from './TradeMilestonesTimeline';
-import { ExpandCollapseAllToggle } from './ExpandCollapseAllToggle';
 
 interface PositionsAndOrdersProps {
-  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines' | 'timeline';
+  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines';
   onOpenOrderModal?: () => void;
 }
 
 export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions', onOpenOrderModal }) => {
-  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines' | 'timeline'>(defaultTab);
+  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines'>(defaultTab);
   const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional'>('all');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
@@ -194,39 +192,14 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
             <Award className="w-3.5 h-3.5 text-amber-400" />
             <span>Disciplinas del Trade</span>
           </button>
-
-          <button
-            id="tab-timeline-btn"
-            onClick={() => setTab('timeline')}
-            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
-              tab === 'timeline'
-                ? 'border-amber-400 text-white bg-neutral-900'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-amber-400" />
-            <span>Cronología de Hitos</span>
-            {positions.length > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-mono">
-                {positions.length}
-              </span>
-            )}
-          </button>
         </div>
 
-        <div className="flex items-center gap-2 pb-2 flex-wrap">
-          {tab === 'positions' && positions.length > 0 && (
-            <ExpandCollapseAllToggle
-              variant="compact"
-              symbols={positions.map((p) => p.symbol)}
-            />
-          )}
-
+        <div className="flex items-center gap-2 pb-2">
           <button
             type="button"
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="text-[11px] font-semibold text-neutral-300 hover:text-white px-2.5 py-1.5 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95 shadow-xs"
+            className="text-[11px] font-semibold text-neutral-300 hover:text-white px-2 py-1 rounded bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95"
             title={lastSyncTime > 0 ? `Última sincronización: ${new Date(lastSyncTime).toLocaleTimeString()}` : 'Sincronizar con Binance'}
           >
             <RefreshCw className={`w-3 h-3 text-amber-400 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -1051,59 +1024,6 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
       {tab === 'strategy_journal' && (
         <div className="p-2 sm:p-3 overflow-y-auto">
           <DiarioEstrategias />
-        </div>
-      )}
-
-      {/* Tab 6: Cronología de Hitos Vertical en Tiempo Real */}
-      {tab === 'timeline' && (
-        <div className="p-3 sm:p-5 w-full flex-1 flex flex-col gap-5 overflow-y-auto">
-          <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-neutral-800">
-            <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-400" />
-                <span>Cronología de Hitos del Trade (Entrada • Desarrollo • Break-Even • TP)</span>
-              </h2>
-              <p className="text-xs text-neutral-400 mt-0.5">
-                Seguimiento táctico vertical con estados dinámicos, cálculo de distancias en vivo por WebSocket y recomendaciones automatizadas.
-              </p>
-            </div>
-            {positions.length > 0 && (
-              <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                {positions.length} {positions.length === 1 ? 'Posición Monitoreada' : 'Posiciones Monitoreadas'}
-              </span>
-            )}
-          </div>
-
-          {positions.length === 0 ? (
-            <div className="p-12 text-center flex flex-col items-center justify-center gap-3 bg-neutral-950/60 rounded-xl border border-neutral-800/80 my-auto">
-              <Clock className="w-10 h-10 text-neutral-600 animate-pulse" />
-              <div className="text-base font-bold text-neutral-300">
-                No hay posiciones abiertas actualmente
-              </div>
-              <p className="text-xs text-neutral-500 max-w-md">
-                Abre una posición en Binance Futures o ejecuta una estrategia para visualizar en tiempo real su trayectoria vertical de hitos, activación de Break-Even y objetivos de Take Profit.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {positions.map((pos) => (
-                <div key={pos.symbol} className="flex flex-col">
-                  <TradeMilestonesTimeline
-                    position={pos}
-                    openOrders={orders}
-                    onMoveToBreakEven={(targetPrice) => {
-                      binanceWs.updatePositionTPSL(pos.symbol, pos.takeProfit, targetPrice);
-                    }}
-                    onAdjustTpSl={(p) => {
-                      setEditingPos(p);
-                      setEditTp(p.takeProfit ? String(p.takeProfit) : '');
-                      setEditSl(p.stopLoss ? String(p.stopLoss) : '');
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
 

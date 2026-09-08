@@ -550,7 +550,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
                 )}
                 <Layers className="w-3 h-3 text-emerald-400" />
-                <span>Live Management ({managedStrategiesCount})</span>
+                <span>En Gestión ({managedStrategiesCount})</span>
               </button>
             </div>
 
@@ -710,12 +710,6 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                     <td style={{ minWidth: '240px' }}>
                       <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
                         <span className="fw-bold text-white fs-6">{strat.par}</span>
-                        {isManaged && (
-                          <span className="relative flex h-2 w-2" title="Operación activa en Live Management">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                          </span>
-                        )}
                         {item.isLong ? (
                           <span
                             className="badge bg-success-subtle text-success border border-success-subtle"

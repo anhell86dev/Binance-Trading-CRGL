@@ -20,27 +20,19 @@ import {
   Layers,
   KeyRound,
   Shield,
-  Activity,
 } from 'lucide-react';
 import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
 import { ordersSheetService } from '../services/ordersSheetService';
 import { googleSheetsApiService } from '../services/googleSheetsApiService';
-import { strategyManagedTradesService } from '../services/strategyManagedTradesService';
-import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
 import { SAMPLE_GOOGLE_SHEET_CSV, normalizeStrategyStatus, DEFAULT_ORDERS_SHEET_CSV_TEMPLATE } from '../utils/sheetParser';
 
 interface GoogleDocsManagerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onNavigateToGestionTrades?: (symbol?: string) => void;
 }
 
-export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({
-  isOpen,
-  onClose,
-  onNavigateToGestionTrades,
-}) => {
+export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<'CATALOG' | 'ORDERS' | 'WRITE' | 'READ'>('CATALOG');
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [customSheetUrl, setCustomSheetUrl] = useState<string>(() => strategyService.getCustomSheetUrl());
@@ -85,9 +77,6 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({
     const unsub = strategyService.subscribe(() => {
       setStrategies([...strategyService.getStrategies()]);
     });
-    const unsubManaged = strategyManagedTradesService.subscribe(() => {
-      setStrategies([...strategyService.getStrategies()]);
-    });
     const unsubOrders = ordersSheetService.subscribe(() => {
       setSheetOrders([...ordersSheetService.getOrders()]);
       setOrdersTabName(ordersSheetService.getSheetTabName());
@@ -101,7 +90,6 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({
     });
     return () => {
       unsub();
-      unsubManaged();
       unsubOrders();
       unsubGoogle();
     };
@@ -421,19 +409,11 @@ function doPost(e) {
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-neutral-950/60 p-3.5 rounded-xl border border-neutral-800">
                 <div>
-                  <div className="flex items-center gap-2.5 flex-wrap">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                      Estrategias registradas en Google Docs ({strategies.length} totales)
-                    </h4>
-                    {strategyManagedTradesService.getManagedStrategiesCount(strategies) > 0 && (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.25)]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-                        <span>{strategyManagedTradesService.getManagedStrategiesCount(strategies)} EN LIVE MANAGEMENT</span>
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-neutral-400 mt-0.5">
-                    Cross-referenciado en tiempo real con posiciones activas de Binance Futures. Puedes modificar el estado de cualquier estrategia, editar sus campos en detalle o agregar una nueva.
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Estrategias registradas en Google Docs ({strategies.length} totales)
+                  </h4>
+                  <p className="text-[11px] text-neutral-400">
+                    Puedes modificar el estado de cualquier estrategia, editar sus campos en detalle o agregar una nueva. Los cambios se guardan y sincronizan inmediatamente.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -463,7 +443,6 @@ function doPost(e) {
                         <th className="py-2.5 px-3">No. Estrategia</th>
                         <th className="py-2.5 px-3">Fecha</th>
                         <th className="py-2.5 px-3">Par</th>
-                        <th className="py-2.5 px-3">Live Management</th>
                         <th className="py-2.5 px-3">Nombre & Reglas</th>
                         <th className="py-2.5 px-3">Estado</th>
                         <th className="py-2.5 px-3 text-right">Acciones</th>
@@ -473,63 +452,24 @@ function doPost(e) {
                       {strategies.map((st) => {
                         const isLiveOrActive = st.estado === 'Activa' || st.estado === 'Live' || st.estado === 'Live+';
                         const isObsolete = st.estado === 'Obsoleto';
-                        const managedCtx = strategyManagedTradesService.getManagedTradeContext(st);
-                        const isLiveManaged = Boolean(managedCtx?.isManaged);
 
                         return (
                           <tr
                             key={st.noEstrategia}
                             className={`hover:bg-neutral-900/60 transition-colors ${
-                              isLiveManaged
-                                ? 'bg-emerald-950/20 border-l-2 border-l-emerald-500'
-                                : isObsolete
-                                ? 'opacity-65 bg-neutral-950/30'
-                                : ''
+                              isObsolete ? 'opacity-65 bg-neutral-950/30' : ''
                             }`}
                           >
                             <td className="py-3 px-3 font-mono font-bold text-white whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                <span>{st.noEstrategia}</span>
-                                {isLiveManaged && (
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" title="En Live Management" />
-                                )}
-                              </div>
+                              {st.noEstrategia}
                             </td>
                             <td className="py-3 px-3 text-neutral-400 font-mono text-[11px] whitespace-nowrap">
                               {st.fecha}
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                <span className="px-2 py-0.5 rounded font-mono font-bold text-xs bg-neutral-800 text-amber-300 border border-neutral-700">
-                                  {st.par}
-                                </span>
-                                {isLiveManaged && (
-                                  <span className="relative flex h-2 w-2" title="Trade activo en Binance Futures">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 whitespace-nowrap">
-                              {isLiveManaged && managedCtx ? (
-                                <StrategyManagedBadge
-                                  tradeContext={managedCtx}
-                                  compact={false}
-                                  showNavigationButton={true}
-                                  onNavigateToGestionTrades={(sym) => {
-                                    onClose();
-                                    if (onNavigateToGestionTrades) {
-                                      onNavigateToGestionTrades(sym || st.par);
-                                    }
-                                  }}
-                                />
-                              ) : (
-                                <span className="text-[10px] text-neutral-500 font-mono flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-neutral-700"></span>
-                                  <span>Sin trade activo</span>
-                                </span>
-                              )}
+                              <span className="px-2 py-0.5 rounded font-mono font-bold text-xs bg-neutral-800 text-amber-300 border border-neutral-700">
+                                {st.par}
+                              </span>
                             </td>
                             <td className="py-3 px-3 max-w-xs">
                               <div className="font-semibold text-neutral-200 line-clamp-1">
@@ -566,18 +506,6 @@ function doPost(e) {
                             </td>
                             <td className="py-3 px-3 text-right whitespace-nowrap">
                               <div className="flex items-center justify-end gap-1.5">
-                                {isLiveManaged && onNavigateToGestionTrades && (
-                                  <button
-                                    onClick={() => {
-                                      onClose();
-                                      onNavigateToGestionTrades(st.par);
-                                    }}
-                                    className="p-1.5 rounded-md bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 transition-colors"
-                                    title="Ir a Gestión de Trades para supervisar"
-                                  >
-                                    <Layers className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
                                 <button
                                   onClick={() => setEditingRow(st)}
                                   className="p-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"

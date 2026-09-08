@@ -7,7 +7,6 @@ import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { notificationService } from '../services/notifications';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
-import { TradeMilestonesTimeline } from './TradeMilestonesTimeline';
 
 interface PositionTacticalDetailRowProps {
   position: PositionRisk;
@@ -616,14 +615,146 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               </div>
             </div>
 
-            {/* COLUMNA DERECHA: CRONOLOGÍA VERTICAL DE HITOS (TRADE MILESTONES TIMELINE) */}
+            {/* COLUMNA DERECHA: CRONOLOGÍA ESTILO PASO A PASO (VERTICAL TIMELINE) */}
             <div className="col-12 col-lg-5">
-              <TradeMilestonesTimeline
-                position={position}
-                openOrders={openOrders}
-                onMoveToBreakEven={handleMoveToBE}
-                onAdjustTpSl={(pos) => onOpenEditModal(pos)}
-              />
+              <div className="trading-card p-3 h-100">
+                <div className="small fw-bold text-secondary text-uppercase mb-3 border-bottom border-secondary pb-2 d-flex justify-content-between align-items-center">
+                  <span className="d-flex align-items-center gap-1">
+                    <i className="bi bi-diagram-3 me-1 text-warning"></i>
+                    Cronología del Trade (Paso a Paso)
+                  </span>
+                  <span className="badge bg-dark border border-secondary text-success font-mono fs-8">
+                    <i className="bi bi-circle-fill me-1 text-success fs-8"></i>
+                    WebSocket Live
+                  </span>
+                </div>
+
+                {/* Vertical Timeline Paso a Paso */}
+                <div className="trading-timeline">
+                  {/* Paso 1: Entrada Ejecutada (Completado) */}
+                  <div className="timeline-step">
+                    <div className="timeline-node completed">
+                      <i className="bi bi-check-lg"></i>
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-title">
+                        <span>Paso 1: Entrada Ejecutada (100%)</span>
+                        <span className="badge bg-success-subtle text-success border border-success font-mono fs-8">
+                          Fill 100%
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Precio Entrada: <strong className="text-white">${formatVal(entryPrice)}</strong> • {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x Isolated
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Paso 2: Trayectoria Hacia TP1 (En Curso / Completado) */}
+                  <div className="timeline-step">
+                    <div className={`timeline-node ${isTp1Reached ? 'completed' : 'active'}`}>
+                      {isTp1Reached ? <i className="bi bi-check-lg"></i> : '2'}
+                    </div>
+                    <div className={`timeline-content ${!isTp1Reached ? 'active-step' : ''}`}>
+                      <div className="timeline-title">
+                        <span className={isTp1Reached ? 'text-success' : 'text-warning'}>
+                          {isTp1Reached ? 'Paso 2: TP1 Alcanzado' : 'Paso 2: En Trayectoria a TP1'}
+                        </span>
+                        <span className={`badge font-mono fs-8 ${isTp1Reached ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning'}`}>
+                          {isTp1Reached ? '100% Logrado' : `${progressToTp1Pct.toFixed(0)}% Completado`}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Precio actual: <strong className="text-warning">${formatVal(currentLivePrice)}</strong> • TP1: <strong className="text-success">${formatVal(tp1Price)}</strong>
+                      </div>
+                      {/* Barra de Progreso a TP1 */}
+                      <div className="progress bg-dark mt-2 border border-secondary progress-xs">
+                        <div
+                          className={`progress-bar ${isTp1Reached ? 'bg-success' : 'bg-warning'}`}
+                          role="progressbar"
+                          style={{ width: `${isTp1Reached ? 100 : Math.max(5, progressToTp1Pct)}%` }}
+                          aria-valuenow={progressToTp1Pct}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                        ></div>
+                      </div>
+                      <div className="d-flex justify-content-between text-secondary font-mono mt-1 fs-8">
+                        <span>Entrada: ${formatVal(entryPrice)}</span>
+                        <span>{isTp1Reached ? '¡Objetivo tocado!' : `Resta: ${Math.max(0, remainingToTp1).toFixed(2)}%`}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Paso 3: Protocolo Break-Even (Blindaje) */}
+                  <div className="timeline-step">
+                    <div className={`timeline-node ${isTp1Reached ? 'active' : 'pending'}`}>
+                      {isTp1Reached ? <i className="bi bi-shield-check"></i> : '3'}
+                    </div>
+                    <div className={`timeline-content ${isTp1Reached ? 'active-step' : ''}`}>
+                      <div className="timeline-title">
+                        <span className={isTp1Reached ? 'text-white fw-bold' : 'text-secondary'}>
+                          Paso 3: Protocolo Break-Even
+                        </span>
+                        <span className={`badge font-mono fs-8 ${isTp1Reached ? 'bg-info-subtle text-info border border-info' : 'bg-dark border border-secondary text-secondary'}`}>
+                          {isTp1Reached ? 'Listo para activar' : 'Condicional a TP1'}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext">
+                        Ajusta el Stop Loss al costo de entrada (${formatVal(entryPrice)}) para garantizar 0 riesgo.
+                      </div>
+                      {isTp1Reached && (
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={handleMoveToBE}
+                            className="btn btn-sm btn-outline-success py-1 px-2 font-mono fs-7 w-100"
+                          >
+                            <i className="bi bi-shield-lock-fill me-1"></i>
+                            Blindar a Break-Even Ahora (${formatVal(entryPrice)})
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Paso 4: Toma de Beneficios Final (TP2) */}
+                  <div className="timeline-step">
+                    <div className="timeline-node pending">
+                      <span>4</span>
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-title">
+                        <span className="text-secondary">Paso 4: Salida Final (TP2)</span>
+                        <span className="badge bg-dark border border-secondary text-secondary font-mono fs-8">
+                          ${formatVal(tp2Price)}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Ganancia proyectada: <strong className="text-success">+${tp2ProfitEst.toFixed(2)} USDT</strong> (+{tp2RoeEst.toFixed(1)}% ROE).
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Paso 5: Stop Loss Preventivo */}
+                  <div className="timeline-step">
+                    <div className={`timeline-node ${isSlBreached ? 'alert' : 'pending'}`}>
+                      <i className={`bi ${isSlBreached ? 'bi-exclamation-triangle-fill' : 'bi-shield-x'}`}></i>
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-title">
+                        <span className={isSlBreached ? 'text-danger fw-bold' : 'text-secondary'}>
+                          Stop Loss Preventivo
+                        </span>
+                        <span className="badge bg-danger-subtle text-danger border border-danger font-mono fs-8">
+                          SL: ${formatVal(slPrice)}
+                        </span>
+                      </div>
+                      <div className="timeline-subtext font-mono">
+                        Riesgo máximo acotado: <span className="text-danger">-${maxRiskUsd.toFixed(2)} USDT</span> ({slDiffPct.toFixed(2)}%).
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
