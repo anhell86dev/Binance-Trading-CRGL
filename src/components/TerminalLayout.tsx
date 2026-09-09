@@ -19,8 +19,8 @@ import { AdminLTELayout } from './AdminLTELayout';
 import { notificationService } from '../services/notifications';
 
 export default function TerminalLayout() {
-  // Pestaña activa por defecto: Billetera
-  const [activeTab, setActiveTab] = useState<NavTab>('billetera');
+  // Pestaña activa por defecto: Terminal Futuros (Selector de Mercados, Indicadores en Vivo y Control de Órdenes)
+  const [activeTab, setActiveTab] = useState<NavTab>('futuros');
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [isConsoleOpen, setIsConsoleOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);

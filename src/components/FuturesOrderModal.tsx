@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
-import { Lock, Shield, Sparkles, X, Zap } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layers, Lock, Shield, Sparkles, X, Zap } from 'lucide-react';
 import { OrderForm } from './OrderForm';
+import { OrderControlPanel } from './OrderControlPanel';
 import { binanceWs } from '../services/binanceWs';
 
 interface FuturesOrderModalProps {
@@ -9,6 +10,8 @@ interface FuturesOrderModalProps {
 }
 
 export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({ isOpen, onClose }) => {
+  const [modalMode, setModalMode] = useState<'control' | 'advanced'>('control');
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {
@@ -42,14 +45,14 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({ isOpen, on
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xs sm:text-sm font-bold text-white">
-                  Ventana Emergente: Binance Futures
+                  Binance Futures: Panel de Control
                 </h3>
                 <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/40">
                   ISOLATED ONLY
                 </span>
               </div>
               <p className="text-[10px] text-neutral-400 font-mono">
-                Apalancamiento estricto 1x-5x | Sin riesgo de contagio cruzado
+                Apalancamiento estricto 1x-5x | Autorización manual requerida
               </p>
             </div>
           </div>
@@ -64,9 +67,44 @@ export const FuturesOrderModal: React.FC<FuturesOrderModalProps> = ({ isOpen, on
           </button>
         </div>
 
-        {/* Modal Scrollable Body with the Order Form */}
+        {/* Modal Mode Selector */}
+        <div className="px-4 pt-3 shrink-0">
+          <div className="grid grid-cols-2 p-1 bg-neutral-950 rounded-xl border border-neutral-800 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setModalMode('control')}
+              className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                modalMode === 'control'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+              <span>Control 1-5x & Autorización</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setModalMode('advanced')}
+              className={`py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                modalMode === 'advanced'
+                  ? 'bg-neutral-800 text-white border border-neutral-700 shadow-xs'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-neutral-400" />
+              <span>Escalonadas & Trailing</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Scrollable Body */}
         <div className="overflow-y-auto p-3.5 sm:p-4 custom-scrollbar flex-1">
-          <OrderForm isModal={true} onClose={onClose} />
+          {modalMode === 'control' ? (
+            <OrderControlPanel onOrderPlaced={() => onClose()} />
+          ) : (
+            <OrderForm isModal={true} onClose={onClose} />
+          )}
         </div>
       </div>
     </div>
