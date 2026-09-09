@@ -10,6 +10,7 @@ import {
   Link as LinkIcon,
   Lock,
   RefreshCw,
+  Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
@@ -39,7 +40,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [openOrders, setOpenOrders] = useState<OpenOrder[]>(() => binanceWs.getOpenOrders());
   const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
-  const [, setPriceTick] = useState<number>(Date.now());
+  const [priceTick, setPriceTick] = useState<number>(Date.now());
   const mode = binanceWs.getMode();
 
   // Stable fixed order of position symbols so positions NEVER jump or re-order automatically
@@ -51,6 +52,11 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [editingPos, setEditingPos] = useState<PositionRisk | null>(null);
   const [editTp, setEditTp] = useState<string>('');
   const [editSl, setEditSl] = useState<string>('');
+
+  // Fast filter & search state
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [posFilter, setPosFilter] = useState<'all' | 'profit' | 'loss' | 'no_sl' | 'long' | 'short'>('all');
+  const [beFeedback, setBeFeedback] = useState<Record<string, string>>({});
 
   // Modals for Risk Audit & Link Strategy
   const [auditPos, setAuditPos] = useState<PositionRisk | null>(null);
@@ -195,6 +201,98 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
     setEditingPos(null);
   };
 
+  const handleQuickBreakeven = async (pos: PositionRisk) => {
+    if (!pos.entryPrice || pos.entryPrice <= 0) return;
+    try {
+      const { tpValue } = getEffectiveTPSL(pos);
+      await binanceWs.updatePositionTPSL(pos.symbol, tpValue, pos.entryPrice);
+      setBeFeedback(prev => ({ ...prev, [pos.symbol]: '¡BE Fijado!' }));
+      setTimeout(() => {
+        setBeFeedback(prev => {
+          const next = { ...prev };
+          delete next[pos.symbol];
+          return next;
+        });
+      }, 3000);
+    } catch {
+      setBeFeedback(prev => ({ ...prev, [pos.symbol]: 'Error' }));
+      setTimeout(() => {
+        setBeFeedback(prev => {
+          const next = { ...prev };
+          delete next[pos.symbol];
+          return next;
+        });
+      }, 3000);
+    }
+  };
+
+  // Quick stats computed across all fixed positions
+  const positionStats = React.useMemo(() => {
+    let winningCount = 0;
+    let losingCount = 0;
+    let missingSlCount = 0;
+    let longCount = 0;
+    let shortCount = 0;
+
+    fixedPositions.forEach((pos) => {
+      const isLong = pos.positionAmt > 0;
+      if (isLong) longCount++;
+      else shortCount++;
+
+      const livePrice = livePriceService.getPrice(pos.symbol);
+      const currentMarketPrice = (livePrice && livePrice > 0)
+        ? livePrice
+        : ((binanceWs.getTicker().symbol === pos.symbol && binanceWs.getTicker().lastPrice > 0)
+          ? binanceWs.getTicker().lastPrice
+          : (pos.markPrice > 0 ? pos.markPrice : pos.entryPrice));
+      const effectiveMarketPrice = currentMarketPrice > 0 ? currentMarketPrice : (pos.entryPrice || 0);
+      const qty = Math.abs(pos.positionAmt || 0);
+
+      const calculatedPnl = (pos.entryPrice > 0 && effectiveMarketPrice > 0 && qty > 0)
+        ? (isLong ? (effectiveMarketPrice - pos.entryPrice) * qty : (pos.entryPrice - effectiveMarketPrice) * qty)
+        : (pos.unRealizedProfit || 0);
+
+      if (calculatedPnl >= 0) winningCount++;
+      else losingCount++;
+
+      const { slValue } = getEffectiveTPSL(pos);
+      if (!slValue || slValue <= 0) missingSlCount++;
+    });
+
+    return { winningCount, losingCount, missingSlCount, longCount, shortCount };
+  }, [fixedPositions, openOrders, priceTick]);
+
+  const filteredPositions = React.useMemo(() => {
+    return fixedPositions.filter(pos => {
+      if (searchTerm.trim() && !pos.symbol.toLowerCase().includes(searchTerm.trim().toLowerCase())) {
+        return false;
+      }
+      const isLong = pos.positionAmt > 0;
+      const livePrice = livePriceService.getPrice(pos.symbol);
+      const currentMarketPrice = (livePrice && livePrice > 0)
+        ? livePrice
+        : ((binanceWs.getTicker().symbol === pos.symbol && binanceWs.getTicker().lastPrice > 0)
+          ? binanceWs.getTicker().lastPrice
+          : (pos.markPrice > 0 ? pos.markPrice : pos.entryPrice));
+      const effectiveMarketPrice = currentMarketPrice > 0 ? currentMarketPrice : (pos.entryPrice || 0);
+      const qty = Math.abs(pos.positionAmt || 0);
+
+      const calculatedPnl = (pos.entryPrice > 0 && effectiveMarketPrice > 0 && qty > 0)
+        ? (isLong ? (effectiveMarketPrice - pos.entryPrice) * qty : (pos.entryPrice - effectiveMarketPrice) * qty)
+        : (pos.unRealizedProfit || 0);
+
+      const isProfit = calculatedPnl >= 0;
+      const { slValue } = getEffectiveTPSL(pos);
+
+      if (posFilter === 'profit') return isProfit;
+      if (posFilter === 'loss') return !isProfit;
+      if (posFilter === 'no_sl') return !slValue || slValue <= 0;
+      if (posFilter === 'long') return isLong;
+      if (posFilter === 'short') return !isLong;
+      return true;
+    });
+  }, [fixedPositions, searchTerm, posFilter, openOrders, priceTick]);
+
   return (
     <div id="open-positions-table-container" className="trading-card border-accent-warning w-full flex flex-col overflow-hidden shadow-lg mb-4">
       {/* Table Header Controls */}
@@ -270,6 +368,98 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         </div>
       </div>
 
+      {/* Quick Filter & Search Bar */}
+      {fixedPositions.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-neutral-950/70 border-b border-neutral-800/80 text-xs">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              onClick={() => setPosFilter('all')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                posFilter === 'all'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold'
+                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
+              }`}
+            >
+              Todas ({fixedPositions.length})
+            </button>
+            <button
+              onClick={() => setPosFilter('profit')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                posFilter === 'profit'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold'
+                  : 'text-neutral-400 hover:text-emerald-300 hover:bg-neutral-900'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              En Ganancia ({positionStats.winningCount})
+            </button>
+            <button
+              onClick={() => setPosFilter('loss')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                posFilter === 'loss'
+                  ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-bold'
+                  : 'text-neutral-400 hover:text-rose-300 hover:bg-neutral-900'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+              En Pérdida ({positionStats.losingCount})
+            </button>
+            <button
+              onClick={() => setPosFilter('no_sl')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer ${
+                posFilter === 'no_sl'
+                  ? 'bg-amber-500/30 text-amber-200 border border-amber-500/50 font-bold'
+                  : positionStats.missingSlCount > 0
+                    ? 'text-amber-400 bg-amber-950/40 border border-amber-800/60 font-bold animate-pulse'
+                    : 'text-neutral-400 hover:text-amber-300 hover:bg-neutral-900'
+              }`}
+              title="Posiciones sin Stop Loss activo (Riesgo según Disciplina #3)"
+            >
+              ⚠️ Sin SL ({positionStats.missingSlCount})
+            </button>
+            <button
+              onClick={() => setPosFilter('long')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                posFilter === 'long'
+                  ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold'
+                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
+              }`}
+            >
+              Long ({positionStats.longCount})
+            </button>
+            <button
+              onClick={() => setPosFilter('short')}
+              className={`px-2 py-1 rounded text-[11px] font-semibold transition-all cursor-pointer ${
+                posFilter === 'short'
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold'
+                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900'
+              }`}
+            >
+              Short ({positionStats.shortCount})
+            </button>
+          </div>
+
+          <div className="relative flex items-center">
+            <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Buscar par (ej. BTC, SOL)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-neutral-900/90 border border-neutral-800 rounded-lg pl-7 pr-2.5 py-1 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400/60 w-44 transition-all"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-2 text-neutral-400 hover:text-white"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Table Container - ALWAYS renders the full table header so the positions card is always recognizable */}
       <div className="overflow-x-auto w-full" style={{ minHeight: '520px' }}>
         <table className="table table-dark table-trading w-full text-left text-sm font-mono min-w-[1200px] mb-0">
@@ -321,8 +511,27 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                   </div>
                 </td>
               </tr>
+            ) : filteredPositions.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="py-12 px-4 text-center">
+                  <div className="flex flex-col items-center justify-center max-w-md mx-auto">
+                    <p className="text-sm font-semibold text-neutral-300 font-sans">
+                      No hay posiciones que coincidan con los filtros seleccionados.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setPosFilter('all');
+                        setSearchTerm('');
+                      }}
+                      className="mt-3 px-3 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-amber-300 border border-neutral-700 text-xs font-semibold"
+                    >
+                      Restablecer Filtros
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ) : (
-              fixedPositions.map((pos) => {
+              filteredPositions.map((pos) => {
                 const isLong = pos.positionAmt > 0;
                 const isExpanded = expandedSymbols.has(pos.symbol);
                 const livePrice = livePriceService.getPrice(pos.symbol);
@@ -540,7 +749,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                             </span>
                           </div>
 
-                          {/* Quick TP / SL with Edit Pencil */}
+                          {/* Quick TP / SL with Edit Pencil and 1-Click Breakeven */}
                           <div className="flex items-center gap-1 text-[10px] text-neutral-400 flex-wrap">
                             {tpValue ? (
                               <span className="text-emerald-400 font-semibold" title="Take Profit">
@@ -555,10 +764,21 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                                 SL: ${slValue.toFixed(2)}
                               </span>
                             ) : (
-                              <span className="text-neutral-500 italic">Sin SL</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditModal(pos);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[9px] font-bold animate-pulse cursor-pointer"
+                                title="¡Alerta de riesgo! Posición sin Stop Loss. Haz clic para fijarlo."
+                              >
+                                ⚠️ Sin SL (Fijar)
+                              </button>
                             )}
 
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 openEditModal(pos);
@@ -568,6 +788,21 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                             >
                               <Edit2 className="w-2.5 h-2.5" />
                             </button>
+
+                            {/* Quick Breakeven button if in profit */}
+                            {isProfit && pos.entryPrice > 0 && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickBreakeven(pos);
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-emerald-950/70 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 text-[9px] font-bold transition-all ml-1 cursor-pointer active:scale-95 shadow-xs"
+                                title={`Mover Stop Loss al precio de entrada ($${pos.entryPrice}) para asegurar el trade sin riesgo (Breakeven)`}
+                              >
+                                {beFeedback[pos.symbol] || '🛡️ BE'}
+                              </button>
+                            )}
                           </div>
                         </div>
                       </td>

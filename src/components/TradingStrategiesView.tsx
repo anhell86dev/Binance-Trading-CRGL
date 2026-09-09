@@ -8,6 +8,7 @@ import { StrategyDetailModal } from './StrategyDetailModal';
 import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrategyStatus } from '../utils/sheetParser';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
+import { MarketNewsWidget } from './MarketNewsWidget';
 
 interface TradingStrategiesViewProps {
   onOpenOrderModal?: () => void;
@@ -106,6 +107,13 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
         onNavigateToGestionTrades={onNavigateToGestionTrades}
+      />
+
+      {/* Contexto de Mercado: Noticias de DiarioBitcoin vinculadas a Estrategias Activas */}
+      <MarketNewsWidget
+        activeStrategies={activeStrategies}
+        currentSymbol={ticker.symbol}
+        onSelectStrategy={(strat) => setSelectedStrategy(strat)}
       />
 
       {/* Detail Modal */}
