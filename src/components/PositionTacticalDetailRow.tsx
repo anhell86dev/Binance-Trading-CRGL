@@ -7,10 +7,7 @@ import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { notificationService } from '../services/notifications';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
-import { TradePriceSparkline } from './TradePriceSparkline';
 import { TradeMultiPathChronology } from './TradeMultiPathChronology';
-import { TradeDecisionFlowDiagram } from './TradeDecisionFlowDiagram';
-import { tradePriceHistoryService, TradePriceHistory } from '../services/tradePriceHistoryService';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -25,8 +22,6 @@ import {
   ChevronUp,
   Activity,
   Zap,
-  Compass,
-  GitBranch,
 } from 'lucide-react';
 
 interface PositionTacticalDetailRowProps {
@@ -44,7 +39,6 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 }) => {
   const [showAdvancedTools, setShowAdvancedTools] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-  const [flowViewMode, setFlowViewMode] = useState<'diagram' | 'matrix'>('diagram');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isLong = position.positionAmt > 0;
@@ -59,11 +53,6 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     return position.markPrice > 0 ? position.markPrice : (position.entryPrice || 1);
   });
 
-  // Sparkline history state
-  const [history, setHistory] = useState<TradePriceHistory | null>(() => {
-    return tradePriceHistoryService.getHistory(position.symbol, position.entryPrice);
-  });
-
   useEffect(() => {
     const handleTickerUpdate = () => {
       const p = livePriceService.getPrice(position.symbol);
@@ -75,22 +64,17 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
           setLivePrice(wsTicker.lastPrice);
         }
       }
-      setHistory(tradePriceHistoryService.getHistory(position.symbol, position.entryPrice));
     };
 
     handleTickerUpdate();
     const unsubLive = livePriceService.subscribe(handleTickerUpdate);
     const unsubWs = binanceWs.subscribe(handleTickerUpdate);
-    const unsubHist = tradePriceHistoryService.subscribe(() => {
-      setHistory(tradePriceHistoryService.getHistory(position.symbol, position.entryPrice));
-    });
 
     return () => {
       unsubLive();
       unsubWs();
-      unsubHist();
     };
-  }, [position.symbol, position.entryPrice]);
+  }, [position.symbol]);
 
   const currentLivePrice =
     livePrice > 0
@@ -419,84 +403,13 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             </div>
           </div>
 
-          {/* 2. SPARKLINE INTEGRADO DEL TRADE DESDE SU INICIO */}
-          <div className="p-3 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-amber-400" />
-                <span>Trayectoria de Precio (Sparkline desde Inicio del Trade)</span>
-              </span>
-              <span className="text-[10px] font-mono text-neutral-400">
-                Punto Base: <strong className="text-sky-300">${formatVal(entryPrice)}</strong> (E1) • LIVE:{' '}
-                <strong className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                  ${formatVal(currentLivePrice)}
-                </strong>
-              </span>
-            </div>
-
-            <TradePriceSparkline
-              history={history}
-              entryPrice={entryPrice}
-              currentPrice={currentLivePrice}
-              isLong={isLong}
-              height={56}
-              showLabels={true}
-              className="w-full"
-            />
-          </div>
-
-          {/* 3. FLUJO DE DECISIÓN (DIAGRAMA DE PASOS) Y MATRIZ MULTICAMINO */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between px-1 flex-wrap gap-2">
-              <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-amber-400" />
-                <span>Ruta y Flujo de Decisión Táctico (Google Sheets)</span>
-              </span>
-
-              <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setFlowViewMode('diagram')}
-                  className={`px-2.5 py-1 rounded text-[10.5px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    flowViewMode === 'diagram'
-                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <Compass className="w-3 h-3" />
-                  <span>Flujo de Decisión (Pasos)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFlowViewMode('matrix')}
-                  className={`px-2.5 py-1 rounded text-[10.5px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                    flowViewMode === 'matrix'
-                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  <GitBranch className="w-3 h-3" />
-                  <span>Matriz Multicamino</span>
-                </button>
-              </div>
-            </div>
-
-            {flowViewMode === 'diagram' ? (
-              <TradeDecisionFlowDiagram
-                position={position}
-                status={tradeStatus}
-                currentPrice={currentLivePrice}
-                onMoveToBE={handleMoveToBE}
-              />
-            ) : (
-              <TradeMultiPathChronology
-                position={position}
-                status={tradeStatus}
-                currentPrice={currentLivePrice}
-                onMoveToBE={handleMoveToBE}
-              />
-            )}
-          </div>
+          {/* 2. MATRIZ MULTICAMINO DEL TRADE (GOOGLE SHEETS) */}
+          <TradeMultiPathChronology
+            position={position}
+            status={tradeStatus}
+            currentPrice={currentLivePrice}
+            onMoveToBE={handleMoveToBE}
+          />
 
           {/* 4. GRÁFICO TÁCTICO DE NIVELES EN VIVO (CANVAS) */}
           <div className="p-3 rounded-xl bg-neutral-900/60 border border-neutral-800 flex flex-col gap-2">

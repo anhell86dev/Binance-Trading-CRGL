@@ -1,6 +1,9 @@
 import React from 'react';
 import { PositionRisk } from '../types/binance';
 import { TradeStatusAndPhase } from '../utils/tradeStatusMilestones';
+import { TradePriceSparkline } from './TradePriceSparkline';
+import { TradePriceHistory } from '../services/tradePriceHistoryService';
+import { TradeMultiPathChronology } from './TradeMultiPathChronology';
 import {
   GitBranch,
   ShieldCheck,
@@ -20,12 +23,16 @@ import {
   ChevronRight,
   HelpCircle,
   Compass,
+  Activity,
 } from 'lucide-react';
 
 interface TradeDecisionFlowDiagramProps {
   position: PositionRisk;
   status: TradeStatusAndPhase;
   currentPrice: number;
+  history?: TradePriceHistory | null;
+  viewMode?: 'diagram' | 'matrix';
+  onToggleViewMode?: (mode: 'diagram' | 'matrix') => void;
   onMoveToBE?: () => void;
   className?: string;
 }
@@ -34,6 +41,9 @@ export const TradeDecisionFlowDiagram: React.FC<TradeDecisionFlowDiagramProps> =
   position,
   status,
   currentPrice,
+  history,
+  viewMode = 'diagram',
+  onToggleViewMode,
   onMoveToBE,
   className = '',
 }) => {
@@ -146,8 +156,38 @@ export const TradeDecisionFlowDiagram: React.FC<TradeDecisionFlowDiagramProps> =
           </div>
         </div>
 
-        {/* Badge "ESTÁS AQUÍ" */}
-        <div className="flex items-center gap-2 self-start md:self-auto">
+        {/* Acciones de Cabecera: Selector de Vista + Badge "ESTÁS AQUÍ" */}
+        <div className="flex items-center gap-2 flex-wrap self-start md:self-auto">
+          {onToggleViewMode && (
+            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
+              <button
+                type="button"
+                onClick={() => onToggleViewMode('diagram')}
+                className={`px-2.5 py-1 rounded text-[10.5px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'diagram'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Compass className="w-3 h-3" />
+                <span>Flujo de Decisión (Pasos)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onToggleViewMode('matrix')}
+                className={`px-2.5 py-1 rounded text-[10.5px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === 'matrix'
+                    ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <GitBranch className="w-3 h-3" />
+                <span>Matriz Multicamino</span>
+              </button>
+            </div>
+          )}
+
+          {/* Badge "ESTÁS AQUÍ" */}
           <div className={`px-2.5 py-1 rounded-lg border flex items-center gap-1.5 shadow-xs ${activePointBadgeClass}`}>
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
@@ -161,8 +201,51 @@ export const TradeDecisionFlowDiagram: React.FC<TradeDecisionFlowDiagramProps> =
         </div>
       </div>
 
-      {/* 2. BANNER INTERACTIVO: "📍 ESTÁS AQUÍ SEGÚN LA LÓGICA DE GOOGLE SHEET" */}
-      <div className="p-3 rounded-lg bg-neutral-900/90 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+      {/* 2. TRAYECTORIA DE PRECIO (SPARKLINE DESDE INICIO DEL TRADE) INTEGRADA EN LA MISMA TARJETA */}
+      <div className="p-3 rounded-xl bg-neutral-900/70 border border-neutral-800/80 flex flex-col gap-2">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-amber-400" />
+            <span>Trayectoria de Precio (Sparkline desde Inicio del Trade)</span>
+          </span>
+          <span className="text-[10.5px] font-mono text-neutral-400 flex items-center gap-2 flex-wrap">
+            <span>Punto Base: <strong className="text-sky-300">${fmt(entry1Price)}</strong> (E1)</span>
+            <span>•</span>
+            <span>LIVE: <strong className={currentPrice >= entry1Price ? (isLong ? 'text-emerald-400' : 'text-rose-400') : (isLong ? 'text-rose-400' : 'text-emerald-400')}>
+              ${fmt(currentPrice)}
+            </strong></span>
+            <span>•</span>
+            <span className={((currentPrice - entry1Price) * (isLong ? 1 : -1)) >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+              {(((currentPrice - entry1Price) / (entry1Price || 1)) * 100 * (isLong ? 1 : -1)) >= 0 ? '+' : ''}
+              {(((currentPrice - entry1Price) / (entry1Price || 1)) * 100 * (isLong ? 1 : -1)).toFixed(2)}%
+            </span>
+          </span>
+        </div>
+
+        <TradePriceSparkline
+          history={history ?? null}
+          entryPrice={entry1Price}
+          currentPrice={currentPrice}
+          isLong={isLong}
+          height={54}
+          showLabels={true}
+          className="w-full"
+        />
+      </div>
+
+      {viewMode === 'matrix' ? (
+        <TradeMultiPathChronology
+          position={position}
+          status={status}
+          currentPrice={currentPrice}
+          onMoveToBE={onMoveToBE}
+          hideHeader={true}
+          className="border-0 bg-transparent p-0 shadow-none"
+        />
+      ) : (
+        <>
+          {/* 3. BANNER INTERACTIVO: "📍 ESTÁS AQUÍ SEGÚN LA LÓGICA DE GOOGLE SHEET" */}
+          <div className="p-3 rounded-lg bg-neutral-900/90 border border-neutral-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
         <div className="flex items-start gap-2">
           <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <div className="text-[11.5px] text-neutral-200">
@@ -610,6 +693,8 @@ export const TradeDecisionFlowDiagram: React.FC<TradeDecisionFlowDiagramProps> =
         </div>
 
       </div>
-    </div>
+    </>
+  )}
+</div>
   );
 };

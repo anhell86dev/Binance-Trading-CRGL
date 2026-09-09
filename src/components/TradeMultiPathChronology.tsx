@@ -24,6 +24,7 @@ interface TradeMultiPathChronologyProps {
   onMoveToBE?: () => void;
   onCancelPendingDca?: () => void;
   className?: string;
+  hideHeader?: boolean;
 }
 
 export const TradeMultiPathChronology: React.FC<TradeMultiPathChronologyProps> = ({
@@ -33,6 +34,7 @@ export const TradeMultiPathChronology: React.FC<TradeMultiPathChronologyProps> =
   onMoveToBE,
   onCancelPendingDca,
   className = '',
+  hideHeader = false,
 }) => {
   const isLong = position.positionAmt > 0;
   const {
@@ -80,53 +82,55 @@ export const TradeMultiPathChronology: React.FC<TradeMultiPathChronologyProps> =
       className={`rounded-xl border border-neutral-800 bg-neutral-950/90 p-3.5 sm:p-4 flex flex-col gap-3.5 shadow-md ${className}`}
     >
       {/* 1. Header Táctico y Estado del Camino */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/80 pb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-            <GitBranch className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                Cronología del Trade: Camino con Múltiples Caminos
-              </h4>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-900 border border-neutral-700 text-neutral-300 font-mono">
-                {position.symbol} • {isLong ? 'LONG' : 'SHORT'}
-              </span>
+      {!hideHeader && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/80 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+              <GitBranch className="w-4 h-4" />
             </div>
-            <p className="text-[11px] text-neutral-400">
-              Bifurcación dinámica: <strong className="text-amber-300">E1 ➔ [TP1 o E2]</strong> según Reglas de Ejecución Táctica de la hoja de Órdenes
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                  Matriz Multicamino del Trade (Google Sheets)
+                </h4>
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-900 border border-neutral-700 text-neutral-300 font-mono">
+                  {position.symbol} • {isLong ? 'LONG' : 'SHORT'}
+                </span>
+              </div>
+              <p className="text-[11px] text-neutral-400">
+                Bifurcación dinámica: <strong className="text-amber-300">E1 ➔ [TP1 o E2]</strong> según Reglas de Ejecución Táctica de la hoja de Órdenes
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {multiPathState === 'TP1_ROUTE_DCA_CANCELED' && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-600 flex items-center gap-1 shadow-xs">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                <span>Ruta TP1 Activa (X=E2 Cancelada)</span>
+              </span>
+            )}
+            {multiPathState === 'E2_ROUTE_ACTIVE' && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-950 text-amber-300 border border-amber-600 flex items-center gap-1 shadow-xs">
+                <Layers className="w-3 h-3 text-amber-400" />
+                <span>Ruta Retroceso DCA E2 Activa</span>
+              </span>
+            )}
+            {multiPathState === 'DUAL_PATH_ACTIVE' && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-sky-950 text-sky-300 border border-sky-600 flex items-center gap-1 shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                <span>Bifurcación Abierta: E1 ⇄ [TP1 | E2]</span>
+              </span>
+            )}
+            {multiPathState === 'SL_ROUTE_HIT' && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-950 text-rose-300 border border-rose-600 flex items-center gap-1 shadow-xs">
+                <XCircle className="w-3 h-3 text-rose-400" />
+                <span>Ruta SL Impactada</span>
+              </span>
+            )}
           </div>
         </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {multiPathState === 'TP1_ROUTE_DCA_CANCELED' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-950 text-emerald-300 border border-emerald-600 flex items-center gap-1 shadow-xs">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-              <span>Ruta TP1 Activa (X=E2 Cancelada)</span>
-            </span>
-          )}
-          {multiPathState === 'E2_ROUTE_ACTIVE' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-950 text-amber-300 border border-amber-600 flex items-center gap-1 shadow-xs">
-              <Layers className="w-3 h-3 text-amber-400" />
-              <span>Ruta Retroceso DCA E2 Activa</span>
-            </span>
-          )}
-          {multiPathState === 'DUAL_PATH_ACTIVE' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-sky-950 text-sky-300 border border-sky-600 flex items-center gap-1 shadow-xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
-              <span>Bifurcación Abierta: E1 ⇄ [TP1 | E2]</span>
-            </span>
-          )}
-          {multiPathState === 'SL_ROUTE_HIT' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-950 text-rose-300 border border-rose-600 flex items-center gap-1 shadow-xs">
-              <XCircle className="w-3 h-3 text-rose-400" />
-              <span>Ruta SL Impactada</span>
-            </span>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* 2. Banner de Regla Táctica Institucional (Hoja de Órdenes) */}
       <div className="p-2.5 rounded-lg bg-neutral-900/90 border border-neutral-800 text-[11px] flex items-start gap-2.5">
