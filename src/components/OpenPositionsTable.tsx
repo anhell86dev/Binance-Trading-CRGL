@@ -31,6 +31,12 @@ import { PositionTacticalDetailRow } from './PositionTacticalDetailRow';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 import { TradePriceSparkline } from './TradePriceSparkline';
 import { tradePriceHistoryService } from '../services/tradePriceHistoryService';
+import { strategyService } from '../services/strategyService';
+import { parsePricesFromStrategy } from '../utils/sheetParser';
+import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
+import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
+import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
+import { GoogleSheetStrategyRow } from '../types/strategy';
 import { GitBranch, Activity } from 'lucide-react';
 
 interface OpenPositionsTableProps {
@@ -44,6 +50,9 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
   const [priceTick, setPriceTick] = useState<number>(Date.now());
+  const [allStrategies, setAllStrategies] = useState<GoogleSheetStrategyRow[]>(() =>
+    strategyService.getStrategies()
+  );
   const mode = binanceWs.getMode();
 
   // Stable fixed order of position symbols so positions NEVER jump or re-order automatically
@@ -129,12 +138,56 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       setPriceTick(Date.now());
     });
 
+    const unsubStrat = strategyService.subscribe(() => {
+      setAllStrategies(strategyService.getStrategies());
+      setPriceTick(Date.now());
+    });
+
     return () => {
       unsub();
       unsubLivePrices();
       unsubHist();
+      unsubStrat();
     };
   }, []);
+
+  // Helper to resolve linked strategy and compute 10-factor confluence in real time
+  const getLinkedStrategyAndConfluence = (pos: PositionRisk, currentMarketPrice: number) => {
+    const effStratId = pos.strategyId || binanceWs.getLinkedStrategyForSymbol(pos.symbol)?.strategyId;
+    const cleanSym = pos.symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+
+    const strat = allStrategies.find(
+      (s) =>
+        (effStratId &&
+          (s.noEstrategia.toUpperCase() === effStratId.toUpperCase() ||
+            s.nombreEstrategia.toUpperCase() === effStratId.toUpperCase())) ||
+        s.par.replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanSym
+    );
+
+    if (!strat) {
+      return {
+        stratId: effStratId,
+        strategy: null,
+        confluence: null,
+      };
+    }
+
+    try {
+      const prices = parsePricesFromStrategy(strat);
+      const confluence = evaluateStrategyConfluence(strat, prices, currentMarketPrice);
+      return {
+        stratId: effStratId || strat.noEstrategia,
+        strategy: strat,
+        confluence,
+      };
+    } catch {
+      return {
+        stratId: effStratId || strat.noEstrategia,
+        strategy: strat,
+        confluence: null,
+      };
+    }
+  };
 
   // Compute positions strictly in fixed stable order
   const fixedPositions = React.useMemo(() => {
@@ -474,7 +527,9 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
           <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800 text-xs">
             <tr>
               <th className="py-3 px-3.5">PAR</th>
-              <th className="py-3 px-3.5">Estrategia</th>
+              <th className="py-3 px-3.5" title="Estrategia vinculada y Nivel de Confluencia técnica e institucional">
+                Estrategia &amp; Confluencia
+              </th>
               <th className="py-3 px-3.5">Apalancamiento Margen</th>
               <th className="py-3 px-3.5">Tamaño</th>
               <th className="py-3 px-3.5">Precio Entrada</th>
@@ -631,61 +686,78 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                         </div>
                       </td>
 
-                      {/* 2. Estrategia */}
+                      {/* 2. Estrategia & Confluencia */}
                       <td className="py-3.5 px-3.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {(() => {
-                            const effStratId = pos.strategyId || binanceWs.getLinkedStrategyForSymbol(pos.symbol)?.strategyId;
-                            return effStratId ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLinkPos(pos);
-                                }}
-                                title={`Estrategia: ${effStratId} - Clic para cambiar`}
-                                className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                                <span>{effStratId}</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLinkPos(pos);
-                                }}
-                                className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                                <span>Ligar Estrategia</span>
-                              </button>
-                            );
-                          })()}
+                        {(() => {
+                          const stratInfo = getLinkedStrategyAndConfluence(pos, effectiveMarketPrice);
+                          return (
+                            <div className="flex flex-col gap-1.5 min-w-[140px]">
+                              {/* Fila superior: ID de Estrategia y botón Hitos */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {stratInfo.stratId ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLinkPos(pos);
+                                    }}
+                                    title={`Estrategia: ${stratInfo.stratId}${
+                                      stratInfo.strategy ? ` (${stratInfo.strategy.nombreEstrategia})` : ''
+                                    } - Clic para cambiar`}
+                                    className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
+                                  >
+                                    <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                                    <span className="truncate max-w-[110px]">{stratInfo.stratId}</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setLinkPos(pos);
+                                    }}
+                                    className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                                  >
+                                    <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                                    <span>Ligar Estrategia</span>
+                                  </button>
+                                )}
 
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleExpand(pos.symbol);
-                            }}
-                            title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-                              isExpanded
-                                ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
-                                : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
-                            }`}
-                          >
-                            <Layers className="w-2.5 h-2.5" />
-                            <span>Hitos</span>
-                            {isExpanded ? (
-                              <ChevronUp className="w-2.5 h-2.5" />
-                            ) : (
-                              <ChevronDown className="w-2.5 h-2.5" />
-                            )}
-                          </button>
-                        </div>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleExpand(pos.symbol);
+                                  }}
+                                  title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
+                                    isExpanded
+                                      ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
+                                      : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
+                                  }`}
+                                >
+                                  <Layers className="w-2.5 h-2.5" />
+                                  <span>Hitos</span>
+                                  {isExpanded ? (
+                                    <ChevronUp className="w-2.5 h-2.5" />
+                                  ) : (
+                                    <ChevronDown className="w-2.5 h-2.5" />
+                                  )}
+                                </button>
+                              </div>
+
+                              {/* Fila inferior: Indicador visual de Confluencia de Estrategia (basado en la hoja de cálculo) */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <StrategyConfluenceStatusBadge
+                                  strategy={stratInfo.strategy}
+                                  confluence={stratInfo.confluence}
+                                  hasPosition={true}
+                                  compact={true}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* 3. Apalancamiento Margen */}

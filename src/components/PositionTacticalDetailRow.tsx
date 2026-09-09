@@ -8,6 +8,9 @@ import { notificationService } from '../services/notifications';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 import { TradeMultiPathChronology } from './TradeMultiPathChronology';
+import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
+import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
+import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -113,6 +116,15 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     }
     return null;
   }, [linkedStrategy]);
+
+  const linkedConfluence = useMemo(() => {
+    if (!linkedStrategy || !stratPrices) return null;
+    try {
+      return evaluateStrategyConfluence(linkedStrategy, stratPrices, currentLivePrice);
+    } catch {
+      return null;
+    }
+  }, [linkedStrategy, stratPrices, currentLivePrice]);
 
   // Precios Tácticos
   const slPrice = tradeStatus.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
@@ -347,6 +359,14 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
                   {effectiveStrategyId}
                 </span>
               )}
+
+              {/* Confluencia de la estrategia ligada (basada en el estado de la hoja de cálculo) */}
+              <StrategyConfluenceStatusBadge
+                strategy={linkedStrategy}
+                confluence={linkedConfluence}
+                hasPosition={true}
+                compact={true}
+              />
 
               {/* Badge PnL / ROE */}
               <span
