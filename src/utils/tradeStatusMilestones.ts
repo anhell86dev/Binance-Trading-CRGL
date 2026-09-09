@@ -84,8 +84,8 @@ export function getTradeStatusAndPhase(
   }
 
   // 2. Parse price levels
-  let slPrice = position.stopLoss || 0;
-  let tp1Price = position.takeProfit || 0;
+  let slPrice = 0;
+  let tp1Price = 0;
   let tp2Price = 0;
   let tp3Price = 0;
   let entry2Price = 0;
@@ -93,13 +93,17 @@ export function getTradeStatusAndPhase(
 
   if (linkedStrategy) {
     const prices = parsePricesFromStrategy(linkedStrategy);
-    if (!slPrice && prices.slPrice) slPrice = prices.slPrice;
-    if (!tp1Price && prices.tp1Price) tp1Price = prices.tp1Price;
-    tp2Price = prices.tp2Price || 0;
-    tp3Price = prices.tpFinalPrice || 0;
-    entry2Price = prices.entry2Price || 0;
-    entry3Price = prices.entry3Price || 0;
+    if (prices.slPrice && prices.slPrice > 0) slPrice = prices.slPrice;
+    if (prices.tp1Price && prices.tp1Price > 0) tp1Price = prices.tp1Price;
+    if (prices.tp2Price && prices.tp2Price > 0) tp2Price = prices.tp2Price;
+    if (prices.tpFinalPrice && prices.tpFinalPrice > 0) tp3Price = prices.tpFinalPrice;
+    if (prices.entry2Price && prices.entry2Price > 0) entry2Price = prices.entry2Price;
+    if (prices.entry3Price && prices.entry3Price > 0) entry3Price = prices.entry3Price;
   }
+
+  // Fallback to position stopLoss/takeProfit if no strategy level found
+  if (!slPrice) slPrice = position.stopLoss || 0;
+  if (!tp1Price) tp1Price = position.takeProfit || 0;
 
   // Fallbacks if not configured in strategy
   if (!tp1Price && entryPrice > 0) {

@@ -54,6 +54,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     if (wsTicker.symbol === position.symbol && wsTicker.lastPrice > 0) return wsTicker.lastPrice;
     return position.markPrice > 0 ? position.markPrice : (position.entryPrice || 1);
   });
+  const [strategyTick, setStrategyTick] = useState<number>(0);
 
   useEffect(() => {
     const handleTickerUpdate = () => {
@@ -71,10 +72,14 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     handleTickerUpdate();
     const unsubLive = livePriceService.subscribe(handleTickerUpdate);
     const unsubWs = binanceWs.subscribe(handleTickerUpdate);
+    const unsubStrat = strategyService.subscribe(() => {
+      setStrategyTick((t) => t + 1);
+    });
 
     return () => {
       unsubLive();
       unsubWs();
+      unsubStrat();
     };
   }, [position.symbol]);
 
@@ -88,7 +93,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   // 2. Estado de Hitos y Camino Múltiple
   const tradeStatus = useMemo(() => {
     return getTradeStatusAndPhase(position, openOrders);
-  }, [position, openOrders, currentLivePrice]);
+  }, [position, openOrders, currentLivePrice, strategyTick]);
 
   // 3. Estrategia vinculada o detectada
   const effectiveStrategyId =
@@ -107,7 +112,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
       ) ||
       all.find((s) => s.par.replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanSym)
     );
-  }, [effectiveStrategyId, position.symbol]);
+  }, [effectiveStrategyId, position.symbol, strategyTick]);
 
   const stratPrices = useMemo(() => {
     if (linkedStrategy) {
@@ -128,10 +133,10 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const e1Price = stratPrices?.entry1Price || entryPrice;
   const e2Price = stratPrices?.entry2Price || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
   const e3Price = stratPrices?.entry3Price || 0;
-  const slPrice = tradeStatus.slPrice || stratPrices?.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
-  const tp1Price = tradeStatus.tp1Price || stratPrices?.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
-  const tp2Price = tradeStatus.tp2Price || stratPrices?.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
-  const tp3Price = stratPrices?.tpFinalPrice || (isLong ? entryPrice * 1.08 : entryPrice * 0.92);
+  const slPrice = stratPrices?.slPrice || tradeStatus.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
+  const tp1Price = stratPrices?.tp1Price || tradeStatus.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
+  const tp2Price = stratPrices?.tp2Price || tradeStatus.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
+  const tp3Price = stratPrices?.tpFinalPrice || tradeStatus.tp3Price || (isLong ? entryPrice * 1.08 : entryPrice * 0.92);
 
   // Fecha/Hora de apertura de la primera operación (en ms)
   const openTime = useMemo(() => {

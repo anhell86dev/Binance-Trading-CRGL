@@ -653,11 +653,11 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
 
   // 2. Stop Loss (e.g. "SL Global @ $748.00" or "Stop-Loss Global @ $1.2980" or "Stop Loss estricto bajo SMA-15 a $759.00")
   const slText = strategy.gestionDeRiesgoStopLoss || '';
-  const slGlobalMatch = slText.match(/(?:SL|Stop[- ]?Loss)\s*Global\s*(?:@|en|a)?\s*\$?([\d,.]+)/i);
+  const slGlobalMatch = slText.match(/(?:SL|Stop[- ]?Loss)\s*(?:Global)?\s*(?:@|en|a|:)?\s*\$?([\d,.]+)/i);
   if (slGlobalMatch) {
     slPrice = parseFloat(slGlobalMatch[1].replace(/,/g, ''));
   } else {
-    const specificSlMatch = slText.match(/Stop[- ]?Loss[^\n\r]*(?:en|a|@)\s*\$?([\d,.]+)/i);
+    const specificSlMatch = slText.match(/Stop[- ]?Loss[^\n\r]*(?:en|a|@|:)\s*\$?([\d,.]+)/i);
     if (specificSlMatch) {
       slPrice = parseFloat(specificSlMatch[1].replace(/,/g, ''));
     } else {
@@ -665,6 +665,15 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
       if (generalSlMatch) {
         slPrice = parseFloat(generalSlMatch[1].replace(/,/g, ''));
       }
+    }
+  }
+
+  // Fallback for SL: Extract any dollar or decimal number if slPrice is still 0
+  if (!slPrice && slText) {
+    const slPlainMatch = slText.match(/\$?([\d,.]+)/);
+    if (slPlainMatch) {
+      const val = parseFloat(slPlainMatch[1].replace(/,/g, ''));
+      if (!isNaN(val) && val > 0) slPrice = val;
     }
   }
 
@@ -687,6 +696,26 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
   if (tpFinalMatch) {
     if (tpFinalMatch[1]) tpFinalPct = parseFloat(tpFinalMatch[1]);
     tpFinalPrice = parseFloat(tpFinalMatch[2].replace(/,/g, ''));
+  }
+
+  // Fallback for TPs: Extract all positive numbers in tpText if tp1Price is still 0
+  if (!tp1Price && tpText) {
+    const allTpNums = Array.from(tpText.matchAll(/\$?([\d,.]+)/g))
+      .map((m) => parseFloat(m[1].replace(/,/g, '')))
+      .filter((n) => !isNaN(n) && n > 0);
+    if (allTpNums.length > 0) tp1Price = allTpNums[0];
+    if (!tp2Price && allTpNums.length > 1) tp2Price = allTpNums[1];
+    if (!tpFinalPrice && allTpNums.length > 2) tpFinalPrice = allTpNums[2];
+  }
+
+  // Fallback for Entries/DCA: Extract all positive numbers in entryText if entry1Price is still 0
+  if (!entry1Price && entryText) {
+    const allEntryNums = Array.from(entryText.matchAll(/\$?([\d,.]+)/g))
+      .map((m) => parseFloat(m[1].replace(/,/g, '')))
+      .filter((n) => !isNaN(n) && n > 0);
+    if (allEntryNums.length > 0) entry1Price = allEntryNums[0];
+    if (!entry2Price && allEntryNums.length > 1) entry2Price = allEntryNums[1];
+    if (!entry3Price && allEntryNums.length > 2) entry3Price = allEntryNums[2];
   }
 
   // Fallbacks if not extracted

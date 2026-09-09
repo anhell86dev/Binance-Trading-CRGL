@@ -76,11 +76,19 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
     } catch {}
   };
 
+  const [strategyTick, setStrategyTick] = useState<number>(0);
+
   useEffect(() => {
     const unsub = binanceWs.subscribe(() => {
       setOpenOrders(binanceWs.getOpenOrders());
     });
-    return () => unsub();
+    const unsubStrat = strategyService.subscribe(() => {
+      setStrategyTick((t) => t + 1);
+    });
+    return () => {
+      unsub();
+      unsubStrat();
+    };
   }, []);
 
   // 1. Find linked strategy or auto-detect matching strategy by symbol (with durable fallback)
@@ -124,7 +132,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
       isCustomStrategy: isCustom,
       detectedStrategy: detected,
     };
-  }, [effectiveStrategyId, position.symbol]);
+  }, [effectiveStrategyId, position.symbol, strategyTick]);
 
   // 2. Derive key tactical levels (E1, E2, E3, SL, TP1, TP2, TP3)
   const isLong = position.positionAmt > 0;
@@ -165,11 +173,14 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
     entry1Price = entryPrice,
     entry2Price = 0,
     entry3Price = 0,
-    slPrice = position.stopLoss || 0,
-    tp1Price = position.takeProfit || 0,
+    slPrice: parsedSl = 0,
+    tp1Price: parsedTp1 = 0,
     tp2Price = 0,
     tpFinalPrice = 0,
   } = strategyPrices;
+
+  const slPrice = parsedSl > 0 ? parsedSl : (position.stopLoss || 0);
+  const tp1Price = parsedTp1 > 0 ? parsedTp1 : (position.takeProfit || 0);
 
   // Persistent tracking of milestones reached during position life to avoid tick flicker
   const [reachedMilestones, setReachedMilestones] = useState<{

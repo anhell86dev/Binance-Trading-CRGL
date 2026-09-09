@@ -157,10 +157,10 @@ class TradeMilestonesAlertService {
     let e1Price = entryPrice;
     let e2Price = 0;
     let e3Price = 0;
-    let tp1Price = pos.takeProfit || 0;
+    let tp1Price = 0;
     let tp2Price = 0;
     let tp3Price = 0;
-    let slPrice = pos.stopLoss || 0;
+    let slPrice = 0;
     let strategyName = linkedStrategy?.nombreEstrategia;
 
     if (linkedStrategy) {
@@ -168,11 +168,14 @@ class TradeMilestonesAlertService {
       if (parsed.entry1Price) e1Price = parsed.entry1Price;
       if (parsed.entry2Price) e2Price = parsed.entry2Price;
       if (parsed.entry3Price) e3Price = parsed.entry3Price;
-      if (!tp1Price && parsed.tp1Price) tp1Price = parsed.tp1Price;
+      if (parsed.tp1Price) tp1Price = parsed.tp1Price;
       if (parsed.tp2Price) tp2Price = parsed.tp2Price;
       if (parsed.tpFinalPrice) tp3Price = parsed.tpFinalPrice;
-      if (!slPrice && parsed.slPrice) slPrice = parsed.slPrice;
+      if (parsed.slPrice) slPrice = parsed.slPrice;
     }
+
+    if (!tp1Price) tp1Price = pos.takeProfit || 0;
+    if (!slPrice) slPrice = pos.stopLoss || 0;
 
     // Calculated fallbacks if not explicitly provided
     if (entryPrice > 0) {
