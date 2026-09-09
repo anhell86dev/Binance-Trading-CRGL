@@ -29,6 +29,9 @@ import { strategyAutofillService } from '../services/strategyAutofillService';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { PositionTacticalDetailRow } from './PositionTacticalDetailRow';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
+import { TradePriceSparkline } from './TradePriceSparkline';
+import { tradePriceHistoryService } from '../services/tradePriceHistoryService';
+import { GitBranch, Activity } from 'lucide-react';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -122,9 +125,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       setPriceTick(Date.now());
     });
 
+    const unsubHist = tradePriceHistoryService.subscribe(() => {
+      setPriceTick(Date.now());
+    });
+
     return () => {
       unsub();
       unsubLivePrices();
+      unsubHist();
     };
   }, []);
 
@@ -472,13 +480,14 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
               <th className="py-3 px-3.5">Precio Entrada</th>
               <th className="py-3 px-3.5">Precio de Mercado</th>
               <th className="py-3 px-3.5">PnL</th>
+              <th className="py-3 px-3.5 text-center">Seguimiento &amp; Sparkline</th>
               <th className="py-3 px-3.5 text-right">Estado del trade</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800/60">
             {fixedPositions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 px-4 text-center">
+                <td colSpan={9} className="py-12 px-4 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <div className="w-12 h-12 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-center text-neutral-500 mb-3 shadow-inner">
                       <ShieldCheck className="w-6 h-6 text-emerald-400/80" />
@@ -513,7 +522,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
               </tr>
             ) : filteredPositions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="py-12 px-4 text-center">
+                <td colSpan={9} className="py-12 px-4 text-center">
                   <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                     <p className="text-sm font-semibold text-neutral-300 font-sans">
                       No hay posiciones que coincidan con los filtros seleccionados.
@@ -807,7 +816,50 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                         </div>
                       </td>
 
-                      {/* 8. Estado del trade */}
+                      {/* 8. Seguimiento Táctico & Sparkline integrado */}
+                      <td className="py-3 px-3 font-mono">
+                        {(() => {
+                          const tradeStatus = getTradeStatusAndPhase(pos, openOrders);
+                          const hist = tradePriceHistoryService.getHistory(pos.symbol, pos.entryPrice);
+                          return (
+                            <div className="flex flex-col items-center gap-1 min-w-[130px]">
+                              <TradePriceSparkline
+                                history={hist}
+                                entryPrice={pos.entryPrice}
+                                currentPrice={effectiveMarketPrice}
+                                isLong={isLong}
+                                height={28}
+                                showLabels={false}
+                                className="w-full"
+                              />
+                              <div className="flex items-center justify-between w-full text-[9px]">
+                                {tradeStatus.multiPathState === 'TP1_ROUTE_DCA_CANCELED' ? (
+                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-700/80 flex items-center gap-1">
+                                    <span>TP1 • X=E2 ❌</span>
+                                  </span>
+                                ) : tradeStatus.multiPathState === 'E2_ROUTE_ACTIVE' ? (
+                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-amber-950/90 text-amber-300 border border-amber-700/80 flex items-center gap-1">
+                                    <span>E1 ➔ E2 DCA</span>
+                                  </span>
+                                ) : tradeStatus.multiPathState === 'SL_ROUTE_HIT' ? (
+                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1">
+                                    <span>🛑 SL Tocado</span>
+                                  </span>
+                                ) : (
+                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-sky-950/90 text-sky-300 border border-sky-700/80 flex items-center gap-1">
+                                    <span>E1 ⇄ [TP1 | E2]</span>
+                                  </span>
+                                )}
+                                <span className="text-neutral-400 font-mono text-[9px]">
+                                  {isExpanded ? '▲ Detalle' : '▼ Táctico'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      {/* 9. Estado del trade */}
                       <td className="py-3.5 px-3.5 text-right">
                         {(() => {
                           const tradeStatus = getTradeStatusAndPhase(pos, openOrders);

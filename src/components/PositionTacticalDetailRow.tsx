@@ -7,6 +7,27 @@ import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { notificationService } from '../services/notifications';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
+import { TradePriceSparkline } from './TradePriceSparkline';
+import { TradeMultiPathChronology } from './TradeMultiPathChronology';
+import { TradeDecisionFlowDiagram } from './TradeDecisionFlowDiagram';
+import { tradePriceHistoryService, TradePriceHistory } from '../services/tradePriceHistoryService';
+import {
+  ShieldCheck,
+  ShieldAlert,
+  Target,
+  Edit2,
+  TrendingUp,
+  AlertTriangle,
+  Lock,
+  Layers,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Activity,
+  Zap,
+  Compass,
+  GitBranch,
+} from 'lucide-react';
 
 interface PositionTacticalDetailRowProps {
   position: PositionRisk;
@@ -23,6 +44,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 }) => {
   const [showAdvancedTools, setShowAdvancedTools] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+  const [flowViewMode, setFlowViewMode] = useState<'diagram' | 'matrix'>('diagram');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isLong = position.positionAmt > 0;
@@ -37,28 +59,38 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     return position.markPrice > 0 ? position.markPrice : (position.entryPrice || 1);
   });
 
+  // Sparkline history state
+  const [history, setHistory] = useState<TradePriceHistory | null>(() => {
+    return tradePriceHistoryService.getHistory(position.symbol, position.entryPrice);
+  });
+
   useEffect(() => {
     const handleTickerUpdate = () => {
       const p = livePriceService.getPrice(position.symbol);
       if (p > 0) {
         setLivePrice(p);
-        return;
+      } else {
+        const wsTicker = binanceWs.getTicker();
+        if (wsTicker.symbol === position.symbol && wsTicker.lastPrice > 0) {
+          setLivePrice(wsTicker.lastPrice);
+        }
       }
-      const wsTicker = binanceWs.getTicker();
-      if (wsTicker.symbol === position.symbol && wsTicker.lastPrice > 0) {
-        setLivePrice(wsTicker.lastPrice);
-      }
+      setHistory(tradePriceHistoryService.getHistory(position.symbol, position.entryPrice));
     };
 
     handleTickerUpdate();
     const unsubLive = livePriceService.subscribe(handleTickerUpdate);
     const unsubWs = binanceWs.subscribe(handleTickerUpdate);
+    const unsubHist = tradePriceHistoryService.subscribe(() => {
+      setHistory(tradePriceHistoryService.getHistory(position.symbol, position.entryPrice));
+    });
 
     return () => {
       unsubLive();
       unsubWs();
+      unsubHist();
     };
-  }, [position.symbol]);
+  }, [position.symbol, position.entryPrice]);
 
   const currentLivePrice =
     livePrice > 0
@@ -67,7 +99,12 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 
   const entryPrice = position.entryPrice > 0 ? position.entryPrice : currentLivePrice;
 
-  // 2. Estrategia vinculada o detectada
+  // 2. Estado de Hitos y Camino Múltiple
+  const tradeStatus = useMemo(() => {
+    return getTradeStatusAndPhase(position, openOrders);
+  }, [position, openOrders, currentLivePrice]);
+
+  // 3. Estrategia vinculada o detectada
   const effectiveStrategyId =
     position.strategyId ||
     binanceWs.getLinkedStrategyForSymbol(position.symbol)?.strategyId ||
@@ -93,31 +130,10 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     return null;
   }, [linkedStrategy]);
 
-  // Precios Tácticos (SL, TP1, TP2)
-  const slPrice =
-    position.stopLoss && position.stopLoss > 0
-      ? position.stopLoss
-      : stratPrices?.slPrice && stratPrices.slPrice > 0
-      ? stratPrices.slPrice
-      : isLong
-      ? entryPrice * 0.9817
-      : entryPrice * 1.0183;
-
-  const tp1Price =
-    position.takeProfit && position.takeProfit > 0
-      ? position.takeProfit
-      : stratPrices?.tp1Price && stratPrices.tp1Price > 0
-      ? stratPrices.tp1Price
-      : isLong
-      ? entryPrice * 1.0267
-      : entryPrice * 0.9733;
-
-  const tp2Price =
-    stratPrices?.tp2Price && stratPrices.tp2Price > 0
-      ? stratPrices.tp2Price
-      : isLong
-      ? entryPrice * 1.0517
-      : entryPrice * 0.9483;
+  // Precios Tácticos
+  const slPrice = tradeStatus.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
+  const tp1Price = tradeStatus.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
+  const tp2Price = tradeStatus.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
 
   // Cálculos financieros
   const calculatedPnl = isLong
@@ -130,181 +146,70 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     position.isolatedMargin > 0
       ? position.isolatedMargin
       : (qty * entryPrice) / Math.max(1, position.leverage || 5);
-  const roe = margin > 0 ? (pnl / margin) * 100 : (position.roePercent || 0);
-
+  const roe = margin > 0 ? (pnl / margin) * 100 : 0;
   const notionalUsd = qty * currentLivePrice;
 
-  // Porcentajes de distancia respecto a la entrada
-  const slDiffPct = entryPrice > 0 ? ((slPrice - entryPrice) / entryPrice) * 100 : -1.83;
-  const tp1DiffPct = entryPrice > 0 ? ((tp1Price - entryPrice) / entryPrice) * 100 : 2.67;
-  const tp2DiffPct = entryPrice > 0 ? ((tp2Price - entryPrice) / entryPrice) * 100 : 5.17;
-
-  // Distancia restante a TP1
-  const remainingToTp1 = isLong
-    ? ((tp1Price - currentLivePrice) / currentLivePrice) * 100
-    : ((currentLivePrice - tp1Price) / currentLivePrice) * 100;
-
-  // Progreso porcentual hacia TP1
-  const totalTargetDistance = Math.abs(tp1Price - entryPrice);
-  const currentCoveredDistance = isLong
-    ? Math.max(0, currentLivePrice - entryPrice)
-    : Math.max(0, entryPrice - currentLivePrice);
-  const progressToTp1Pct = totalTargetDistance > 0
-    ? Math.min(100, Math.max(0, (currentCoveredDistance / totalTargetDistance) * 100))
-    : 0;
-
-  // Estimaciones para TP2 y Riesgo Máximo SL
-  const tp2ProfitEst = isLong ? (tp2Price - entryPrice) * qty : (entryPrice - tp2Price) * qty;
-  const tp2RoeEst = margin > 0 ? (tp2ProfitEst / margin) * 100 : 0;
-  const maxRiskUsd = isLong ? Math.max(0, (entryPrice - slPrice) * qty) : Math.max(0, (slPrice - entryPrice) * qty);
-
-  // Ratio R:B
-  const riskDistance = Math.abs(entryPrice - slPrice);
-  const rewardDistance = Math.abs(tp1Price - entryPrice);
-  const rewardRiskRatio = riskDistance > 0 ? rewardDistance / riskDistance : 2.5;
-
-  // Diagnóstico de Hitos
-  const tradeStatus = getTradeStatusAndPhase(position, openOrders);
-  const isTp1Reached = isLong ? currentLivePrice >= tp1Price : currentLivePrice <= tp1Price;
-  const isSlBreached = isLong ? currentLivePrice <= slPrice : currentLivePrice >= slPrice;
-
-  // Formato numérico adaptado
-  const formatVal = (val: number) => {
-    if (!val || isNaN(val)) return '0.00';
-    if (val < 0.01) return val.toFixed(6);
-    if (val < 1) return val.toFixed(4);
-    if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return val.toFixed(2);
+  const formatVal = (num: number): string => {
+    if (!num || isNaN(num)) return '0.00';
+    if (num >= 1000) return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (num >= 1) return num.toFixed(2);
+    if (num >= 0.01) return num.toFixed(4);
+    return num.toFixed(6);
   };
 
-  // Motor de Renderizado en Canvas con Coordenadas (X, Y) y Zonas de Riesgo / Beneficio Dinámicas
+  // Canvas para el Gráfico Táctico
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     const render = () => {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
+      const rect = canvas.getBoundingClientRect();
+      const w = Math.max(100, Math.floor(rect.width));
+      const h = Math.max(60, Math.floor(rect.height || 140));
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.resetTransform();
       ctx.scale(dpr, dpr);
-      const w = rect.width;
-      const h = rect.height;
 
-      ctx.clearRect(0, 0, w, h);
+      // Fondo oscuro
+      ctx.fillStyle = '#0a0d14';
+      ctx.fillRect(0, 0, w, h);
 
-      const live = currentLivePrice;
-      const entry = entryPrice;
-      const sl = slPrice;
-      const tp1 = tp1Price;
-      const tp2 = tp2Price || (isLong ? entry * 1.05 : entry * 0.95);
+      // Grid suave
+      ctx.strokeStyle = '#1a202c';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 40; x < w; x += 60) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+      }
+      for (let y = 20; y < h; y += 30) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+      }
+      ctx.stroke();
 
-      // Límites dinámicos con padding proporcional
-      const allPrices = [live, entry, sl, tp1, tp2].filter((p) => p > 0);
-      const minRaw = Math.min(...allPrices);
-      const maxRaw = Math.max(...allPrices);
-      const priceRange = Math.max(0.0001, maxRaw - minRaw);
-      const pad = priceRange * 0.16;
-      const minP = minRaw - pad;
-      const maxP = maxRaw + pad;
+      const prices = [entryPrice, currentLivePrice, slPrice, tp1Price];
+      if (tp2Price > 0) prices.push(tp2Price);
 
-      const getY = (price: number) => {
-        const clamped = Math.max(minP, Math.min(maxP, price));
-        return h - ((clamped - minP) / (maxP - minP)) * h;
+      const minP = Math.min(...prices) * 0.997;
+      const maxP = Math.max(...prices) * 1.003;
+      const range = maxP - minP || 1;
+
+      const getY = (val: number) => {
+        const norm = (val - minP) / range;
+        return h - 16 - norm * (h - 32);
       };
 
       const chartRightEdge = w - 100;
 
-      // 1. Sombrear Zona Dinámica de Beneficio (Verde) y Zona de Riesgo (Roja)
-      if (isLong) {
-        // En LONG: Beneficio por encima de la entrada (hasta TP2/TP1)
-        const yTopProfit = getY(tp2);
-        const yBottomProfit = getY(entry);
-        const profitHeight = yBottomProfit - yTopProfit;
-        if (profitHeight > 0) {
-          const gradProfit = ctx.createLinearGradient(0, yTopProfit, 0, yBottomProfit);
-          gradProfit.addColorStop(0, 'rgba(46, 189, 133, 0.18)');
-          gradProfit.addColorStop(1, 'rgba(46, 189, 133, 0.03)');
-          ctx.fillStyle = gradProfit;
-          ctx.fillRect(0, yTopProfit, chartRightEdge, profitHeight);
-
-          // Etiqueta sutil de Zona de Beneficio
-          ctx.fillStyle = 'rgba(46, 189, 133, 0.6)';
-          ctx.font = 'bold 9px sans-serif';
-          ctx.fillText('▲ ZONA BENEFICIO (TP1 / TP2)', 14, yTopProfit + 15);
-        }
-
-        // Riesgo por debajo de la entrada (hasta SL)
-        const yTopRisk = getY(entry);
-        const yBottomRisk = getY(sl);
-        const riskHeight = yBottomRisk - yTopRisk;
-        if (riskHeight > 0) {
-          const gradRisk = ctx.createLinearGradient(0, yTopRisk, 0, yBottomRisk);
-          gradRisk.addColorStop(0, 'rgba(246, 70, 93, 0.03)');
-          gradRisk.addColorStop(1, 'rgba(246, 70, 93, 0.18)');
-          ctx.fillStyle = gradRisk;
-          ctx.fillRect(0, yTopRisk, chartRightEdge, riskHeight);
-
-          // Etiqueta sutil de Zona de Riesgo
-          ctx.fillStyle = 'rgba(246, 70, 93, 0.6)';
-          ctx.font = 'bold 9px sans-serif';
-          ctx.fillText('▼ ZONA RIESGO ACOTADO (SL)', 14, yBottomRisk - 8);
-        }
-      } else {
-        // En SHORT: Beneficio por debajo de la entrada (hasta TP2/TP1)
-        const yTopProfit = getY(entry);
-        const yBottomProfit = getY(tp2);
-        const profitHeight = yBottomProfit - yTopProfit;
-        if (profitHeight > 0) {
-          const gradProfit = ctx.createLinearGradient(0, yTopProfit, 0, yBottomProfit);
-          gradProfit.addColorStop(0, 'rgba(46, 189, 133, 0.03)');
-          gradProfit.addColorStop(1, 'rgba(46, 189, 133, 0.18)');
-          ctx.fillStyle = gradProfit;
-          ctx.fillRect(0, yTopProfit, chartRightEdge, profitHeight);
-
-          ctx.fillStyle = 'rgba(46, 189, 133, 0.6)';
-          ctx.font = 'bold 9px sans-serif';
-          ctx.fillText('▼ ZONA BENEFICIO SHORT (TP1 / TP2)', 14, yBottomProfit - 8);
-        }
-
-        // Riesgo por encima de la entrada (hasta SL)
-        const yTopRisk = getY(sl);
-        const yBottomRisk = getY(entry);
-        const riskHeight = yBottomRisk - yTopRisk;
-        if (riskHeight > 0) {
-          const gradRisk = ctx.createLinearGradient(0, yTopRisk, 0, yBottomRisk);
-          gradRisk.addColorStop(0, 'rgba(246, 70, 93, 0.18)');
-          gradRisk.addColorStop(1, 'rgba(246, 70, 93, 0.03)');
-          ctx.fillStyle = gradRisk;
-          ctx.fillRect(0, yTopRisk, chartRightEdge, riskHeight);
-
-          ctx.fillStyle = 'rgba(246, 70, 93, 0.6)';
-          ctx.font = 'bold 9px sans-serif';
-          ctx.fillText('▲ ZONA RIESGO SHORT (SL)', 14, yTopRisk + 15);
-        }
-      }
-
-      // 2. Guías de cuadrícula de fondo
-      ctx.strokeStyle = '#1e2638';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 4]);
-      for (let i = 1; i <= 3; i++) {
-        const gridY = (h / 4) * i;
-        ctx.beginPath();
-        ctx.moveTo(0, gridY);
-        ctx.lineTo(w, gridY);
-        ctx.stroke();
-      }
-
-      // 3. Función para trazar niveles de precio clave
-      function drawLevel(price: number, label: string, color: string, dashed = false) {
-        const y = getY(price);
+      // Dibujar niveles clave
+      const drawLevel = (price: number, label: string, color: string, dashed = false) => {
+        const y = Math.round(getY(price));
         ctx.beginPath();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.3;
@@ -314,7 +219,6 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
         ctx.lineTo(chartRightEdge, y);
         ctx.stroke();
 
-        // Pastilla de etiqueta lateral derecha
         ctx.fillStyle = '#161c28';
         ctx.fillRect(chartRightEdge + 4, y - 9, w - chartRightEdge - 8, 18);
         ctx.strokeStyle = color;
@@ -324,86 +228,53 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
         ctx.fillStyle = color;
         ctx.font = 'bold 10px monospace';
         ctx.fillText(`${label} $${formatVal(price)}`, chartRightEdge + 8, y + 4);
-      }
+      };
 
-      if (tp2Price) drawLevel(tp2, 'TP2', '#2ebd85', true);
-      drawLevel(tp1, 'TP1', '#2ebd85', true);
-      drawLevel(entry, 'E1', '#00b8d9');
-      drawLevel(sl, 'SL', '#f6465d');
+      if (tp2Price) drawLevel(tp2Price, 'TP2', '#10b981', true);
+      drawLevel(tp1Price, 'TP1', '#10b981', true);
+      drawLevel(entryPrice, 'E1', '#0ea5e9');
+      drawLevel(slPrice, 'SL', '#f43f5e');
 
-      // 4. Trayectoria de precio hacia el tick actual (Sparkline en vivo)
+      // Trayectoria LIVE
       const liveX = Math.max(70, Math.min(chartRightEdge - 20, chartRightEdge * 0.75));
-      const liveY = getY(live);
-      const entryY = getY(entry);
+      const liveY = getY(currentLivePrice);
+      const entryY = getY(entryPrice);
 
       ctx.beginPath();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isProfit ? '#10b981' : '#f43f5e';
+      ctx.lineWidth = 1.8;
       ctx.setLineDash([]);
-
-      const step = liveX / 5;
-      const diff = live - entry;
-      const pts = [
-        { x: 15, y: entryY },
-        { x: step * 1, y: getY(entry + diff * 0.25 + (isLong ? 0.05 : -0.05) * entry * 0.002) },
-        { x: step * 2, y: getY(entry + diff * 0.65 - (isLong ? 0.04 : -0.04) * entry * 0.002) },
-        { x: step * 3, y: getY(entry + diff * 0.45 + (isLong ? 0.03 : -0.03) * entry * 0.002) },
-        { x: step * 4, y: getY(entry + diff * 0.85) },
-        { x: liveX, y: liveY },
-      ];
-
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) {
-        ctx.lineTo(pts[i].x, pts[i].y);
-      }
+      ctx.moveTo(15, entryY);
+      ctx.lineTo(liveX, liveY);
       ctx.stroke();
 
-      // Halo degradado bajo la curva
-      ctx.lineTo(liveX, h);
-      ctx.lineTo(pts[0].x, h);
-      ctx.closePath();
-      const grad = ctx.createLinearGradient(0, Math.min(entryY, liveY), 0, h);
-      grad.addColorStop(0, 'rgba(240, 185, 11, 0.12)');
-      grad.addColorStop(1, 'rgba(240, 185, 11, 0)');
-      ctx.fillStyle = grad;
-      ctx.fill();
-
-      // Línea horizontal punteada del precio LIVE actual
+      // Marcador LIVE pulsante
       ctx.beginPath();
-      ctx.strokeStyle = '#f0b90b';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 2]);
-      ctx.moveTo(0, liveY);
-      ctx.lineTo(chartRightEdge, liveY);
-      ctx.stroke();
-
-      // 5. Marcador puntual LIVE con halo pulsante
-      ctx.beginPath();
-      ctx.arc(liveX, liveY, 10, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(240, 185, 11, 0.3)';
+      ctx.arc(liveX, liveY, 7, 0, Math.PI * 2);
+      ctx.fillStyle = isProfit ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)';
       ctx.fill();
 
       ctx.beginPath();
-      ctx.arc(liveX, liveY, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#f0b90b';
+      ctx.arc(liveX, liveY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = isProfit ? '#10b981' : '#f43f5e';
       ctx.fill();
 
-      // Etiqueta flotante enriquecida con precio y PnL en vivo
+      // Etiqueta LIVE
       ctx.fillStyle = '#121722';
-      const badgeText = `LIVE: $${formatVal(live)} (${isProfit ? '+' : ''}$${pnl.toFixed(2)} / ${isProfit ? '+' : ''}${roe.toFixed(2)}%)`;
-      ctx.font = 'bold 10px monospace';
+      const badgeText = `LIVE: $${formatVal(currentLivePrice)} (${isProfit ? '+' : ''}$${pnl.toFixed(2)})`;
+      ctx.font = 'bold 9.5px monospace';
       const textW = ctx.measureText(badgeText).width;
       const badgeX = Math.max(10, Math.min(chartRightEdge - textW - 14, liveX - textW / 2));
-      const badgeY = liveY < 32 ? liveY + 14 : liveY - 18;
+      const badgeY = liveY < 25 ? liveY + 14 : liveY - 14;
 
-      ctx.fillRect(badgeX - 4, badgeY - 11, textW + 8, 16);
-      ctx.strokeStyle = '#f0b90b';
+      ctx.fillRect(badgeX - 4, badgeY - 9, textW + 8, 16);
+      ctx.strokeStyle = '#f59e0b';
       ctx.lineWidth = 1;
       ctx.setLineDash([]);
-      ctx.strokeRect(badgeX - 4, badgeY - 11, textW + 8, 16);
+      ctx.strokeRect(badgeX - 4, badgeY - 9, textW + 8, 16);
 
-      ctx.fillStyle = '#f0b90b';
-      ctx.fillText(badgeText, badgeX, badgeY + 1);
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillText(badgeText, badgeX, badgeY + 3);
     };
 
     render();
@@ -423,11 +294,11 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     if (!entryPrice || entryPrice <= 0) return;
     try {
       await binanceWs.updatePositionTPSL(position.symbol, position.takeProfit, entryPrice);
-      setActionFeedback(`SL movido a Break-Even ($${formatVal(entryPrice)})`);
+      setActionFeedback(`SL blindado a Break-Even ($${formatVal(entryPrice)})`);
       notificationService.notify(
         'SYSTEM',
         'Break-Even Activado',
-        `${position.symbol}: Stop Loss ajustado al precio de entrada $${formatVal(entryPrice)}`,
+        `${position.symbol}: Stop Loss ajustado al costo de entrada $${formatVal(entryPrice)}`,
         'high'
       );
       setTimeout(() => setActionFeedback(null), 4000);
@@ -440,356 +311,260 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const handlePanicClose = async () => {
     try {
       await binanceWs.closePosition(position.symbol);
-      setActionFeedback('Cierre de emergencia enviado a Binance');
+      setActionFeedback('Cierre a mercado enviado');
       notificationService.notify(
         'SL_HIT',
-        'Cierre Pánico Ejecutado',
-        `Orden a mercado de cierre para ${position.symbol} ejecutada.`,
+        'Cierre de Emergencia',
+        `Orden a mercado para ${position.symbol} ejecutada.`,
         'urgent'
       );
       setTimeout(() => setActionFeedback(null), 4000);
     } catch (err: any) {
-      setActionFeedback(err?.message || 'Error en cierre pánico');
+      setActionFeedback(err?.message || 'Error en cierre');
       setTimeout(() => setActionFeedback(null), 4000);
     }
   };
 
   return (
-    <tr className="bg-trading-darker border-bottom border-secondary">
-      <td colSpan={8} className="p-2 border-0 bg-trading-darker">
-        {/* CONTENEDOR EXPEDIENTE TOTALMENTE ENCAPSULADO CON BOOTSTRAP 5 / ADMINLTE 4 */}
-        <div className="trading-card border-accent-warning p-3 w-100 my-1">
-          {/* 1. HEADER DEL TRADE CON BADGE DE PNL / ROE EN VIVO VÍA WEBSOCKET */}
-          <div className="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-3 flex-wrap gap-2">
-            <div className="d-flex align-items-center gap-2 flex-wrap">
-              <span className="fs-5 fw-bold text-white font-mono">
+    <tr className="bg-neutral-950/95 border-b border-neutral-800">
+      <td colSpan={9} className="p-3 sm:p-4 bg-neutral-950/95">
+        <div className="flex flex-col gap-3.5 w-full max-w-7xl mx-auto">
+          
+          {/* 1. BARRA SUPERIOR DE CABECERA Y ACCIONES RÁPIDAS */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-neutral-800">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-white font-mono flex items-center gap-1.5">
+                <Activity className="w-4 h-4 text-amber-400" />
                 {position.symbol}
               </span>
               <span
-                className={`badge px-2 py-1 font-mono fw-bold fs-7 ${
+                className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
                   isLong
-                    ? 'bg-success-subtle text-success border border-success'
-                    : 'bg-danger-subtle text-danger border border-danger'
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                    : 'bg-rose-950 text-rose-300 border-rose-800'
                 }`}
               >
-                {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x
-              </span>
-              <span className="badge bg-dark border border-secondary text-secondary font-mono fs-7">
-                ID: {effectiveStrategyId}
+                {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x ISOLATED
               </span>
 
-              {/* Badge Visual Reactivo de PnL no realizado y ROE% con WebSocket Stream */}
+              {/* Estrategia vinculada */}
+              {onLinkStrategy ? (
+                <button
+                  type="button"
+                  onClick={() => onLinkStrategy(position)}
+                  className="px-2 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Clic para cambiar o vincular estrategia de Google Sheets"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-400" />
+                  <span>{effectiveStrategyId}</span>
+                </button>
+              ) : (
+                <span className="px-2 py-0.5 rounded bg-neutral-900 text-neutral-300 border border-neutral-800 text-[10px] font-mono">
+                  {effectiveStrategyId}
+                </span>
+              )}
+
+              {/* Badge PnL / ROE */}
               <span
-                className={`badge px-2 py-1 font-mono fw-bold fs-7 d-flex align-items-center gap-1 ${
+                className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border flex items-center gap-1 ${
                   isProfit
-                    ? 'bg-success-subtle text-success border border-success'
-                    : 'bg-danger-subtle text-danger border border-danger'
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                    : 'bg-rose-950/80 text-rose-300 border-rose-700'
                 }`}
-                title="PnL No Realizado calculado dinámicamente con ticks en vivo de WebSocket"
               >
-                <i className={`bi ${isProfit ? 'bi-graph-up-arrow' : 'bi-graph-down-arrow'}`}></i>
+                <TrendingUp className="w-3 h-3" />
                 <span>{isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} USDT</span>
                 <span>({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)</span>
               </span>
 
-              <span
-                className={`badge px-2 py-1 fs-7 ${
-                  isTp1Reached
-                    ? 'bg-success-subtle text-success border border-success'
-                    : isSlBreached
-                    ? 'bg-danger-subtle text-danger border border-danger'
-                    : 'bg-primary-subtle text-primary border border-primary'
-                }`}
-              >
-                {isTp1Reached
-                  ? 'Fase 3: TP1 Alcanzado'
-                  : isSlBreached
-                  ? 'Fase 4: SL Amenazado'
-                  : 'Fase 2: En Desarrollo'}
-              </span>
-
+              {/* Feedback toast */}
               {actionFeedback && (
-                <span className="badge bg-warning text-dark fw-bold font-mono fs-7">
+                <span className="px-2 py-0.5 rounded bg-amber-500 text-neutral-950 font-bold font-mono text-[10px] animate-pulse">
                   {actionFeedback}
                 </span>
               )}
             </div>
 
-            <div className="d-flex align-items-center gap-2 flex-wrap">
-              <div className="text-end font-mono small me-1">
-                <span className="text-secondary">R/B: </span>
-                <strong className="text-success">1 : {rewardRiskRatio.toFixed(1)}</strong>
-              </div>
+            {/* Botones de acción operativa inmediata */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={handleMoveToBE}
-                className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono fs-7"
+                className="px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-neutral-200 hover:text-white border border-neutral-700 text-[11px] font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                title={`Mover Stop Loss al costo de entrada ($${formatVal(entryPrice)}) para garantizar 0 riesgo`}
               >
-                <i className="bi bi-shield-check me-1 text-success"></i>
-                Mover a BE (${formatVal(entryPrice)})
+                <Lock className="w-3 h-3 text-emerald-400" />
+                <span>Mover a BE (${formatVal(entryPrice)})</span>
               </button>
+
               <button
                 type="button"
                 onClick={() => onOpenEditModal(position)}
-                className="btn btn-sm btn-outline-warning py-1 px-2 fw-semibold font-mono fs-7"
+                className="px-2.5 py-1 rounded bg-neutral-900 hover:bg-neutral-800 text-amber-300 hover:text-amber-200 border border-amber-500/30 text-[11px] font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="Ajustar parámetros de Take Profit y Stop Loss en Binance"
               >
-                <i className="bi bi-pencil-square me-1"></i>
-                Ajustar TP/SL
+                <Edit2 className="w-3 h-3 text-amber-400" />
+                <span>Ajustar TP/SL</span>
               </button>
+
               <button
                 type="button"
                 onClick={handlePanicClose}
-                className="btn btn-sm btn-danger fw-bold text-white py-1 px-2 fs-7"
+                className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Cerrar inmediatamente la posición al precio de mercado"
               >
-                <i className="bi bi-exclamation-triangle-fill me-1"></i>
-                Cierre Pánico
+                <AlertTriangle className="w-3 h-3" />
+                <span>Cierre Pánico</span>
               </button>
             </div>
           </div>
 
-          {/* 2. GRID PRINCIPAL (GRÁFICO A LA IZQ, TIMELINE VERTICAL A LA DER) */}
-          <div className="row g-3 align-items-start">
-            {/* COLUMNA IZQUIERDA: GRÁFICO REAL ENCAPSULADO CON CSS GRID */}
-            <div className="col-12 col-lg-7 d-flex flex-column gap-3">
-              <div className="trading-chart-grid">
-                {/* Header de Niveles en CSS Grid */}
-                <div className="chart-grid-header d-flex justify-content-between align-items-center font-mono fs-7 flex-wrap gap-2">
-                  <span className="text-danger fw-bold">
-                    <i className="bi bi-arrow-down-circle me-1"></i>
-                    SL: ${formatVal(slPrice)} ({slDiffPct >= 0 ? '+' : ''}{slDiffPct.toFixed(2)}%)
-                  </span>
-                  <span className="text-info fw-bold">
-                    <i className="bi bi-record-circle me-1"></i>
-                    ENTRADA: ${formatVal(entryPrice)}
-                  </span>
-                  <span className="text-success fw-bold">
-                    <i className="bi bi-arrow-up-circle me-1"></i>
-                    TP1: ${formatVal(tp1Price)} ({tp1DiffPct >= 0 ? '+' : ''}{tp1DiffPct.toFixed(2)}%)
-                  </span>
-                  {tp2Price > 0 && (
-                    <span className="text-success-subtle fw-semibold">
-                      TP2: ${formatVal(tp2Price)} ({tp2DiffPct >= 0 ? '+' : ''}{tp2DiffPct.toFixed(2)}%)
-                    </span>
-                  )}
-                </div>
-
-                {/* Contenedor Encapsulado del Canvas */}
-                <div className="chart-grid-canvas-container">
-                  <canvas ref={canvasRef} className="w-100 h-100 d-block" />
-                </div>
-
-                {/* Footer Métricas en CSS Grid */}
-                <div className="chart-grid-footer d-flex justify-content-between align-items-center text-secondary font-mono fs-7 flex-wrap gap-2">
-                  <span>
-                    ATR (15m): <strong className="text-warning">27.67%</strong>
-                  </span>
-                  <span>
-                    Volumen: <strong className="text-white">${notionalUsd.toFixed(2)} USDT</strong>
-                  </span>
-                  <span>
-                    PnL Flotante:{' '}
-                    <strong className={isProfit ? 'text-success' : 'text-danger'}>
-                      {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} ({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)
-                    </strong>
-                  </span>
-                </div>
-              </div>
-
-              {/* Alerta de Diagnóstico y Disciplina */}
-              <div className="p-3 rounded border-start border-4 border-primary bg-primary-subtle text-light small">
-                <div className="text-primary fw-bold mb-1 d-flex align-items-center gap-1">
-                  <i className="bi bi-info-circle-fill"></i>
-                  Diagnóstico Táctico &amp; Disciplina Operativa
-                </div>
-                <div className="text-secondary">
-                  {isTp1Reached
-                    ? 'El precio alcanzó la zona de TP1. Activa el protocolo de Break-Even para blindar la operación sin riesgo de pérdida.'
-                    : isSlBreached
-                    ? 'Atención: El precio está en proximidad de Stop Loss. Respeta la salida sin promediar.'
-                    : `El precio consolida a favor. Faltan ${Math.max(0, remainingToTp1).toFixed(2)}% para tocar el objetivo TP1.`}
-                </div>
-                <div className="mt-2 text-warning small font-mono">
-                  <i className="bi bi-shield-exclamation me-1"></i>
-                  <strong>Regla #8:</strong> Mantén la orden condicional en Binance; no cierres por ansiedad antes de tocar TP1 o activar Break-Even.
-                </div>
-              </div>
+          {/* 2. SPARKLINE INTEGRADO DEL TRADE DESDE SU INICIO */}
+          <div className="p-3 rounded-xl bg-neutral-900/80 border border-neutral-800 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-amber-400" />
+                <span>Trayectoria de Precio (Sparkline desde Inicio del Trade)</span>
+              </span>
+              <span className="text-[10px] font-mono text-neutral-400">
+                Punto Base: <strong className="text-sky-300">${formatVal(entryPrice)}</strong> (E1) • LIVE:{' '}
+                <strong className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
+                  ${formatVal(currentLivePrice)}
+                </strong>
+              </span>
             </div>
 
-            {/* COLUMNA DERECHA: CRONOLOGÍA ESTILO PASO A PASO (VERTICAL TIMELINE) */}
-            <div className="col-12 col-lg-5">
-              <div className="trading-card p-3 h-100">
-                <div className="small fw-bold text-secondary text-uppercase mb-3 border-bottom border-secondary pb-2 d-flex justify-content-between align-items-center">
-                  <span className="d-flex align-items-center gap-1">
-                    <i className="bi bi-diagram-3 me-1 text-warning"></i>
-                    Cronología del Trade (Paso a Paso)
-                  </span>
-                  <span className="badge bg-dark border border-secondary text-success font-mono fs-8">
-                    <i className="bi bi-circle-fill me-1 text-success fs-8"></i>
-                    WebSocket Live
-                  </span>
-                </div>
-
-                {/* Vertical Timeline Paso a Paso */}
-                <div className="trading-timeline">
-                  {/* Paso 1: Entrada Ejecutada (Completado) */}
-                  <div className="timeline-step">
-                    <div className="timeline-node completed">
-                      <i className="bi bi-check-lg"></i>
-                    </div>
-                    <div className="timeline-content">
-                      <div className="timeline-title">
-                        <span>Paso 1: Entrada Ejecutada (100%)</span>
-                        <span className="badge bg-success-subtle text-success border border-success font-mono fs-8">
-                          Fill 100%
-                        </span>
-                      </div>
-                      <div className="timeline-subtext font-mono">
-                        Precio Entrada: <strong className="text-white">${formatVal(entryPrice)}</strong> • {isLong ? 'LONG' : 'SHORT'} {position.leverage || 5}x Isolated
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Paso 2: Trayectoria Hacia TP1 (En Curso / Completado) */}
-                  <div className="timeline-step">
-                    <div className={`timeline-node ${isTp1Reached ? 'completed' : 'active'}`}>
-                      {isTp1Reached ? <i className="bi bi-check-lg"></i> : '2'}
-                    </div>
-                    <div className={`timeline-content ${!isTp1Reached ? 'active-step' : ''}`}>
-                      <div className="timeline-title">
-                        <span className={isTp1Reached ? 'text-success' : 'text-warning'}>
-                          {isTp1Reached ? 'Paso 2: TP1 Alcanzado' : 'Paso 2: En Trayectoria a TP1'}
-                        </span>
-                        <span className={`badge font-mono fs-8 ${isTp1Reached ? 'bg-success-subtle text-success border border-success' : 'bg-warning-subtle text-warning border border-warning'}`}>
-                          {isTp1Reached ? '100% Logrado' : `${progressToTp1Pct.toFixed(0)}% Completado`}
-                        </span>
-                      </div>
-                      <div className="timeline-subtext font-mono">
-                        Precio actual: <strong className="text-warning">${formatVal(currentLivePrice)}</strong> • TP1: <strong className="text-success">${formatVal(tp1Price)}</strong>
-                      </div>
-                      {/* Barra de Progreso a TP1 */}
-                      <div className="progress bg-dark mt-2 border border-secondary progress-xs">
-                        <div
-                          className={`progress-bar ${isTp1Reached ? 'bg-success' : 'bg-warning'}`}
-                          role="progressbar"
-                          style={{ width: `${isTp1Reached ? 100 : Math.max(5, progressToTp1Pct)}%` }}
-                          aria-valuenow={progressToTp1Pct}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                        ></div>
-                      </div>
-                      <div className="d-flex justify-content-between text-secondary font-mono mt-1 fs-8">
-                        <span>Entrada: ${formatVal(entryPrice)}</span>
-                        <span>{isTp1Reached ? '¡Objetivo tocado!' : `Resta: ${Math.max(0, remainingToTp1).toFixed(2)}%`}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Paso 3: Protocolo Break-Even (Blindaje) */}
-                  <div className="timeline-step">
-                    <div className={`timeline-node ${isTp1Reached ? 'active' : 'pending'}`}>
-                      {isTp1Reached ? <i className="bi bi-shield-check"></i> : '3'}
-                    </div>
-                    <div className={`timeline-content ${isTp1Reached ? 'active-step' : ''}`}>
-                      <div className="timeline-title">
-                        <span className={isTp1Reached ? 'text-white fw-bold' : 'text-secondary'}>
-                          Paso 3: Protocolo Break-Even
-                        </span>
-                        <span className={`badge font-mono fs-8 ${isTp1Reached ? 'bg-info-subtle text-info border border-info' : 'bg-dark border border-secondary text-secondary'}`}>
-                          {isTp1Reached ? 'Listo para activar' : 'Condicional a TP1'}
-                        </span>
-                      </div>
-                      <div className="timeline-subtext">
-                        Ajusta el Stop Loss al costo de entrada (${formatVal(entryPrice)}) para garantizar 0 riesgo.
-                      </div>
-                      {isTp1Reached && (
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={handleMoveToBE}
-                            className="btn btn-sm btn-outline-success py-1 px-2 font-mono fs-7 w-100"
-                          >
-                            <i className="bi bi-shield-lock-fill me-1"></i>
-                            Blindar a Break-Even Ahora (${formatVal(entryPrice)})
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Paso 4: Toma de Beneficios Final (TP2) */}
-                  <div className="timeline-step">
-                    <div className="timeline-node pending">
-                      <span>4</span>
-                    </div>
-                    <div className="timeline-content">
-                      <div className="timeline-title">
-                        <span className="text-secondary">Paso 4: Salida Final (TP2)</span>
-                        <span className="badge bg-dark border border-secondary text-secondary font-mono fs-8">
-                          ${formatVal(tp2Price)}
-                        </span>
-                      </div>
-                      <div className="timeline-subtext font-mono">
-                        Ganancia proyectada: <strong className="text-success">+${tp2ProfitEst.toFixed(2)} USDT</strong> (+{tp2RoeEst.toFixed(1)}% ROE).
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Paso 5: Stop Loss Preventivo */}
-                  <div className="timeline-step">
-                    <div className={`timeline-node ${isSlBreached ? 'alert' : 'pending'}`}>
-                      <i className={`bi ${isSlBreached ? 'bi-exclamation-triangle-fill' : 'bi-shield-x'}`}></i>
-                    </div>
-                    <div className="timeline-content">
-                      <div className="timeline-title">
-                        <span className={isSlBreached ? 'text-danger fw-bold' : 'text-secondary'}>
-                          Stop Loss Preventivo
-                        </span>
-                        <span className="badge bg-danger-subtle text-danger border border-danger font-mono fs-8">
-                          SL: ${formatVal(slPrice)}
-                        </span>
-                      </div>
-                      <div className="timeline-subtext font-mono">
-                        Riesgo máximo acotado: <span className="text-danger">-${maxRiskUsd.toFixed(2)} USDT</span> ({slDiffPct.toFixed(2)}%).
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TradePriceSparkline
+              history={history}
+              entryPrice={entryPrice}
+              currentPrice={currentLivePrice}
+              isLong={isLong}
+              height={56}
+              showLabels={true}
+              className="w-full"
+            />
           </div>
 
-          {/* Acordeón Opcional para Herramientas Avanzadas */}
-          <div className="mt-3 pt-2 border-top border-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-              className="btn btn-sm btn-outline-secondary py-1 px-2 font-mono fs-7"
-            >
-              {showAdvancedTools
-                ? '▲ Ocultar Herramientas Avanzadas & Órdenes Condicionales'
-                : '▼ Ver Órdenes Condicionales, 8 Disciplinas & Hoja Oficial'}
-            </button>
+          {/* 3. FLUJO DE DECISIÓN (DIAGRAMA DE PASOS) Y MATRIZ MULTICAMINO */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between px-1 flex-wrap gap-2">
+              <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Compass className="w-3.5 h-3.5 text-amber-400" />
+                <span>Ruta y Flujo de Decisión Táctico (Google Sheets)</span>
+              </span>
 
-            {onLinkStrategy && (
-              <button
-                type="button"
-                onClick={() => onLinkStrategy(position)}
-                className="btn btn-sm btn-outline-warning py-1 px-2 font-mono fs-7"
-              >
-                <i className="bi bi-link-45deg me-1"></i>
-                Vincular / Cambiar Estrategia
-              </button>
+              <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setFlowViewMode('diagram')}
+                  className={`px-2.5 py-1 rounded text-[10.5px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    flowViewMode === 'diagram'
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <Compass className="w-3 h-3" />
+                  <span>Flujo de Decisión (Pasos)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFlowViewMode('matrix')}
+                  className={`px-2.5 py-1 rounded text-[10.5px] font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    flowViewMode === 'matrix'
+                      ? 'bg-amber-500 text-neutral-950 font-bold shadow-xs'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                >
+                  <GitBranch className="w-3 h-3" />
+                  <span>Matriz Multicamino</span>
+                </button>
+              </div>
+            </div>
+
+            {flowViewMode === 'diagram' ? (
+              <TradeDecisionFlowDiagram
+                position={position}
+                status={tradeStatus}
+                currentPrice={currentLivePrice}
+                onMoveToBE={handleMoveToBE}
+              />
+            ) : (
+              <TradeMultiPathChronology
+                position={position}
+                status={tradeStatus}
+                currentPrice={currentLivePrice}
+                onMoveToBE={handleMoveToBE}
+              />
             )}
           </div>
 
-          {showAdvancedTools && (
-            <div className="mt-3">
-              <StrategyPositionTracker
-                position={position}
-                onLinkStrategy={onLinkStrategy}
-              />
+          {/* 4. GRÁFICO TÁCTICO DE NIVELES EN VIVO (CANVAS) */}
+          <div className="p-3 rounded-xl bg-neutral-900/60 border border-neutral-800 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-[11px] font-mono flex-wrap gap-2 text-neutral-300">
+              <span className="text-rose-400 font-bold flex items-center gap-1">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                SL: ${formatVal(slPrice)}
+              </span>
+              <span className="text-sky-400 font-bold flex items-center gap-1">
+                <Target className="w-3.5 h-3.5" />
+                E1: ${formatVal(entryPrice)}
+              </span>
+              <span className="text-emerald-400 font-bold flex items-center gap-1">
+                <Target className="w-3.5 h-3.5" />
+                TP1: ${formatVal(tp1Price)}
+              </span>
+              {tp2Price > 0 && (
+                <span className="text-emerald-300 font-bold flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  TP2: ${formatVal(tp2Price)}
+                </span>
+              )}
             </div>
-          )}
+
+            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-neutral-800">
+              <canvas ref={canvasRef} className="w-full h-full block" />
+            </div>
+
+            <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
+              <span>Volumen Nocional: <strong className="text-white">${notionalUsd.toFixed(2)} USDT</strong></span>
+              <span>Margen Aislado: <strong className="text-white">${(position.isolatedMargin || margin || 0).toFixed(2)} USDT</strong></span>
+              <span>
+                PnL Flotante:{' '}
+                <strong className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
+                  {isProfit ? '+' : '-'}${Math.abs(pnl).toFixed(2)} ({isProfit ? '+' : '-'}{Math.abs(roe).toFixed(2)}% ROE)
+                </strong>
+              </span>
+            </div>
+          </div>
+
+          {/* 5. ACORDEÓN PARA ESTRATEGIA COMPLETA & PROTOCOLO DE 8 DISCIPLINAS */}
+          <div className="pt-2 border-t border-neutral-800 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedTools(!showAdvancedTools)}
+              className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer w-full"
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span>
+                  {showAdvancedTools
+                    ? 'Ocultar Auditoría del Protocolo de 8 Disciplinas & Órdenes Condicionales'
+                    : 'Ver Auditoría del Protocolo de 8 Disciplinas, Ficha Oficial de Estrategia & Órdenes'}
+                </span>
+              </div>
+              {showAdvancedTools ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
+            </button>
+
+            {showAdvancedTools && (
+              <div className="mt-2">
+                <StrategyPositionTracker
+                  position={position}
+                  onLinkStrategy={onLinkStrategy}
+                />
+              </div>
+            )}
+          </div>
+
         </div>
       </td>
     </tr>

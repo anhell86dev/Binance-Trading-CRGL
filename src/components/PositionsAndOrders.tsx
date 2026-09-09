@@ -44,9 +44,14 @@ import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 interface PositionsAndOrdersProps {
   defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines';
   onOpenOrderModal?: () => void;
+  onSelectPosition?: (pos: PositionRisk) => void;
 }
 
-export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultTab = 'positions', onOpenOrderModal }) => {
+export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
+  defaultTab = 'positions',
+  onOpenOrderModal,
+  onSelectPosition,
+}) => {
   const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines'>(defaultTab);
   const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional'>('all');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
@@ -346,7 +351,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({ defaultT
       {/* Tab 1: Posiciones Activas */}
       {tab === 'positions' && (
         <div className="p-2 sm:p-3 w-full flex-1 flex flex-col">
-          <OpenPositionsTable onOpenOrderModal={onOpenOrderModal} />
+          <OpenPositionsTable onOpenOrderModal={onOpenOrderModal} onSelectPosition={onSelectPosition} />
         </div>
       )}
 

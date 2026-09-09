@@ -5,9 +5,11 @@ import { GoogleSheetStrategyRow } from '../types/strategy';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 
 export interface TradeMilestoneItem {
-  id: 'E1' | 'E2' | 'E3' | 'TP1' | 'TP2' | 'BE' | 'SL';
+  id: 'E1' | 'E2' | 'E3' | 'TP1' | 'TP2' | 'TP3' | 'BE' | 'SL';
   label: string;
   isHit: boolean;
+  isCanceled?: boolean;
+  cancelReason?: string;
   price?: number;
 }
 
@@ -25,8 +27,21 @@ export interface TradeStatusAndPhase {
   isSlHit: boolean;
   isTp1Hit: boolean;
   isTp2Hit: boolean;
+  isTp3Hit: boolean;
   isE2Hit: boolean;
   isE3Hit: boolean;
+  isE2CanceledDueToTp1: boolean;
+  isE3CanceledDueToTp1: boolean;
+  multiPathState: 'DUAL_PATH_ACTIVE' | 'TP1_ROUTE_DCA_CANCELED' | 'E2_ROUTE_ACTIVE' | 'E3_ROUTE_ACTIVE' | 'SL_ROUTE_HIT';
+  multiPathLabel: string;
+  tacticalRuleSummary: string;
+  entry1Price: number;
+  entry2Price: number;
+  entry3Price: number;
+  tp1Price: number;
+  tp2Price: number;
+  tp3Price: number;
+  slPrice: number;
   linkedStrategyId?: string;
   linkedStrategyName?: string;
 }
@@ -72,6 +87,7 @@ export function getTradeStatusAndPhase(
   let slPrice = position.stopLoss || 0;
   let tp1Price = position.takeProfit || 0;
   let tp2Price = 0;
+  let tp3Price = 0;
   let entry2Price = 0;
   let entry3Price = 0;
 
@@ -80,6 +96,7 @@ export function getTradeStatusAndPhase(
     if (!slPrice && prices.slPrice) slPrice = prices.slPrice;
     if (!tp1Price && prices.tp1Price) tp1Price = prices.tp1Price;
     tp2Price = prices.tp2Price || 0;
+    tp3Price = prices.tpFinalPrice || 0;
     entry2Price = prices.entry2Price || 0;
     entry3Price = prices.entry3Price || 0;
   }
@@ -91,12 +108,15 @@ export function getTradeStatusAndPhase(
   if (!tp2Price && entryPrice > 0) {
     tp2Price = isLong ? entryPrice * 1.05 : entryPrice * 0.95;
   }
+  if (!tp3Price && entryPrice > 0) {
+    tp3Price = isLong ? entryPrice * 1.08 : entryPrice * 0.92;
+  }
   if (!slPrice && entryPrice > 0) {
     slPrice = isLong ? entryPrice * 0.985 : entryPrice * 1.015;
   }
 
   // 3. Persistent milestone tracking check
-  let savedMilestones = { e2: false, e3: false, tp1: false, tp2: false };
+  let savedMilestones = { e2: false, e3: false, tp1: false, tp2: false, tp3: false };
   try {
     const saved = sessionStorage.getItem(`milestones_${position.symbol}_${position.entryPrice}`);
     if (saved) {
@@ -110,10 +130,15 @@ export function getTradeStatusAndPhase(
     position.strategyStatus === 'Fallida' ||
     linkedStrategy?.estado === 'Fallida';
 
+  const isTp3Hit =
+    !isSlHit &&
+    tp3Price > 0 &&
+    (savedMilestones.tp3 || (isLong ? markPrice >= tp3Price : markPrice <= tp3Price));
+
   const isTp2Hit =
     !isSlHit &&
-    tp2Price > 0 &&
-    (savedMilestones.tp2 || (isLong ? markPrice >= tp2Price : markPrice <= tp2Price));
+    (isTp3Hit ||
+      (tp2Price > 0 && (savedMilestones.tp2 || (isLong ? markPrice >= tp2Price : markPrice <= tp2Price))));
 
   const isTp1Hit =
     !isSlHit &&
@@ -144,29 +169,72 @@ export function getTradeStatusAndPhase(
         (!isLong && position.stopLoss <= entryPrice * 1.002))
   );
 
-  // Compile hit milestones
+  // Core Tactical Rule from Google Sheets:
+  // "Si tocó antes TP1, se elimina pone en X=E2 y X=E3 (invalida compras DCA) y traslada SL a Break-Even (E1)"
+  const isE2CanceledDueToTp1 = isTp1Hit;
+  const isE3CanceledDueToTp1 = isTp1Hit;
+
+  // Compile hit milestones with cancellation annotations
   const milestones: TradeMilestoneItem[] = [
-    { id: 'E1', label: 'E1 Entrada', isHit: true, price: entryPrice },
-    { id: 'E2', label: 'E2 DCA', isHit: isE2Hit || isE3Hit, price: entry2Price },
-    { id: 'E3', label: 'E3 Carga', isHit: isE3Hit, price: entry3Price },
-    { id: 'TP1', label: 'TP1 Objetivo', isHit: isTp1Hit, price: tp1Price },
-    { id: 'TP2', label: 'TP2 Max', isHit: isTp2Hit, price: tp2Price },
-    { id: 'BE', label: 'Break-Even', isHit: isBreakEvenActive, price: entryPrice },
+    { id: 'E1', label: 'E1 Entrada (100%)', isHit: true, price: entryPrice },
+    {
+      id: 'E2',
+      label: isE2CanceledDueToTp1 ? 'X = E2 (Cancelada)' : 'E2 DCA (30%)',
+      isHit: !isE2CanceledDueToTp1 && (isE2Hit || isE3Hit),
+      isCanceled: isE2CanceledDueToTp1,
+      cancelReason: 'Eliminada por tocar TP1 primero (Regla de Ejecución Táctica)',
+      price: entry2Price,
+    },
+    {
+      id: 'E3',
+      label: isE3CanceledDueToTp1 ? 'X = E3 (Cancelada)' : 'E3 Carga (20%)',
+      isHit: !isE3CanceledDueToTp1 && isE3Hit,
+      isCanceled: isE3CanceledDueToTp1,
+      cancelReason: 'Eliminada por tocar TP1 primero (Regla de Ejecución Táctica)',
+      price: entry3Price,
+    },
+    { id: 'TP1', label: 'TP1 Objetivo (50%)', isHit: isTp1Hit, price: tp1Price },
+    { id: 'TP2', label: 'TP2 Max (30%)', isHit: isTp2Hit, price: tp2Price },
+    { id: 'TP3', label: 'TP3 Final (20%)', isHit: isTp3Hit, price: tp3Price },
+    { id: 'BE', label: 'Break-Even (E1)', isHit: isBreakEvenActive || isTp1Hit, price: entryPrice },
     { id: 'SL', label: 'SL Impacto', isHit: isSlHit, price: slPrice },
   ];
 
-  const hasHitMilestone = isTp1Hit || isTp2Hit || isE2Hit || isE3Hit || isBreakEvenActive || isSlHit;
+  const hasHitMilestone = isTp1Hit || isTp2Hit || isTp3Hit || isE2Hit || isE3Hit || isBreakEvenActive || isSlHit;
+
+  // Multi-Path Branching Determination
+  let multiPathState: 'DUAL_PATH_ACTIVE' | 'TP1_ROUTE_DCA_CANCELED' | 'E2_ROUTE_ACTIVE' | 'E3_ROUTE_ACTIVE' | 'SL_ROUTE_HIT' = 'DUAL_PATH_ACTIVE';
+  let multiPathLabel = 'Bifurcación Abierta: E1 ➔ [TP1 o E2]';
+  let tacticalRuleSummary = 'Regla Táctica: Si el precio toca TP1, se cancela E2 (X=E2) y SL pasa a BE. Si retrocede a E2 sin tocar TP1, se ejecuta DCA.';
+
+  if (isSlHit) {
+    multiPathState = 'SL_ROUTE_HIT';
+    multiPathLabel = 'Ruta Invalidada: Stop Loss Impactado';
+    tacticalRuleSummary = 'Disciplina #8: Nivel de invalidación alcanzado. Respetar salida estricta sin promediar pérdidas.';
+  } else if (isTp1Hit) {
+    multiPathState = 'TP1_ROUTE_DCA_CANCELED';
+    multiPathLabel = 'Ruta Favorable: TP1 Tocado ➔ [X=E2 Cancelada] ➔ Break-Even';
+    tacticalRuleSummary = 'Regla Táctica Ejecutada: Al tocar TP1 (50% tomado), la orden E2 queda anulada (X=E2) y el SL se blinda en BE ($' + entryPrice.toFixed(2) + ').';
+  } else if (isE3Hit) {
+    multiPathState = 'E3_ROUTE_ACTIVE';
+    multiPathLabel = 'Ruta Retroceso: E2 + E3 Ejecutadas (100% Cupo)';
+    tacticalRuleSummary = 'Disciplina #1: Carga máxima de posición alcanzada. Prohibido añadir más capital. Esperar rebote a TP1 o corte en SL.';
+  } else if (isE2Hit) {
+    multiPathState = 'E2_ROUTE_ACTIVE';
+    multiPathLabel = 'Ruta Retroceso: E2 DCA Ejecutada';
+    tacticalRuleSummary = 'Regla Táctica: E2 completado antes de TP1. Precio promedio optimizado. Siguiente objetivo: Rebote a TP1 o soporte en E3.';
+  }
 
   // Build summary text of milestones hit
   let milestonesHitText = '';
   if (isSlHit) {
     milestonesHitText = '🛑 SL Impactado (Invalidado)';
+  } else if (isTp3Hit) {
+    milestonesHitText = '🏆 TP3 Objetivo Final Alcanzado';
   } else if (isTp2Hit) {
     milestonesHitText = '🎯 TP1 & 🚀 TP2 Tocados • Trailing';
   } else if (isTp1Hit) {
-    milestonesHitText = isBreakEvenActive
-      ? '🎯 TP1 Tocado • 🛡️ Break-Even Activo'
-      : '🎯 TP1 Tocado (Toma 50%)';
+    milestonesHitText = '🎯 TP1 Tocado • X=E2 Cancelado • 🛡️ BE';
   } else if (isBreakEvenActive) {
     milestonesHitText = '🛡️ Break-Even Blindado (Riesgo Cero)';
   } else if (isE3Hit) {
@@ -194,133 +262,16 @@ export function getTradeStatusAndPhase(
       tp2Price > 0 && markPrice > 0
         ? ((Math.abs(tp2Price - markPrice) / markPrice) * 100).toFixed(1)
         : '2.5';
-    nextMilestoneText = `Siguiente: TP2 (${distToTp2}% de dist.)`;
+    nextMilestoneText = `Siguiente: TP2 (${distToTp2}% de dist.) • X=E2`;
   } else {
     const distToTp1 =
       tp1Price > 0 && markPrice > 0
         ? ((Math.abs(tp1Price - markPrice) / markPrice) * 100).toFixed(1)
         : '1.5';
-    nextMilestoneText = `Siguiente: TP1 (${distToTp1}% de dist.)`;
+    nextMilestoneText = `Siguiente: TP1 (${distToTp1}% de dist.) o DCA E2`;
   }
 
-  // Determine Phase Step, Name and Badge
-  if (isSlHit) {
-    return {
-      phaseStep: 0,
-      phaseName: 'Fase Invalidada (SL)',
-      phaseBadge: 'SL IMPACTADO',
-      badgeClass: 'bg-rose-950/80 text-rose-300 border-rose-800/80',
-      textClass: 'text-rose-400',
-      hasHitMilestone,
-      milestonesHitText,
-      milestones,
-      nextMilestoneText,
-      isBreakEvenActive,
-      isSlHit,
-      isTp1Hit,
-      isTp2Hit,
-      isE2Hit,
-      isE3Hit,
-      linkedStrategyId: effectiveStrategyId,
-      linkedStrategyName: effectiveStrategyName,
-    };
-  }
-
-  if (isTp2Hit) {
-    return {
-      phaseStep: 4,
-      phaseName: 'Fase 4: Maximización & Trailing',
-      phaseBadge: 'FASE 4 • MAXIMIZACIÓN',
-      badgeClass: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80',
-      textClass: 'text-emerald-300',
-      hasHitMilestone,
-      milestonesHitText,
-      milestones,
-      nextMilestoneText,
-      isBreakEvenActive,
-      isSlHit,
-      isTp1Hit,
-      isTp2Hit,
-      isE2Hit,
-      isE3Hit,
-      linkedStrategyId: effectiveStrategyId,
-      linkedStrategyName: effectiveStrategyName,
-    };
-  }
-
-  if (isTp1Hit) {
-    return {
-      phaseStep: 3,
-      phaseName: 'Fase 3: TP1 & Break-Even',
-      phaseBadge: 'FASE 3 • TP1 & BE',
-      badgeClass: 'bg-emerald-950/80 text-emerald-400 border-emerald-600/80',
-      textClass: 'text-emerald-400',
-      hasHitMilestone,
-      milestonesHitText,
-      milestones,
-      nextMilestoneText,
-      isBreakEvenActive,
-      isSlHit,
-      isTp1Hit,
-      isTp2Hit,
-      isE2Hit,
-      isE3Hit,
-      linkedStrategyId: effectiveStrategyId,
-      linkedStrategyName: effectiveStrategyName,
-    };
-  }
-
-  if (isE3Hit) {
-    return {
-      phaseStep: 1,
-      phaseName: 'Fase 1: DCA E3 (100% Carga)',
-      phaseBadge: 'FASE 1 • DCA E3',
-      badgeClass: 'bg-purple-950/80 text-purple-300 border-purple-800/80',
-      textClass: 'text-purple-300',
-      hasHitMilestone,
-      milestonesHitText,
-      milestones,
-      nextMilestoneText,
-      isBreakEvenActive,
-      isSlHit,
-      isTp1Hit,
-      isTp2Hit,
-      isE2Hit,
-      isE3Hit,
-      linkedStrategyId: effectiveStrategyId,
-      linkedStrategyName: effectiveStrategyName,
-    };
-  }
-
-  if (isE2Hit) {
-    return {
-      phaseStep: 1,
-      phaseName: 'Fase 1: DCA E2 (80% Carga)',
-      phaseBadge: 'FASE 1 • DCA E2',
-      badgeClass: 'bg-amber-950/80 text-amber-300 border-amber-800/80',
-      textClass: 'text-amber-300',
-      hasHitMilestone,
-      milestonesHitText,
-      milestones,
-      nextMilestoneText,
-      isBreakEvenActive,
-      isSlHit,
-      isTp1Hit,
-      isTp2Hit,
-      isE2Hit,
-      isE3Hit,
-      linkedStrategyId: effectiveStrategyId,
-      linkedStrategyName: effectiveStrategyName,
-    };
-  }
-
-  // Phase 2: Monitoring & Development (Default)
-  return {
-    phaseStep: 2,
-    phaseName: 'Fase 2: Monitoreo & Desarrollo',
-    phaseBadge: 'FASE 2 • DESARROLLO',
-    badgeClass: 'bg-sky-950/80 text-sky-300 border-sky-800/80',
-    textClass: 'text-sky-300',
+  const baseResult = {
     hasHitMilestone,
     milestonesHitText,
     milestones,
@@ -329,9 +280,88 @@ export function getTradeStatusAndPhase(
     isSlHit,
     isTp1Hit,
     isTp2Hit,
+    isTp3Hit,
     isE2Hit,
     isE3Hit,
+    isE2CanceledDueToTp1,
+    isE3CanceledDueToTp1,
+    multiPathState,
+    multiPathLabel,
+    tacticalRuleSummary,
+    entry1Price: entryPrice,
+    entry2Price,
+    entry3Price,
+    tp1Price,
+    tp2Price,
+    tp3Price,
+    slPrice,
     linkedStrategyId: effectiveStrategyId,
     linkedStrategyName: effectiveStrategyName,
+  };
+
+  // Determine Phase Step, Name and Badge
+  if (isSlHit) {
+    return {
+      ...baseResult,
+      phaseStep: 0,
+      phaseName: 'Fase Invalidada (SL)',
+      phaseBadge: 'SL IMPACTADO',
+      badgeClass: 'bg-rose-950/80 text-rose-300 border-rose-800/80',
+      textClass: 'text-rose-400',
+    };
+  }
+
+  if (isTp2Hit || isTp3Hit) {
+    return {
+      ...baseResult,
+      phaseStep: 4,
+      phaseName: isTp3Hit ? 'Fase 4: TP3 Objetivo Final' : 'Fase 4: Maximización & Trailing',
+      phaseBadge: isTp3Hit ? 'FASE 4 • TP3 FINAL' : 'FASE 4 • MAXIMIZACIÓN',
+      badgeClass: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/80',
+      textClass: 'text-emerald-300',
+    };
+  }
+
+  if (isTp1Hit) {
+    return {
+      ...baseResult,
+      phaseStep: 3,
+      phaseName: 'Fase 3: TP1 Alcanzado (X=E2 Cancelada & BE)',
+      phaseBadge: 'FASE 3 • TP1 & BE (X=E2)',
+      badgeClass: 'bg-emerald-950/80 text-emerald-400 border-emerald-600/80',
+      textClass: 'text-emerald-400',
+    };
+  }
+
+  if (isE3Hit) {
+    return {
+      ...baseResult,
+      phaseStep: 1,
+      phaseName: 'Fase 1: DCA E3 (100% Carga)',
+      phaseBadge: 'FASE 1 • DCA E3',
+      badgeClass: 'bg-purple-950/80 text-purple-300 border-purple-800/80',
+      textClass: 'text-purple-300',
+    };
+  }
+
+  if (isE2Hit) {
+    return {
+      ...baseResult,
+      phaseStep: 1,
+      phaseName: 'Fase 1: DCA E2 (80% Carga)',
+      phaseBadge: 'FASE 1 • DCA E2',
+      badgeClass: 'bg-amber-950/80 text-amber-300 border-amber-800/80',
+      textClass: 'text-amber-300',
+    };
+  }
+
+  // Phase 2: Monitoring & Development (Default)
+  return {
+    ...baseResult,
+    phaseStep: 2,
+    phaseName: 'Fase 2: Monitoreo & Bifurcación [TP1 o E2]',
+    phaseBadge: 'FASE 2 • E1 [TP1 | E2]',
+    badgeClass: 'bg-sky-950/80 text-sky-300 border-sky-800/80',
+    textClass: 'text-sky-300',
   };
 }
