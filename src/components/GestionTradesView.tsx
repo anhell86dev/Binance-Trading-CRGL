@@ -27,7 +27,6 @@ import { notificationService } from '../services/notifications';
 import { PositionRisk, OpenOrder, AccountBalance, NetworkMode, ConnectionStatus, ApiCredentials } from '../types/binance';
 import { PositionsAndOrders } from './PositionsAndOrders';
 import { TradingViewWidget } from './TradingViewWidget';
-import { ActiveTradeInspectorWithMilestones } from './ActiveTradeInspectorWithMilestones';
 
 interface GestionTradesViewProps {
   onOpenOrderModal?: () => void;
@@ -394,14 +393,7 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
 
       </div>
 
-      {/* 6. Inspector Táctico de Trades, Sparkline desde Inicio y Alertas de Hitos (E2, E3, TP1, TP2, TP3, SL) */}
-      <ActiveTradeInspectorWithMilestones
-        selectedSymbol={selectedChartSymbol}
-        onSelectSymbol={(sym) => setSelectedChartSymbol(sym)}
-        onOpenOrderModal={onOpenOrderModal}
-      />
-
-      {/* 7. Gráfico Avanzado Tipo TradingView en Vivo en Gestión de Trades */}
+      {/* 6. Gráfico Avanzado Tipo TradingView en Vivo en Gestión de Trades */}
       <div
         id="gestion-trades-tradingview-section"
         className="w-full bg-neutral-900/95 rounded-2xl border border-neutral-800 shadow-xl overflow-hidden flex flex-col transition-all"
