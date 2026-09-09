@@ -3,6 +3,7 @@ import { PositionRisk } from '../types/binance';
 import { TradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 import { TradePriceSparkline } from './TradePriceSparkline';
 import { TradePriceHistory } from '../services/tradePriceHistoryService';
+import { TradeMatrix } from './TradeMatrix';
 import { TradeMultiPathChronology } from './TradeMultiPathChronology';
 import {
   GitBranch,
@@ -234,7 +235,7 @@ export const TradeDecisionFlowDiagram: React.FC<TradeDecisionFlowDiagramProps> =
       </div>
 
       {viewMode === 'matrix' ? (
-        <TradeMultiPathChronology
+        <TradeMatrix
           position={position}
           status={status}
           currentPrice={currentPrice}

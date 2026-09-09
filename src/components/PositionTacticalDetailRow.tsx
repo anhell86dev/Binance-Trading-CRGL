@@ -7,7 +7,7 @@ import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { notificationService } from '../services/notifications';
 import { tradeMilestonesAlertService } from '../services/tradeMilestonesAlertService';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
-import { TradeMultiPathChronology } from './TradeMultiPathChronology';
+import { TradeMatrix } from './TradeMatrix';
 import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
 import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import { ApexTradePriceChart } from './ApexTradePriceChart';
@@ -307,8 +307,8 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             </div>
           </div>
 
-          {/* 2. MATRIZ MULTICAMINO DEL TRADE (GOOGLE SHEETS) */}
-          <TradeMultiPathChronology
+          {/* 2. MATRIZ MULTICAMINO DEL TRADE (NODOS INTERCONECTADOS) */}
+          <TradeMatrix
             position={position}
             status={tradeStatus}
             currentPrice={currentLivePrice}
