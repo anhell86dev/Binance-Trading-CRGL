@@ -26,7 +26,6 @@ import { auditPositionRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { strategyAutofillService } from '../services/strategyAutofillService';
-import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { PositionTacticalDetailRow } from './PositionTacticalDetailRow';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 import { TradePriceSparkline } from './TradePriceSparkline';

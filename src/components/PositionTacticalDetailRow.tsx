@@ -6,12 +6,12 @@ import { strategyService } from '../services/strategyService';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { notificationService } from '../services/notifications';
 import { tradeMilestonesAlertService } from '../services/tradeMilestonesAlertService';
-import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 import { TradeMultiPathChronology } from './TradeMultiPathChronology';
 import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
 import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import { ApexTradePriceChart } from './ApexTradePriceChart';
+import { TacticalPairVolatilityCard } from './TacticalPairVolatilityCard';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -22,8 +22,6 @@ import {
   Lock,
   Layers,
   Sparkles,
-  ChevronDown,
-  ChevronUp,
   Activity,
   Zap,
   Volume2,
@@ -42,7 +40,6 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   onOpenEditModal,
   onLinkStrategy,
 }) => {
-  const [showAdvancedTools, setShowAdvancedTools] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
   const isLong = position.positionAmt > 0;
@@ -363,32 +360,16 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             </div>
           </div>
 
-          {/* 5. ACORDEÓN PARA ESTRATEGIA COMPLETA & PROTOCOLO DE 8 DISCIPLINAS */}
-          <div className="pt-2 border-t border-neutral-800 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-              className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-850 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer w-full"
-            >
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
-                <span>
-                  {showAdvancedTools
-                    ? 'Ocultar Auditoría del Protocolo de 8 Disciplinas & Órdenes Condicionales'
-                    : 'Ver Auditoría del Protocolo de 8 Disciplinas, Ficha Oficial de Estrategia & Órdenes'}
-                </span>
-              </div>
-              {showAdvancedTools ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}
-            </button>
-
-            {showAdvancedTools && (
-              <div className="mt-2">
-                <StrategyPositionTracker
-                  position={position}
-                  onLinkStrategy={onLinkStrategy}
-                />
-              </div>
-            )}
+          {/* 3. HISTÓRICO DE VOLATILIDAD (SPARKLINE & BARRAS) */}
+          <div className="pt-2 border-t border-neutral-800">
+            <TacticalPairVolatilityCard
+              symbol={position.symbol}
+              isLong={isLong}
+              markPrice={currentLivePrice}
+              entryPrice={entryPrice}
+              slPrice={slPrice}
+              tp1Price={tp1Price}
+            />
           </div>
 
         </div>
