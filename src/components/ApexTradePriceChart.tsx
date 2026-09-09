@@ -51,16 +51,28 @@ export interface CandleData {
   volume?: number;
 }
 
+export interface DCAEntryInfo {
+  label: string;
+  price: number;
+  pct?: number;
+  executed?: boolean;
+  time?: number;
+}
+
 export interface ApexTradePriceChartProps {
   symbol: string;
   isLong: boolean;
-  entryPrice: number; // E1
+  entryPrice: number; // E1 (Initial Entry)
   currentPrice: number;
-  e2Price?: number; // E2 / DCA
+  e2Price?: number; // E2 / DCA 1
+  e3Price?: number; // E3 / DCA 2
+  averageEntryPrice?: number; // Precio Promedio ponderado (Average Cost Basis)
   tp1Price?: number;
   tp2Price?: number;
   tp3Price?: number;
   slPrice?: number;
+  openTime?: number; // Timestamp (ms) when the first operation was opened
+  dcaEntries?: DCAEntryInfo[];
   height?: number | string;
   showControls?: boolean;
   defaultTimeframe?: ChartTimeframe;
@@ -73,10 +85,14 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
   entryPrice,
   currentPrice,
   e2Price = 0,
+  e3Price = 0,
+  averageEntryPrice = 0,
   tp1Price = 0,
   tp2Price = 0,
   tp3Price = 0,
   slPrice = 0,
+  openTime,
+  dcaEntries,
   height = 250,
   showControls = true,
   defaultTimeframe = '15m',
@@ -151,7 +167,16 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
 
       const cleanSym = symbol.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
       const binanceInterval = tfConfig.binanceInterval;
-      const limit = tfConfig.candleCount;
+      
+      // If openTime is provided, calculate candles needed to encompass openTime
+      let limit = tfConfig.candleCount;
+      if (openTime && openTime > 0) {
+        const timeDiffMs = Date.now() - openTime;
+        if (timeDiffMs > 0) {
+          const candlesNeeded = Math.ceil(timeDiffMs / tfConfig.intervalMs) + 15;
+          limit = Math.min(250, Math.max(tfConfig.candleCount, candlesNeeded));
+        }
+      }
 
       const endpoints = [
         `https://data-api.binance.vision/api/v3/klines?symbol=${cleanSym}&interval=${binanceInterval}&limit=${limit}`,
@@ -299,14 +324,59 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
     }
   }, [selectedTf, chartStyle, candles, historyPoints, entryPrice, lastTickPrice]);
 
-  // Build Y-axis Annotations for key levels (E1, E2, TP1, TP2, TP3, SL)
+  // Calculate Effective Average Entry Price (Precio Promedio para DCA)
+  const effectiveAvgPrice = useMemo(() => {
+    if (averageEntryPrice > 0) return averageEntryPrice;
+    if (e2Price > 0) {
+      if (e3Price > 0) {
+        return entryPrice * 0.5 + e2Price * 0.3 + e3Price * 0.2;
+      }
+      return entryPrice * 0.6 + e2Price * 0.4;
+    }
+    return entryPrice;
+  }, [averageEntryPrice, entryPrice, e2Price, e3Price]);
+
+  // Build X-axis Annotations for start time (Apertura de la primera operación)
+  const xAxisAnnotations = useMemo(() => {
+    if (!openTime || openTime <= 0) return [];
+    const openDate = new Date(openTime);
+    const dateStr = openDate.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const timeStr = openDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    return [
+      {
+        x: openTime,
+        borderColor: '#38bdf8',
+        borderWidth: 2,
+        strokeDashArray: 2,
+        label: {
+          borderColor: '#0284c7',
+          style: {
+            color: '#ffffff',
+            background: '#0284c7',
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            fontWeight: 700,
+            padding: { left: 5, right: 5, top: 2, bottom: 2 },
+          },
+          text: `🚀 APERTURA (${dateStr} ${timeStr})`,
+          orientation: 'horizontal',
+          position: 'top',
+        },
+      },
+    ];
+  }, [openTime]);
+
+  // Build Y-axis Annotations for key levels (E1, E2, E3, Average Price, TP1, TP2, TP3, SL)
   const yAxisAnnotations = useMemo(() => {
     const annotations: any[] = [];
+    const lineStartX = openTime && openTime > 0 ? openTime : undefined;
 
     // SL (Stop Loss) - Crimson Red
     if (slPrice > 0) {
       annotations.push({
         y: slPrice,
+        x: lineStartX,
         borderColor: '#f43f5e',
         borderWidth: 1.8,
         strokeDashArray: 3,
@@ -326,10 +396,35 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
       });
     }
 
-    // E2 (Entrada 2 / DCA) - Amber
+    // E3 (Entrada 3 / DCA 2) - Orange
+    if (e3Price > 0) {
+      annotations.push({
+        y: e3Price,
+        x: lineStartX,
+        borderColor: '#f97316',
+        borderWidth: 1.5,
+        strokeDashArray: 4,
+        label: {
+          borderColor: '#f97316',
+          style: {
+            color: '#ffffff',
+            background: '#c2410c',
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            fontWeight: 700,
+            padding: { left: 4, right: 4, top: 2, bottom: 2 },
+          },
+          text: `⚠️ E3 (DCA 2): $${formatPrice(e3Price)}`,
+          position: 'right',
+        },
+      });
+    }
+
+    // E2 (Entrada 2 / DCA 1) - Amber
     if (e2Price > 0) {
       annotations.push({
         y: e2Price,
+        x: lineStartX,
         borderColor: '#f59e0b',
         borderWidth: 1.5,
         strokeDashArray: 4,
@@ -343,16 +438,17 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
             fontWeight: 700,
             padding: { left: 4, right: 4, top: 2, bottom: 2 },
           },
-          text: `⚠️ E2: $${formatPrice(e2Price)}`,
+          text: `⚠️ E2 (DCA 1): $${formatPrice(e2Price)}`,
           position: 'right',
         },
       });
     }
 
-    // E1 (Entrada 1 / Costo base) - Sky Blue
+    // E1 (Entrada 1 / Costo base inicial) - Sky Blue
     if (entryPrice > 0) {
       annotations.push({
         y: entryPrice,
+        x: lineStartX,
         borderColor: '#0ea5e9',
         borderWidth: 1.8,
         strokeDashArray: 0,
@@ -372,10 +468,36 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
       });
     }
 
+    // PRECIO PROMEDIO (Average Cost Basis con DCA e ingresos múltiples)
+    const hasMultipleIngresos = e2Price > 0 || e3Price > 0 || averageEntryPrice > 0 || (dcaEntries && dcaEntries.length > 1);
+    if (hasMultipleIngresos && effectiveAvgPrice > 0 && Math.abs(effectiveAvgPrice - entryPrice) > 0.00000001) {
+      annotations.push({
+        y: effectiveAvgPrice,
+        x: lineStartX,
+        borderColor: '#eab308',
+        borderWidth: 2.2,
+        strokeDashArray: 0,
+        label: {
+          borderColor: '#eab308',
+          style: {
+            color: '#090d16',
+            background: '#eab308',
+            fontSize: '10px',
+            fontFamily: 'monospace',
+            fontWeight: 800,
+            padding: { left: 5, right: 5, top: 2, bottom: 2 },
+          },
+          text: `📊 PROMEDIO: $${formatPrice(effectiveAvgPrice)}`,
+          position: 'right',
+        },
+      });
+    }
+
     // TP1 (Take Profit 1) - Emerald Green
     if (tp1Price > 0) {
       annotations.push({
         y: tp1Price,
+        x: lineStartX,
         borderColor: '#10b981',
         borderWidth: 1.5,
         strokeDashArray: 3,
@@ -399,6 +521,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
     if (tp2Price > 0) {
       annotations.push({
         y: tp2Price,
+        x: lineStartX,
         borderColor: '#34d399',
         borderWidth: 1.5,
         strokeDashArray: 3,
@@ -422,6 +545,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
     if (tp3Price > 0) {
       annotations.push({
         y: tp3Price,
+        x: lineStartX,
         borderColor: '#6ee7b7',
         borderWidth: 1.8,
         strokeDashArray: 2,
@@ -442,7 +566,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
     }
 
     return annotations;
-  }, [entryPrice, e2Price, tp1Price, tp2Price, tp3Price, slPrice]);
+  }, [entryPrice, e2Price, e3Price, averageEntryPrice, effectiveAvgPrice, tp1Price, tp2Price, tp3Price, slPrice, openTime, dcaEntries]);
 
   // Current Point marker annotation
   const pointsAnnotations = useMemo(() => {
@@ -598,6 +722,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
         },
       },
       annotations: {
+        xaxis: xAxisAnnotations,
         yaxis: yAxisAnnotations,
         points: pointsAnnotations,
       },
@@ -627,6 +752,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
             },
           },
           annotations: {
+            xaxis: xAxisAnnotations,
             yaxis: yAxisAnnotations,
             points: pointsAnnotations,
           },
@@ -650,6 +776,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
     height,
     seriesData,
     xAxisLabelFormat,
+    xAxisAnnotations,
     yAxisAnnotations,
     pointsAnnotations,
     isProfit,
@@ -670,6 +797,8 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
   // Calculate distance metrics to key levels
   const distE1 = entryPrice > 0 ? ((lastTickPrice - entryPrice) / entryPrice) * 100 : 0;
   const distE2 = e2Price > 0 ? ((lastTickPrice - e2Price) / e2Price) * 100 : 0;
+  const distE3 = e3Price > 0 ? ((lastTickPrice - e3Price) / e3Price) * 100 : 0;
+  const distAvg = effectiveAvgPrice > 0 ? ((lastTickPrice - effectiveAvgPrice) / effectiveAvgPrice) * 100 : 0;
   const distTP1 = tp1Price > 0 ? ((lastTickPrice - tp1Price) / tp1Price) * 100 : 0;
   const distTP2 = tp2Price > 0 ? ((lastTickPrice - tp2Price) / tp2Price) * 100 : 0;
   const distTP3 = tp3Price > 0 ? ((lastTickPrice - tp3Price) / tp3Price) * 100 : 0;
@@ -783,8 +912,18 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
         )}
       </div>
 
-      {/* 2. Badges Tácticos de Niveles de Precio (E1, E2, TP1, TP2, TP3, SL) */}
+      {/* 2. Badges Tácticos de Niveles de Precio (Apertura, E1, E2, E3, Precio Promedio, TP1, TP2, TP3, SL) */}
       <div className="flex items-center gap-1.5 flex-wrap text-[10px] pb-1">
+        {/* Timestamp de Apertura */}
+        {openTime && openTime > 0 && (
+          <span
+            className="px-1.5 py-0.5 rounded bg-sky-950/80 text-sky-300 border border-sky-700/80 font-semibold flex items-center gap-1"
+            title="Fecha y Hora de la primera operación (Inicio de gráfico)"
+          >
+            <span>🚀 Inicio: {new Date(openTime).toLocaleDateString([], { month: 'numeric', day: 'numeric' })} {new Date(openTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+          </span>
+        )}
+
         {/* SL */}
         {slPrice > 0 && (
           <span
@@ -803,6 +942,24 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
           </span>
         )}
 
+        {/* E3 */}
+        {e3Price > 0 && (
+          <span
+            className={`px-1.5 py-0.5 rounded border flex items-center gap-1 ${
+              (isLong && lastTickPrice <= e3Price) || (!isLong && lastTickPrice >= e3Price)
+                ? 'bg-orange-500 text-neutral-950 border-orange-300 font-extrabold'
+                : 'bg-orange-950/40 text-orange-300 border-orange-800/70'
+            }`}
+            title="Entrada 3 (DCA 2) definida"
+          >
+            <span>E3 (DCA 2): ${formatPrice(e3Price)}</span>
+            <span className="opacity-80">
+              ({distE3 >= 0 ? '+' : ''}
+              {distE3.toFixed(1)}%)
+            </span>
+          </span>
+        )}
+
         {/* E2 */}
         {e2Price > 0 && (
           <span
@@ -811,9 +968,9 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
                 ? 'bg-amber-500 text-neutral-950 border-amber-300 font-extrabold'
                 : 'bg-amber-950/40 text-amber-300 border-amber-800/70'
             }`}
-            title="Entrada 2 (DCA) definida"
+            title="Entrada 2 (DCA 1) definida"
           >
-            <span>E2: ${formatPrice(e2Price)}</span>
+            <span>E2 (DCA 1): ${formatPrice(e2Price)}</span>
             <span className="opacity-80">
               ({distE2 >= 0 ? '+' : ''}
               {distE2.toFixed(1)}%)
@@ -824,10 +981,24 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
         {/* E1 */}
         <span
           className="px-1.5 py-0.5 rounded bg-sky-950/40 text-sky-300 border border-sky-800/70 flex items-center gap-1"
-          title="Entrada 1 (Precio base de compra/venta)"
+          title="Entrada 1 (Precio base inicial de la operación)"
         >
           <span>E1: ${formatPrice(entryPrice)}</span>
         </span>
+
+        {/* PRECIO PROMEDIO (DCA) */}
+        {(e2Price > 0 || e3Price > 0 || averageEntryPrice > 0 || (dcaEntries && dcaEntries.length > 1)) && effectiveAvgPrice > 0 && (
+          <span
+            className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/80 font-bold flex items-center gap-1 shadow-xs"
+            title="Precio Promedio Ponderado de Costo (DCA con ingresos múltiples)"
+          >
+            <span>📊 PROMEDIO: ${formatPrice(effectiveAvgPrice)}</span>
+            <span className="opacity-90 font-mono text-[9px] text-amber-200">
+              ({distAvg >= 0 ? '+' : ''}
+              {distAvg.toFixed(2)}%)
+            </span>
+          </span>
+        )}
 
         {/* TP1 */}
         {tp1Price > 0 && (

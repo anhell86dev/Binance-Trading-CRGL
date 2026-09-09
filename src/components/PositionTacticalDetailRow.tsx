@@ -125,13 +125,63 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     }
   }, [linkedStrategy, stratPrices, currentLivePrice]);
 
-  // Precios Tácticos y de Estrategia
   const e1Price = stratPrices?.entry1Price || entryPrice;
   const e2Price = stratPrices?.entry2Price || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
+  const e3Price = stratPrices?.entry3Price || 0;
   const slPrice = tradeStatus.slPrice || stratPrices?.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
   const tp1Price = tradeStatus.tp1Price || stratPrices?.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
   const tp2Price = tradeStatus.tp2Price || stratPrices?.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
   const tp3Price = stratPrices?.tpFinalPrice || (isLong ? entryPrice * 1.08 : entryPrice * 0.92);
+
+  // Fecha/Hora de apertura de la primera operación (en ms)
+  const openTime = useMemo(() => {
+    if (position.updatedAt && position.updatedAt > 0) return position.updatedAt;
+    if (linkedStrategy?.fecha) {
+      const parsed = new Date(linkedStrategy.fecha).getTime();
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return undefined;
+  }, [position.updatedAt, linkedStrategy]);
+
+  // Precio promedio de entrada para DCA
+  const averageEntryPrice = useMemo(() => {
+    if (position.entryPrice > 0 && position.positionAmt !== 0) {
+      return position.entryPrice;
+    }
+    if (stratPrices?.avgEntryPrice && stratPrices.avgEntryPrice > 0) {
+      return stratPrices.avgEntryPrice;
+    }
+    if (e2Price > 0) {
+      if (e3Price > 0) {
+        return e1Price * 0.5 + e2Price * 0.3 + e3Price * 0.2;
+      }
+      return e1Price * 0.6 + e2Price * 0.4;
+    }
+    return e1Price;
+  }, [position.entryPrice, position.positionAmt, stratPrices, e1Price, e2Price, e3Price]);
+
+  const dcaEntries = useMemo(() => {
+    const list = [
+      { label: 'E1', price: e1Price, pct: stratPrices?.entry1Pct || 50, executed: true },
+    ];
+    if (e2Price > 0) {
+      list.push({
+        label: 'E2 (DCA 1)',
+        price: e2Price,
+        pct: stratPrices?.entry2Pct || 30,
+        executed: (isLong && currentLivePrice <= e2Price) || (!isLong && currentLivePrice >= e2Price),
+      });
+    }
+    if (e3Price > 0) {
+      list.push({
+        label: 'E3 (DCA 2)',
+        price: e3Price,
+        pct: stratPrices?.entry3Pct || 20,
+        executed: (isLong && currentLivePrice <= e3Price) || (!isLong && currentLivePrice >= e3Price),
+      });
+    }
+    return list;
+  }, [e1Price, e2Price, e3Price, stratPrices, isLong, currentLivePrice]);
 
   const [rowTime, setRowTime] = useState(Date.now());
 
@@ -361,18 +411,22 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               );
             })()}
 
-            {/* ApexCharts LineChart para seguimiento en vivo del precio y niveles E1, E2, TP1-3, SL */}
+            {/* ApexCharts LineChart para seguimiento en vivo del precio y niveles E1, E2, E3, Precio Promedio, TP1-3, SL */}
             <ApexTradePriceChart
               symbol={position.symbol}
               isLong={isLong}
-              entryPrice={entryPrice}
+              entryPrice={e1Price}
               currentPrice={currentLivePrice}
               e2Price={e2Price}
+              e3Price={e3Price}
+              averageEntryPrice={averageEntryPrice}
               tp1Price={tp1Price}
               tp2Price={tp2Price}
               tp3Price={tp3Price}
               slPrice={slPrice}
-              height={240}
+              openTime={openTime}
+              dcaEntries={dcaEntries}
+              height={260}
             />
 
             <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 px-1">
