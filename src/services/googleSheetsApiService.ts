@@ -3,8 +3,14 @@ import { strategyService } from './strategyService';
 import { binanceWs } from './binanceWs';
 import { OpenOrder } from '../types/binance';
 import { GoogleSheetStrategyRow } from '../types/strategy';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 const GOOGLE_TOKEN_STORAGE_KEY = 'binance_google_sheets_access_token_v1';
+
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+const auth = getAuth(app);
 
 class GoogleSheetsApiService {
   private accessToken: string | null = null;
@@ -54,16 +60,35 @@ class GoogleSheetsApiService {
   }
 
   /**
-   * Triggers client-side OAuth flow using Google Identity Services (GIS)
+   * Triggers client-side OAuth flow using Firebase Auth or Google Identity Services (GIS)
    */
   public async requestAccessToken(): Promise<string> {
+    // 1. Try Firebase Auth popup first
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/spreadsheets');
+      provider.addScope('https://www.googleapis.com/auth/drive.readonly');
+      
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        this.setAccessToken(credential.accessToken);
+        this.lastSyncError = null;
+        this.notify();
+        return credential.accessToken;
+      }
+    } catch (fbErr: any) {
+      console.warn('Firebase Auth popup attempt finished with warning, trying GIS fallback:', fbErr);
+    }
+
+    // 2. Fallback to GIS with provisioned OAuth Client ID
     return new Promise((resolve, reject) => {
-      // Check if google Identity Services script is available
       if (typeof window === 'undefined') {
         return reject(new Error('Entorno no soportado para OAuth de Google.'));
       }
 
-      // Load GIS script dynamically if not present
+      const clientId = (firebaseConfig as any).oAuthClientId || '965981731655-egfaa86v2jbo1r42cplt3l17uv7hod93.apps.googleusercontent.com';
+
       const ensureGisScript = (): Promise<void> => {
         return new Promise((res, rej) => {
           if ((window as any).google?.accounts?.oauth2) {
@@ -87,8 +112,8 @@ class GoogleSheetsApiService {
           }
 
           const tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: '322867373543-ai-studio-applet.apps.googleusercontent.com', // standard client
-            scope: 'https://www.googleapis.com/auth/spreadsheets',
+            client_id: clientId,
+            scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly',
             callback: (response: any) => {
               if (response.error) {
                 console.error('OAuth GIS Token Error:', response);
