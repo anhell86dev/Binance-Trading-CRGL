@@ -15,18 +15,12 @@ import {
   RefreshCw,
   Clock,
   Bell,
-  BarChart3,
-  ChevronDown,
-  ChevronUp,
-  Maximize2,
-  Minimize2,
   Sparkles,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
 import { PositionRisk, OpenOrder, AccountBalance, NetworkMode, ConnectionStatus, ApiCredentials } from '../types/binance';
 import { PositionsAndOrders } from './PositionsAndOrders';
-import { TradingViewWidget } from './TradingViewWidget';
 
 interface GestionTradesViewProps {
   onOpenOrderModal?: () => void;
@@ -52,17 +46,6 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
   const [lastSyncTime, setLastSyncTime] = useState<number>(() => binanceWs.getLastDataSyncTime());
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-
-  // TradingView Chart State in Gestión de Trades
-  const [isChartVisible, setIsChartVisible] = useState<boolean>(true);
-  const [chartInterval, setChartInterval] = useState<string>('240'); // 4H by default
-  const [chartHeightMode, setChartHeightMode] = useState<'compact' | 'normal' | 'expanded'>('normal');
-  const [selectedChartSymbol, setSelectedChartSymbol] = useState<string>(() => {
-    const curPos = binanceWs.getPositions();
-    if (curPos.length > 0) return curPos[0].symbol;
-    const ticker = binanceWs.getTicker();
-    return ticker.symbol || 'BTCUSDT';
-  });
 
   // Subscribe to pure real-time WebSocket events (no polling, no resets)
   useEffect(() => {
@@ -393,163 +376,7 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
 
       </div>
 
-      {/* 6. Gráfico Avanzado Tipo TradingView en Vivo en Gestión de Trades */}
-      <div
-        id="gestion-trades-tradingview-section"
-        className="w-full bg-neutral-900/95 rounded-2xl border border-neutral-800 shadow-xl overflow-hidden flex flex-col transition-all"
-      >
-        {/* Header del Gráfico TradingView con Selector de Pares y Temporalidades */}
-        <div className="px-4 py-3 bg-neutral-950 border-b border-neutral-800 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 shadow-xs">
-              <BarChart3 className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <span>Gráfico Técnico Pro (TradingView)</span>
-                  <span className="text-amber-400 font-mono font-extrabold">{selectedChartSymbol}</span>
-                </h3>
-                <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-neutral-800 text-neutral-300 border border-neutral-700">
-                  Binance Futures
-                </span>
-              </div>
-              <p className="text-[11px] text-neutral-400 hidden sm:block">
-                Monitoreo interactivo con velas en tiempo real, soporte, resistencias e indicadores técnicos.
-              </p>
-            </div>
-          </div>
-
-          {/* Controles de Gráfico: Selector de Pares, Temporalidad y Opciones de Vista */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Quick Switcher de Posiciones Activas */}
-            <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-1">
-              <span className="text-[10px] font-mono text-neutral-400 px-1 hidden md:inline">Par:</span>
-              {(() => {
-                const uniqueSymbols = Array.from(
-                  new Set([
-                    ...positions.map((p) => p.symbol),
-                    'BTCUSDT',
-                    'ETHUSDT',
-                    'SOLUSDT',
-                    'ZECUSDT',
-                    'TAOUSDT',
-                  ])
-                ).slice(0, 6);
-
-                return uniqueSymbols.map((sym) => {
-                  const hasPos = positions.some((p) => p.symbol === sym);
-                  const isSelected = selectedChartSymbol === sym;
-                  return (
-                    <button
-                      key={sym}
-                      type="button"
-                      onClick={() => setSelectedChartSymbol(sym)}
-                      className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                        isSelected
-                          ? 'bg-amber-500 text-black shadow-xs'
-                          : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
-                      }`}
-                    >
-                      {hasPos && (
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            isSelected ? 'bg-black' : 'bg-emerald-400 animate-pulse'
-                          }`}
-                        />
-                      )}
-                      <span>{sym.replace('USDT', '')}</span>
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-
-            {/* Selector de Intervalos / Temporalidad */}
-            <div className="flex items-center gap-0.5 bg-neutral-900 border border-neutral-800 rounded-lg p-0.5">
-              {[
-                { label: '1m', value: '1' },
-                { label: '5m', value: '5' },
-                { label: '15m', value: '15' },
-                { label: '1H', value: '60' },
-                { label: '4H', value: '240' },
-                { label: '1D', value: 'D' },
-              ].map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setChartInterval(t.value)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all cursor-pointer ${
-                    chartInterval === t.value
-                      ? 'bg-neutral-800 text-amber-400 border border-neutral-700'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Selector de Altura del Gráfico */}
-            <button
-              type="button"
-              onClick={() =>
-                setChartHeightMode((prev) =>
-                  prev === 'compact' ? 'normal' : prev === 'normal' ? 'expanded' : 'compact'
-                )
-              }
-              className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white border border-neutral-800 transition-colors cursor-pointer"
-              title={`Ajustar tamaño del gráfico (Actual: ${chartHeightMode})`}
-            >
-              {chartHeightMode === 'expanded' ? (
-                <Minimize2 className="w-3.5 h-3.5" />
-              ) : (
-                <Maximize2 className="w-3.5 h-3.5" />
-              )}
-            </button>
-
-            {/* Toggle Mostrar / Ocultar Gráfico */}
-            <button
-              type="button"
-              onClick={() => setIsChartVisible(!isChartVisible)}
-              className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-              title={isChartVisible ? 'Plegar gráfico TradingView' : 'Desplegar gráfico TradingView'}
-            >
-              {isChartVisible ? (
-                <>
-                  <ChevronUp className="w-3.5 h-3.5 text-neutral-400" />
-                  <span className="hidden sm:inline">Plegar</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Expandir Gráfico</span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Iframe Interactivo de TradingView */}
-        {isChartVisible && (
-          <div className="w-full bg-neutral-950 p-1">
-            <TradingViewWidget
-              symbol={selectedChartSymbol}
-              interval={chartInterval}
-              height={
-                chartHeightMode === 'compact'
-                  ? '380px'
-                  : chartHeightMode === 'expanded'
-                  ? '640px'
-                  : '500px'
-              }
-              theme="dark"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* 8. Bandeja Operativa Principal: Posiciones, Órdenes, Historial & Disciplinas */}
+      {/* Bandeja Operativa Principal: Posiciones, Órdenes, Historial & Disciplinas */}
       <div
         id="gestion-trades-tray-card"
         className="w-full flex-1 bg-neutral-900/95 rounded-2xl border-2 border-neutral-800 hover:border-amber-500/40 overflow-hidden flex flex-col shadow-2xl ring-1 ring-amber-500/10 transition-colors"
@@ -599,7 +426,6 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
           <PositionsAndOrders
             defaultTab="positions"
             onOpenOrderModal={onOpenOrderModal}
-            onSelectPosition={(pos) => setSelectedChartSymbol(pos.symbol)}
           />
         </div>
       </div>
