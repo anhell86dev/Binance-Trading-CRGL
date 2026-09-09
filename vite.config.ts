@@ -20,10 +20,12 @@ function googleSheetsProxyPlugin(): Plugin {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
               'Accept': 'text/csv, text/plain, application/json, */*',
+              'Cache-Control': 'no-cache',
             },
           });
           res.statusCode = response.status;
           res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
           res.setHeader('Content-Type', response.headers.get('content-type') || 'text/csv; charset=utf-8');
           const data = await response.text();
           res.end(data);

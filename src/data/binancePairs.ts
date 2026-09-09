@@ -59,10 +59,11 @@ export const BINANCE_POPULAR_PAIRS: BinancePairInfo[] = [
   { symbol: 'STXUSDT', baseAsset: 'STX', quoteAsset: 'USDT', name: 'Stacks', category: 'Layer 1 / Layer 2' },
 
   // Memes
-  { symbol: 'PEPEUSDT', baseAsset: 'PEPE', quoteAsset: 'USDT', name: 'Pepe', category: 'Memes', popular: true },
-  { symbol: 'SHIBUSDT', baseAsset: 'SHIB', quoteAsset: 'USDT', name: 'Shiba Inu', category: 'Memes', popular: true },
-  { symbol: 'BONKUSDT', baseAsset: 'BONK', quoteAsset: 'USDT', name: 'Bonk', category: 'Memes' },
-  { symbol: 'FLOKIUSDT', baseAsset: 'FLOKI', quoteAsset: 'USDT', name: 'Floki', category: 'Memes' },
+  { symbol: '1000PEPEUSDT', baseAsset: '1000PEPE', quoteAsset: 'USDT', name: 'Pepe (1000PEPE)', category: 'Memes', popular: true },
+  { symbol: '1000PUMPUSDT', baseAsset: '1000PUMP', quoteAsset: 'USDT', name: 'Pump (1000PUMP)', category: 'Memes', popular: true },
+  { symbol: '1000SHIBUSDT', baseAsset: '1000SHIB', quoteAsset: 'USDT', name: 'Shiba Inu (1000SHIB)', category: 'Memes', popular: true },
+  { symbol: '1000BONKUSDT', baseAsset: '1000BONK', quoteAsset: 'USDT', name: 'Bonk (1000BONK)', category: 'Memes' },
+  { symbol: '1000FLOKIUSDT', baseAsset: '1000FLOKI', quoteAsset: 'USDT', name: 'Floki (1000FLOKI)', category: 'Memes' },
   { symbol: 'WIFUSDT', baseAsset: 'WIF', quoteAsset: 'USDT', name: 'dogwifhat', category: 'Memes' },
   { symbol: 'BOMEUSDT', baseAsset: 'BOME', quoteAsset: 'USDT', name: 'BOOK OF MEME', category: 'Memes' },
 
@@ -77,12 +78,127 @@ export const BINANCE_POPULAR_PAIRS: BinancePairInfo[] = [
 ];
 
 /**
+ * Known Binance Futures USDT-M contract multipliers and symbol remaps
+ * e.g. PEPE -> 1000PEPEUSDT (* 1000), PUMP -> 1000PUMPUSDT (* 1000)
+ */
+export const BINANCE_FUTURES_MULTIPLIERS: Record<string, { futuresSymbol: string; multiplier: number }> = {
+  PEPE: { futuresSymbol: '1000PEPEUSDT', multiplier: 1000 },
+  PEPEUSDT: { futuresSymbol: '1000PEPEUSDT', multiplier: 1000 },
+  '1000PEPE': { futuresSymbol: '1000PEPEUSDT', multiplier: 1000 },
+  '1000PEPEUSDT': { futuresSymbol: '1000PEPEUSDT', multiplier: 1000 },
+
+  PUMP: { futuresSymbol: '1000PUMPUSDT', multiplier: 1000 },
+  PUMPUSDT: { futuresSymbol: '1000PUMPUSDT', multiplier: 1000 },
+  '1000PUMP': { futuresSymbol: '1000PUMPUSDT', multiplier: 1000 },
+  '1000PUMPUSDT': { futuresSymbol: '1000PUMPUSDT', multiplier: 1000 },
+
+  SHIB: { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  SHIBUSDT: { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  '1000SHIB': { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  '1000SHIBUSDT': { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+
+  FLOKI: { futuresSymbol: '1000FLOKIUSDT', multiplier: 1000 },
+  FLOKIUSDT: { futuresSymbol: '1000FLOKIUSDT', multiplier: 1000 },
+  '1000FLOKI': { futuresSymbol: '1000FLOKIUSDT', multiplier: 1000 },
+  '1000FLOKIUSDT': { futuresSymbol: '1000FLOKIUSDT', multiplier: 1000 },
+
+  BONK: { futuresSymbol: '1000BONKUSDT', multiplier: 1000 },
+  BONKUSDT: { futuresSymbol: '1000BONKUSDT', multiplier: 1000 },
+  '1000BONK': { futuresSymbol: '1000BONKUSDT', multiplier: 1000 },
+  '1000BONKUSDT': { futuresSymbol: '1000BONKUSDT', multiplier: 1000 },
+
+  SATS: { futuresSymbol: '1000SATSUSDT', multiplier: 1000 },
+  SATSUSDT: { futuresSymbol: '1000SATSUSDT', multiplier: 1000 },
+  '1000SATS': { futuresSymbol: '1000SATSUSDT', multiplier: 1000 },
+  '1000SATSUSDT': { futuresSymbol: '1000SATSUSDT', multiplier: 1000 },
+
+  LUNC: { futuresSymbol: '1000LUNCUSDT', multiplier: 1000 },
+  LUNCUSDT: { futuresSymbol: '1000LUNCUSDT', multiplier: 1000 },
+  '1000LUNC': { futuresSymbol: '1000LUNCUSDT', multiplier: 1000 },
+  '1000LUNCUSDT': { futuresSymbol: '1000LUNCUSDT', multiplier: 1000 },
+
+  RATS: { futuresSymbol: '1000RATSUSDT', multiplier: 1000 },
+  RATSUSDT: { futuresSymbol: '1000RATSUSDT', multiplier: 1000 },
+  '1000RATS': { futuresSymbol: '1000RATSUSDT', multiplier: 1000 },
+  '1000RATSUSDT': { futuresSymbol: '1000RATSUSDT', multiplier: 1000 },
+
+  CHEEMS: { futuresSymbol: '1000CHEEMSUSDT', multiplier: 1000 },
+  CHEEMSUSDT: { futuresSymbol: '1000CHEEMSUSDT', multiplier: 1000 },
+  '1000CHEEMS': { futuresSymbol: '1000CHEEMSUSDT', multiplier: 1000 },
+  '1000CHEEMSUSDT': { futuresSymbol: '1000CHEEMSUSDT', multiplier: 1000 },
+
+  CAT: { futuresSymbol: '1000CATUSDT', multiplier: 1000 },
+  CATUSDT: { futuresSymbol: '1000CATUSDT', multiplier: 1000 },
+  '1000CAT': { futuresSymbol: '1000CATUSDT', multiplier: 1000 },
+  '1000CATUSDT': { futuresSymbol: '1000CATUSDT', multiplier: 1000 },
+
+  NEIRO: { futuresSymbol: '1000NEIROUSDT', multiplier: 1000 },
+  NEIROUSDT: { futuresSymbol: '1000NEIROUSDT', multiplier: 1000 },
+  '1000NEIRO': { futuresSymbol: '1000NEIROUSDT', multiplier: 1000 },
+  '1000NEIROUSDT': { futuresSymbol: '1000NEIROUSDT', multiplier: 1000 },
+
+  MOG: { futuresSymbol: '1000MOGUSDT', multiplier: 1000 },
+  MOGUSDT: { futuresSymbol: '1000MOGUSDT', multiplier: 1000 },
+  '1000MOG': { futuresSymbol: '1000MOGUSDT', multiplier: 1000 },
+  '1000MOGUSDT': { futuresSymbol: '1000MOGUSDT', multiplier: 1000 },
+
+  WHY: { futuresSymbol: '1000WHYUSDT', multiplier: 1000 },
+  WHYUSDT: { futuresSymbol: '1000WHYUSDT', multiplier: 1000 },
+  '1000WHY': { futuresSymbol: '1000WHYUSDT', multiplier: 1000 },
+  '1000WHYUSDT': { futuresSymbol: '1000WHYUSDT', multiplier: 1000 },
+
+  APU: { futuresSymbol: '1000APUUSDT', multiplier: 1000 },
+  APUUSDT: { futuresSymbol: '1000APUUSDT', multiplier: 1000 },
+  '1000APU': { futuresSymbol: '1000APUUSDT', multiplier: 1000 },
+  '1000APUUSDT': { futuresSymbol: '1000APUUSDT', multiplier: 1000 },
+
+  XEC: { futuresSymbol: '1000XECUSDT', multiplier: 1000 },
+  XECUSDT: { futuresSymbol: '1000XECUSDT', multiplier: 1000 },
+  '1000XEC': { futuresSymbol: '1000XECUSDT', multiplier: 1000 },
+  '1000XECUSDT': { futuresSymbol: '1000XECUSDT', multiplier: 1000 },
+
+  BABYDOGE: { futuresSymbol: '1MBABYDOGEUSDT', multiplier: 1000000 },
+  BABYDOGEUSDT: { futuresSymbol: '1MBABYDOGEUSDT', multiplier: 1000000 },
+  '1MBABYDOGE': { futuresSymbol: '1MBABYDOGEUSDT', multiplier: 1000000 },
+  '1MBABYDOGEUSDT': { futuresSymbol: '1MBABYDOGEUSDT', multiplier: 1000000 },
+};
+
+/**
+ * Returns the contract price multiplier for micro-assets on Binance Futures
+ * e.g. PEPE / 1000PEPE -> 1000, 1MBABYDOGE -> 1000000, BTC -> 1
+ */
+export function getBinanceSymbolMultiplier(symbol: string): number {
+  if (!symbol) return 1;
+  const clean = symbol.trim().toUpperCase().replace(/[\s\/\-_]/g, '');
+  if (BINANCE_FUTURES_MULTIPLIERS[clean]) {
+    return BINANCE_FUTURES_MULTIPLIERS[clean].multiplier;
+  }
+  const base = clean.endsWith('USDT') ? clean.slice(0, -4) : clean.endsWith('BUSD') ? clean.slice(0, -4) : clean;
+  if (BINANCE_FUTURES_MULTIPLIERS[base]) {
+    return BINANCE_FUTURES_MULTIPLIERS[base].multiplier;
+  }
+  if (clean.startsWith('1M')) return 1000000;
+  if (clean.startsWith('1000')) return 1000;
+  return 1;
+}
+
+/**
  * Normalizes any input into a valid Binance USDT perpetual symbol
- * e.g. "btc" -> "BTCUSDT", "ETHUSDT" -> "ETHUSDT", "sol/usdt" -> "SOLUSDT"
+ * e.g. "pepe" -> "1000PEPEUSDT", "pump" -> "1000PUMPUSDT", "btc" -> "BTCUSDT"
  */
 export function normalizeBinanceSymbol(input: string): string {
   if (!input) return 'BTCUSDT';
   const clean = input.trim().toUpperCase().replace(/[\s\/\-_]/g, '');
+
+  if (BINANCE_FUTURES_MULTIPLIERS[clean]) {
+    return BINANCE_FUTURES_MULTIPLIERS[clean].futuresSymbol;
+  }
+
+  const base = clean.endsWith('USDT') ? clean.slice(0, -4) : clean.endsWith('BUSD') ? clean.slice(0, -4) : clean;
+  if (BINANCE_FUTURES_MULTIPLIERS[base]) {
+    return BINANCE_FUTURES_MULTIPLIERS[base].futuresSymbol;
+  }
+
   if (clean.endsWith('USDT') || clean.endsWith('BUSD') || clean.endsWith('USDC')) {
     return clean;
   }

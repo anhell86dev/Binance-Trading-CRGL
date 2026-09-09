@@ -80,7 +80,7 @@ class StrategyService {
   }
 
   /**
-   * Initializes periodic polling every 20 seconds to auto-update from Google Sheets
+   * Initializes periodic polling every 10 seconds to auto-update strategies from Google Sheets in real-time
    */
   private initAutoSync() {
     if (this.autoSyncInterval) {
@@ -88,7 +88,13 @@ class StrategyService {
     }
     this.autoSyncInterval = setInterval(() => {
       this.syncFromGoogleSheets(this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL, true);
-    }, 20000);
+    }, 10000);
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', () => {
+        this.syncFromGoogleSheets(this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL, true);
+      });
+    }
   }
 
   /**

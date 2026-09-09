@@ -7,6 +7,7 @@ import {
   ParsedStrategyPrices,
 } from '../types/strategy';
 import { OpenOrder } from '../types/binance';
+import { normalizeBinanceSymbol, getBinanceSymbolMultiplier } from '../data/binancePairs';
 
 export const SAMPLE_GOOGLE_SHEET_CSV = `No. Estrategia,Fecha,Nombre de Estrategia,Par,Temporalidad,Tipo de Orden,Indicadores Clave,Reglas de Entrada,Reglas de Salida / TP,Gestión de Riesgo & Stop Loss,Comentarios / Backtesting,Estado
 ZEC-20260902-RETROCESO,2026-09-02,Acumulación en Retroceso y Testeo de SMA-15,ZECUSDT,1D / 4H / 1H,Limit (DCA) + SL + TP,"SMA-15 ($760.45), Mínimo $789.12, SMA-7 ($813.98), Resistencia $839.76, Máx 8 años $888","DCA: E1 (50%) @ $785.00, E2 (30%) @ $770.00, E3 (20%) @ $760.00 (Promedio: $775.50)",TP1 (50%) @ $838.00; TP2 (30%) @ $885.00; TP Final (20%) @ $950.00,SL Global @ $748.00 (bajo SMA-15 $760.45). ROE Máx 5X: -17.73%. Margen Aislado,Superada por análisis del 03/09.,Obsoleto
@@ -350,16 +351,17 @@ export async function fetchGoogleSheetCsv(
   const directUrl = convertToGoogleSheetCsvUrl(url, options);
   if (!directUrl) return '';
 
+  const cacheBustUrl = `${directUrl}${directUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
   const timeoutMs = options?.timeoutMs || 9000;
 
   // 1. First attempt: via local proxy endpoint to bypass any browser CORS restrictions
   try {
-    const proxyUrl = `/api/sheets-proxy?url=${encodeURIComponent(directUrl)}`;
+    const proxyUrl = `/api/sheets-proxy?url=${encodeURIComponent(cacheBustUrl)}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(proxyUrl, {
       signal: controller.signal,
-      headers: { Accept: 'text/csv, text/plain, */*' },
+      headers: { Accept: 'text/csv, text/plain, */*', 'Cache-Control': 'no-cache' },
     });
     clearTimeout(timeoutId);
 
@@ -706,20 +708,41 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
     }
   }
 
+  // Auto-coupling / Scaling for Binance Futures contract multipliers (e.g. PEPE -> 1000PEPEUSDT, PUMP -> 1000PUMPUSDT)
+  const normSym = normalizeBinanceSymbol(strategy.par || '');
+  const mult = getBinanceSymbolMultiplier(normSym);
+
+  if (mult > 1 && entry1Price > 0) {
+    // Check if the parsed prices are raw unscaled spot prices (e.g. PEPE spot $0.0000095 vs 1000PEPE $0.0095)
+    const unscaledThreshold = mult === 1000000 ? 0.00001 : 0.001;
+    if (entry1Price < unscaledThreshold) {
+      entry1Price *= mult;
+      entry2Price *= mult;
+      if (entry3Price > 0) entry3Price *= mult;
+      if (avgEntryPrice > 0) avgEntryPrice *= mult;
+      if (slPrice > 0) slPrice *= mult;
+      if (tp1Price > 0) tp1Price *= mult;
+      if (tp2Price > 0) tp2Price *= mult;
+      if (tpFinalPrice > 0) tpFinalPrice *= mult;
+    }
+  }
+
+  const decs = (mult > 1 || entry1Price < 1) ? 8 : 4;
+
   return {
-    entry1Price: Number(entry1Price.toFixed(4)),
+    entry1Price: Number(entry1Price.toFixed(decs)),
     entry1Pct,
-    entry2Price: Number(entry2Price.toFixed(4)),
+    entry2Price: Number(entry2Price.toFixed(decs)),
     entry2Pct,
-    entry3Price: entry3Price > 0 ? Number(entry3Price.toFixed(4)) : undefined,
+    entry3Price: entry3Price > 0 ? Number(entry3Price.toFixed(decs)) : undefined,
     entry3Pct: entry3Price > 0 ? entry3Pct : undefined,
-    avgEntryPrice: Number(avgEntryPrice.toFixed(4)),
-    slPrice: Number(slPrice.toFixed(4)),
-    tp1Price: Number(tp1Price.toFixed(4)),
+    avgEntryPrice: Number(avgEntryPrice.toFixed(decs)),
+    slPrice: Number(slPrice.toFixed(decs)),
+    tp1Price: Number(tp1Price.toFixed(decs)),
     tp1Pct,
-    tp2Price: Number(tp2Price.toFixed(4)),
+    tp2Price: Number(tp2Price.toFixed(decs)),
     tp2Pct,
-    tpFinalPrice: Number(tpFinalPrice.toFixed(4)),
+    tpFinalPrice: Number(tpFinalPrice.toFixed(decs)),
     tpFinalPct,
     leverage,
   };
