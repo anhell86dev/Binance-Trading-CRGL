@@ -1,11 +1,13 @@
 import React, { useMemo } from 'react';
 import { TradePriceHistory } from '../services/tradePriceHistoryService';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 
 interface TradePriceSparklineProps {
   history: TradePriceHistory | null;
   entryPrice: number;
   currentPrice: number;
   isLong: boolean;
+  symbol?: string;
   width?: number | string;
   height?: number;
   showLabels?: boolean;
@@ -17,6 +19,7 @@ export const TradePriceSparkline: React.FC<TradePriceSparklineProps> = ({
   entryPrice,
   currentPrice,
   isLong,
+  symbol,
   width = '100%',
   height = 56,
   showLabels = true,
@@ -93,10 +96,7 @@ export const TradePriceSparkline: React.FC<TradePriceSparklineProps> = ({
   const fillColor = isProfit ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)';
 
   const formatPrice = (p: number) => {
-    if (!p) return '0.00';
-    if (p >= 100) return p.toFixed(2);
-    if (p >= 1) return p.toFixed(4);
-    return p.toFixed(6);
+    return formatPriceUtil(p, symbol || history?.symbol);
   };
 
   return (

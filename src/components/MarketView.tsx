@@ -17,6 +17,7 @@ import {
 import { binanceApi, WatchlistPriceUpdate } from '../services/binanceApi';
 import { binanceWs } from '../services/binanceWs';
 import { BINANCE_POPULAR_PAIRS, normalizeBinanceSymbol } from '../data/binancePairs';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 
 interface MarketViewProps {
   onSelectSymbolForTrading: (symbol: string) => void;
@@ -37,11 +38,8 @@ export const MarketView: React.FC<MarketViewProps> = ({ onSelectSymbolForTrading
   }, []);
 
   // Format price helper
-  const formatPrice = (p: number) => {
-    if (!p || isNaN(p)) return '0.00';
-    if (p >= 100) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (p >= 1) return p.toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 4 });
-    return p.toLocaleString('en-US', { minimumFractionDigits: 5, maximumFractionDigits: 6 });
+  const formatPrice = (p: number, sym?: string) => {
+    return formatPriceUtil(p, sym);
   };
 
   const marketList = useMemo(() => {
@@ -287,7 +285,7 @@ export const MarketView: React.FC<MarketViewProps> = ({ onSelectSymbolForTrading
                     </td>
 
                     <td className="py-3.5 px-4 font-bold text-neutral-100 text-xs sm:text-sm">
-                      ${formatPrice(coin.price)}
+                      ${formatPrice(coin.price, coin.symbol)}
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -307,9 +305,9 @@ export const MarketView: React.FC<MarketViewProps> = ({ onSelectSymbolForTrading
                     </td>
 
                     <td className="py-3.5 px-4 text-neutral-400 text-[11px] hidden md:table-cell">
-                      <span>${formatPrice(coin.low24h)}</span>
+                      <span>${formatPrice(coin.low24h, coin.symbol)}</span>
                       <span className="mx-1.5 text-neutral-600">—</span>
-                      <span>${formatPrice(coin.high24h)}</span>
+                      <span>${formatPrice(coin.high24h, coin.symbol)}</span>
                     </td>
 
                     <td className="py-3.5 px-4 text-neutral-300 text-xs hidden sm:table-cell">

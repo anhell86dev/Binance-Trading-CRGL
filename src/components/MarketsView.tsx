@@ -43,6 +43,7 @@ import {
 } from '../services/marketsService';
 import { binanceWs } from '../services/binanceWs';
 import { MarketLiquidityVolatilityChart } from './MarketLiquidityVolatilityChart';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 
 interface MarketsViewProps {
   onNavigateToFutures: (symbol: string) => void;
@@ -95,18 +96,8 @@ export const MarketsView: React.FC<MarketsViewProps> = ({
     onNavigateToFutures(symbol);
   };
 
-  const formatPrice = (price: number): string => {
-    if (!price || isNaN(price)) return '0.00';
-    if (price >= 1000) {
-      return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-    if (price >= 1) {
-      return price.toFixed(2);
-    }
-    if (price >= 0.01) {
-      return price.toFixed(4);
-    }
-    return price.toFixed(6);
+  const formatPrice = (price: number, sym?: string): string => {
+    return formatPriceUtil(price, sym);
   };
 
   const formatVolume = (vol: number): string => {
@@ -783,7 +774,7 @@ export const MarketsView: React.FC<MarketsViewProps> = ({
                       {/* Precio & Cambio */}
                       <td className="py-3 px-4">
                         <div className="font-bold text-white text-xs">
-                          ${formatPrice(pair.lastPrice)}
+                          ${formatPrice(pair.lastPrice, pair.symbol)}
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                           <span
@@ -823,8 +814,8 @@ export const MarketsView: React.FC<MarketsViewProps> = ({
                             {getVolatilityBadge(pair.volatilityTier, pair.volatilityPercent24h)}
                           </div>
                           <div className="text-[10px] text-neutral-400 font-mono flex items-center justify-between">
-                            <span>L: ${formatPrice(pair.low24h)}</span>
-                            <span>H: ${formatPrice(pair.high24h)}</span>
+                            <span>L: ${formatPrice(pair.low24h, pair.symbol)}</span>
+                            <span>H: ${formatPrice(pair.high24h, pair.symbol)}</span>
                           </div>
                         </div>
                       </td>
@@ -946,7 +937,7 @@ export const MarketsView: React.FC<MarketsViewProps> = ({
                     <div>
                       <div className="text-[10px] text-neutral-400">Precio</div>
                       <div className="text-base font-bold text-white font-mono">
-                        ${formatPrice(pair.lastPrice)}
+                        ${formatPrice(pair.lastPrice, pair.symbol)}
                       </div>
                     </div>
                     <div>

@@ -28,6 +28,7 @@ import {
   MilestoneAlertEvent,
   PositionMilestoneLevels,
 } from '../services/tradeMilestonesAlertService';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import {
   tradePriceHistoryService,
   TradePriceHistory,
@@ -107,10 +108,7 @@ export const ActiveTradeInspectorWithMilestones: React.FC<ActiveTradeInspectorPr
   }, [activePosition]);
 
   const formatPrice = (p: number) => {
-    if (!p) return '0.00';
-    if (p >= 100) return p.toFixed(2);
-    if (p >= 1) return p.toFixed(4);
-    return p.toFixed(6);
+    return formatPriceUtil(p, activePosition?.symbol);
   };
 
   const handleSelectSym = (sym: string) => {

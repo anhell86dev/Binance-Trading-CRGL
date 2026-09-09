@@ -38,6 +38,7 @@ import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 import { GitBranch, Activity, Volume2, VolumeX } from 'lucide-react';
 import { tradeMilestonesAlertService } from '../services/tradeMilestonesAlertService';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import { notificationService } from '../services/notifications';
 
 interface OpenPositionsTableProps {
@@ -636,11 +637,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 const { tpValue, slValue, tpOrder, slOrder } = getEffectiveTPSL(pos);
 
                 const formatPrice = (price: number): string => {
-                  if (!price || isNaN(price)) return '0.00';
-                  if (price >= 1000) return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                  if (price >= 1) return price.toFixed(2);
-                  if (price >= 0.01) return price.toFixed(4);
-                  return price.toFixed(6);
+                  return formatPriceUtil(price, pos.symbol);
                 };
 
                 const notionalUsd = qty * (pos.entryPrice || effectiveMarketPrice);
@@ -917,6 +914,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                                 entryPrice={pos.entryPrice}
                                 currentPrice={effectiveMarketPrice}
                                 isLong={isLong}
+                                symbol={pos.symbol}
                                 height={28}
                                 showLabels={false}
                                 className="w-full"

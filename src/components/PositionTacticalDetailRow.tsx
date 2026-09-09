@@ -12,6 +12,7 @@ import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
 import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import { ApexTradePriceChart } from './ApexTradePriceChart';
 import { TacticalPairVolatilityCard } from './TacticalPairVolatilityCard';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -162,11 +163,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const notionalUsd = qty * currentLivePrice;
 
   const formatVal = (num: number): string => {
-    if (!num || isNaN(num)) return '0.00';
-    if (num >= 1000) return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (num >= 1) return num.toFixed(2);
-    if (num >= 0.01) return num.toFixed(4);
-    return num.toFixed(6);
+    return formatPriceUtil(num, position.symbol);
   };
 
   // Acciones Rápidas

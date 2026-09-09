@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PositionRisk, OpenOrder } from '../types/binance';
 import { TradeStatusAndPhase, getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import {
   GitBranch,
   Target,
@@ -105,11 +106,7 @@ export const TradeMatrix: React.FC<TradeMatrixProps> = ({
   } = status;
 
   const fmt = (val: number | undefined) => {
-    if (!val || isNaN(val)) return '0.00';
-    if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    if (val >= 1) return val.toFixed(2);
-    if (val >= 0.01) return val.toFixed(4);
-    return val.toFixed(6);
+    return formatPriceUtil(val, position.symbol);
   };
 
   const calcDist = (targetPrice: number) => {

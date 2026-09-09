@@ -5,6 +5,7 @@ import {
   MilestoneType,
 } from '../services/tradeMilestonesAlertService';
 import { notificationService } from '../services/notifications';
+import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import {
   Volume2,
   VolumeX,
@@ -83,10 +84,8 @@ export const TradeMilestonesAlertBanner: React.FC = () => {
     }
   };
 
-  const formatPrice = (val: number) => {
-    if (!val || isNaN(val)) return '0.00';
-    if (val >= 1000) return val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return val.toFixed(3);
+  const formatPrice = (val: number, symbol?: string) => {
+    return formatPriceUtil(val, symbol);
   };
 
   return (
@@ -219,7 +218,7 @@ export const TradeMilestonesAlertBanner: React.FC = () => {
               </span>
               <span className="font-bold text-white tracking-wide">{latestAlert.symbol}</span>
               <span className="text-neutral-300 hidden md:inline">
-                Precio: ${formatPrice(latestAlert.triggerPrice)} (Nivel: ${formatPrice(latestAlert.levelPrice)})
+                Precio: ${formatPrice(latestAlert.triggerPrice, latestAlert.symbol)} (Nivel: ${formatPrice(latestAlert.levelPrice, latestAlert.symbol)})
               </span>
               <span className="text-[10px] text-neutral-400">
                 {new Date(latestAlert.timestamp).toLocaleTimeString()}
