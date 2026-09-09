@@ -105,10 +105,16 @@ class TradeMilestonesAlertService {
     );
   }
 
-  public hasRecentAlert(symbol: string, withinMs = 15000): boolean {
+  public hasRecentAlert(symbol: string, withinMs = 10000): boolean {
     const latest = this.getLatestAlertForSymbol(symbol);
     if (!latest) return false;
     return Date.now() - latest.timestamp < withinMs;
+  }
+
+  public getLatestActiveAlertForSymbol(symbol: string, withinMs = 10000): MilestoneAlertEvent | null {
+    const latest = this.getLatestAlertForSymbol(symbol);
+    if (!latest) return null;
+    return Date.now() - latest.timestamp < withinMs ? latest : null;
   }
 
   public clearAlerts() {

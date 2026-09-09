@@ -148,12 +148,17 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       setPriceTick(Date.now());
     });
 
+    const alertTimer = setInterval(() => {
+      setPriceTick(Date.now());
+    }, 1000);
+
     return () => {
       unsub();
       unsubLivePrices();
       unsubHist();
       unsubStrat();
       unsubMilestones();
+      clearInterval(alertTimer);
     };
   }, []);
 
@@ -639,8 +644,8 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 };
 
                 const notionalUsd = qty * (pos.entryPrice || effectiveMarketPrice);
-                const hasMilestoneAlert = tradeMilestonesAlertService.hasRecentAlert(pos.symbol);
-                const latestMilestoneAlert = tradeMilestonesAlertService.getLatestAlertForSymbol(pos.symbol);
+                const hasMilestoneAlert = tradeMilestonesAlertService.hasRecentAlert(pos.symbol, 10000);
+                const latestMilestoneAlert = tradeMilestonesAlertService.getLatestActiveAlertForSymbol(pos.symbol, 10000);
 
                 return (
                   <React.Fragment key={pos.symbol}>

@@ -132,8 +132,20 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const tp2Price = tradeStatus.tp2Price || stratPrices?.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
   const tp3Price = stratPrices?.tpFinalPrice || (isLong ? entryPrice * 1.08 : entryPrice * 0.92);
 
-  // Alerta de hito reciente para esta posición
-  const recentAlert = tradeMilestonesAlertService.getLatestAlertForSymbol(position.symbol);
+  const [rowTime, setRowTime] = useState(Date.now());
+
+  useEffect(() => {
+    const unsub = tradeMilestonesAlertService.subscribe(() => setRowTime(Date.now()));
+    const interval = setInterval(() => setRowTime(Date.now()), 1000);
+    return () => {
+      unsub();
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Alerta de hito reciente para esta posición (activa estrictamente por 10 segundos)
+  const recentAlert = tradeMilestonesAlertService.getLatestActiveAlertForSymbol(position.symbol, 10000);
+  const isRecentAlertActive = Boolean(recentAlert && (rowTime - recentAlert.timestamp < 10000));
 
   // Cálculos financieros
   const calculatedPnl = isLong
@@ -305,34 +317,52 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 
           {/* 4. GRÁFICO TÁCTICO DE NIVELES EN VIVO CON APEXCHARTS LINECHART */}
           <div className="flex flex-col gap-2">
-            {/* Alerta de hito activo en esta posición si cruzó algún nivel clave */}
-            {recentAlert && (
-              <div
-                className={`px-3 py-2 rounded-lg border text-xs font-mono flex items-center justify-between gap-2 ${
-                  recentAlert.milestone === 'SL'
-                    ? 'bg-rose-950/80 border-rose-600 text-rose-200 animate-pulse'
-                    : recentAlert.milestone.startsWith('TP')
-                    ? 'bg-emerald-950/80 border-emerald-600 text-emerald-200'
-                    : 'bg-amber-950/80 border-amber-600 text-amber-200'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">🚨 Hito Cruzado: {recentAlert.milestone}</span>
-                  <span className="text-neutral-300">
-                    a ${formatVal(recentAlert.triggerPrice)} (Nivel ${formatVal(recentAlert.levelPrice)})
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => notificationService.playMilestoneSound(recentAlert.milestone)}
-                  className="px-2 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] flex items-center gap-1 border border-neutral-700"
-                  title="Re-escuchar sonido de la alerta"
+            {/* Alerta de hito activo en esta posición si cruzó algún nivel clave (desaparece a los 10 segundos) */}
+            {isRecentAlertActive && recentAlert && (() => {
+              const elapsed = Math.max(0, Math.min(10000, rowTime - recentAlert.timestamp));
+              const remainingSeconds = Math.max(1, Math.ceil((10000 - elapsed) / 1000));
+
+              return (
+                <div
+                  className={`relative overflow-hidden px-3 py-2 rounded-lg border text-xs font-mono flex items-center justify-between gap-2 shadow-xs ${
+                    recentAlert.milestone === 'SL'
+                      ? 'bg-rose-950/80 border-rose-600 text-rose-200 animate-pulse'
+                      : recentAlert.milestone.startsWith('TP')
+                      ? 'bg-emerald-950/80 border-emerald-600 text-emerald-200'
+                      : 'bg-amber-950/80 border-amber-600 text-amber-200'
+                  }`}
                 >
-                  <Volume2 className="w-3 h-3 text-amber-400" />
-                  <span>Sonido</span>
-                </button>
-              </div>
-            )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold">🚨 Hito Cruzado: {recentAlert.milestone}</span>
+                    <span className="text-neutral-300">
+                      a ${formatVal(recentAlert.triggerPrice)} (Nivel ${formatVal(recentAlert.levelPrice)})
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded bg-black/40 text-[9px] text-amber-300 border border-amber-500/30">
+                      ⏱ Cierra en {remainingSeconds}s • Queda no leída en campana
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => notificationService.playMilestoneSound(recentAlert.milestone)}
+                    className="px-2 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] flex items-center gap-1 border border-neutral-700 cursor-pointer shrink-0"
+                    title="Re-escuchar sonido de la alerta"
+                  >
+                    <Volume2 className="w-3 h-3 text-amber-400" />
+                    <span>Sonido</span>
+                  </button>
+
+                  {/* Barra de progreso de 10 segundos */}
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/30">
+                    <div
+                      className="h-full bg-amber-400/80 transition-all duration-300 ease-linear"
+                      style={{
+                        width: `${Math.max(0, 100 - (elapsed / 10000) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ApexCharts LineChart para seguimiento en vivo del precio y niveles E1, E2, TP1-3, SL */}
             <ApexTradePriceChart

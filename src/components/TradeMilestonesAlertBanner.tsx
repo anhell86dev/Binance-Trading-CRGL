@@ -25,20 +25,29 @@ export const TradeMilestonesAlertBanner: React.FC = () => {
   const [soundEnabled, setSoundEnabled] = useState<boolean>(notificationService.isSoundEnabled());
   const [showTestMenu, setShowTestMenu] = useState<boolean>(false);
   const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
   useEffect(() => {
     const update = () => {
       setAlerts(tradeMilestonesAlertService.getAlerts());
       setSoundEnabled(notificationService.isSoundEnabled());
+      setIsDismissed(false); // Reset dismissal on new alert
+      setCurrentTime(Date.now());
     };
 
     update();
     const unsubMilestones = tradeMilestonesAlertService.subscribe(update);
     const unsubNotifs = notificationService.subscribe(update);
 
+    // Timer de 1s para actualizar la cuenta regresiva de 10s del banner activo
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
     return () => {
       unsubMilestones();
       unsubNotifs();
+      clearInterval(interval);
     };
   }, []);
 
@@ -185,55 +194,73 @@ export const TradeMilestonesAlertBanner: React.FC = () => {
         </div>
       </div>
 
-      {/* Dynamic Alert Banner when a recent alert exists */}
-      {latestAlert && !isDismissed && Date.now() - latestAlert.timestamp < 60000 && (
-        <div
-          className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-xs font-mono transition-all ${
-            latestAlert.milestone === 'SL'
-              ? 'bg-rose-950/70 border-rose-700/80 text-rose-200'
-              : latestAlert.milestone.startsWith('TP')
-              ? 'bg-emerald-950/60 border-emerald-700/70 text-emerald-200'
-              : 'bg-sky-950/60 border-sky-700/70 text-sky-200'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeColor(
-                latestAlert.milestone
-              )}`}
-            >
-              {latestAlert.milestone} CRUZADO
-            </span>
-            <span className="font-bold text-white tracking-wide">{latestAlert.symbol}</span>
-            <span className="text-neutral-300 hidden md:inline">
-              Precio: ${formatPrice(latestAlert.triggerPrice)} (Nivel: ${formatPrice(latestAlert.levelPrice)})
-            </span>
-            <span className="text-[10px] text-neutral-400">
-              {new Date(latestAlert.timestamp).toLocaleTimeString()}
-            </span>
-          </div>
+      {/* Dynamic Alert Banner when a recent alert exists (Se oculta automáticamente a los 10 segundos) */}
+      {latestAlert && !isDismissed && currentTime - latestAlert.timestamp < 10000 && (() => {
+        const elapsed = Math.max(0, Math.min(10000, currentTime - latestAlert.timestamp));
+        const remainingSeconds = Math.max(1, Math.ceil((10000 - elapsed) / 1000));
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => notificationService.playMilestoneSound(latestAlert.milestone)}
-              className="px-2 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-[10px] text-neutral-200 flex items-center gap-1 border border-neutral-600"
-              title="Re-escuchar sonido"
-            >
-              <Volume2 className="w-3 h-3 text-amber-400" />
-              <span>Sonido</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsDismissed(true)}
-              className="p-1 text-neutral-400 hover:text-white rounded"
-              title="Descartar"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+        return (
+          <div
+            className={`relative overflow-hidden flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-xs font-mono transition-all shadow-md ${
+              latestAlert.milestone === 'SL'
+                ? 'bg-rose-950/80 border-rose-700 text-rose-200'
+                : latestAlert.milestone.startsWith('TP')
+                ? 'bg-emerald-950/70 border-emerald-700 text-emerald-200'
+                : 'bg-sky-950/70 border-sky-700 text-sky-200'
+            }`}
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getBadgeColor(
+                  latestAlert.milestone
+                )}`}
+              >
+                {latestAlert.milestone} CRUZADO
+              </span>
+              <span className="font-bold text-white tracking-wide">{latestAlert.symbol}</span>
+              <span className="text-neutral-300 hidden md:inline">
+                Precio: ${formatPrice(latestAlert.triggerPrice)} (Nivel: ${formatPrice(latestAlert.levelPrice)})
+              </span>
+              <span className="text-[10px] text-neutral-400">
+                {new Date(latestAlert.timestamp).toLocaleTimeString()}
+              </span>
+              <span className="px-1.5 py-0.2 rounded bg-black/40 text-amber-300 text-[10px] border border-amber-500/30">
+                ⏱ Auto-cierre en {remainingSeconds}s • Queda no leída en campana
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => notificationService.playMilestoneSound(latestAlert.milestone)}
+                className="px-2 py-0.5 rounded bg-neutral-800/80 hover:bg-neutral-700 text-[10px] text-neutral-200 flex items-center gap-1 border border-neutral-600 cursor-pointer"
+                title="Re-escuchar sonido"
+              >
+                <Volume2 className="w-3 h-3 text-amber-400" />
+                <span>Sonido</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsDismissed(true)}
+                className="p-1 text-neutral-400 hover:text-white rounded cursor-pointer"
+                title="Cerrar banner (quedará no leída en el centro de notificaciones)"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Barra de cuenta regresiva de 10 segundos */}
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black/30">
+              <div
+                className="h-full bg-amber-400/80 transition-all duration-300 ease-linear"
+                style={{
+                  width: `${Math.max(0, 100 - (elapsed / 10000) * 100)}%`,
+                }}
+              />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
