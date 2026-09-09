@@ -13,7 +13,7 @@ import { strategyService } from './strategyService';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { PositionRisk } from '../types/binance';
 
-export type MilestoneType = 'E2' | 'E3' | 'TP1' | 'TP2' | 'TP3' | 'SL';
+export type MilestoneType = 'E1' | 'E2' | 'E3' | 'TP1' | 'TP2' | 'TP3' | 'SL';
 
 export interface MilestoneAlertEvent {
   id: string;
@@ -32,6 +32,7 @@ export interface PositionMilestoneLevels {
   isLong: boolean;
   entryPrice: number;
   markPrice: number;
+  e1Price: number;
   e2Price: number;
   e3Price: number;
   tp1Price: number;
@@ -44,6 +45,7 @@ export interface PositionMilestoneLevels {
 class TradeMilestonesAlertService {
   private alertsLog: MilestoneAlertEvent[] = [];
   private triggeredAlertKeys: Set<string> = new Set();
+  private prevPriceMap: Map<string, number> = new Map();
   private listeners: Set<() => void> = new Set();
   private isInitialized = false;
 
@@ -90,6 +92,25 @@ class TradeMilestonesAlertService {
     return [...this.alertsLog];
   }
 
+  public getLatestAlert(): MilestoneAlertEvent | null {
+    return this.alertsLog.length > 0 ? this.alertsLog[0] : null;
+  }
+
+  public getLatestAlertForSymbol(symbol: string): MilestoneAlertEvent | null {
+    const cleanSym = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+    return (
+      this.alertsLog.find(
+        (a) => a.symbol.replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanSym
+      ) || null
+    );
+  }
+
+  public hasRecentAlert(symbol: string, withinMs = 15000): boolean {
+    const latest = this.getLatestAlertForSymbol(symbol);
+    if (!latest) return false;
+    return Date.now() - latest.timestamp < withinMs;
+  }
+
   public clearAlerts() {
     this.alertsLog = [];
     this.saveToStorage();
@@ -97,7 +118,7 @@ class TradeMilestonesAlertService {
   }
 
   /**
-   * Derive exact E2, E3, TP1, TP2, TP3, SL for a given position.
+   * Derive exact E1, E2, E3, TP1, TP2, TP3, SL for a given position.
    */
   public getMilestoneLevelsForPosition(pos: PositionRisk): PositionMilestoneLevels {
     const isLong = pos.positionAmt > 0;
@@ -127,6 +148,7 @@ class TradeMilestonesAlertService {
       );
     }
 
+    let e1Price = entryPrice;
     let e2Price = 0;
     let e3Price = 0;
     let tp1Price = pos.takeProfit || 0;
@@ -137,6 +159,7 @@ class TradeMilestonesAlertService {
 
     if (linkedStrategy) {
       const parsed = parsePricesFromStrategy(linkedStrategy);
+      if (parsed.entry1Price) e1Price = parsed.entry1Price;
       if (parsed.entry2Price) e2Price = parsed.entry2Price;
       if (parsed.entry3Price) e3Price = parsed.entry3Price;
       if (!tp1Price && parsed.tp1Price) tp1Price = parsed.tp1Price;
@@ -147,6 +170,7 @@ class TradeMilestonesAlertService {
 
     // Calculated fallbacks if not explicitly provided
     if (entryPrice > 0) {
+      if (!e1Price) e1Price = entryPrice;
       if (!e2Price) e2Price = isLong ? entryPrice * 0.985 : entryPrice * 1.015;
       if (!e3Price) e3Price = isLong ? entryPrice * 0.970 : entryPrice * 1.030;
       if (!tp1Price) tp1Price = isLong ? entryPrice * 1.025 : entryPrice * 0.975;
@@ -160,6 +184,7 @@ class TradeMilestonesAlertService {
       isLong,
       entryPrice,
       markPrice,
+      e1Price,
       e2Price,
       e3Price,
       tp1Price,
@@ -184,6 +209,9 @@ class TradeMilestonesAlertService {
 
       if (!mark || mark <= 0) return;
 
+      const prevMark = this.prevPriceMap.get(pos.symbol) || mark;
+      this.prevPriceMap.set(pos.symbol, mark);
+
       const checkMilestone = (
         milestone: MilestoneType,
         levelPrice: number,
@@ -197,7 +225,7 @@ class TradeMilestonesAlertService {
         const alertKey = `${pos.symbol}_${pos.entryPrice.toFixed(4)}_${milestone}`;
         if (this.triggeredAlertKeys.has(alertKey)) return;
 
-        // Register triggered
+        // Register triggered key
         this.triggeredAlertKeys.add(alertKey);
 
         const alertEvent: MilestoneAlertEvent = {
@@ -210,15 +238,18 @@ class TradeMilestonesAlertService {
           timestamp: Date.now(),
           message: `${badgeText} en ${pos.symbol}: Precio actual $${mark.toFixed(
             2
-          )} alcanzó nivel objetivo $${levelPrice.toFixed(2)} (${isLong ? 'LONG' : 'SHORT'}).`,
+          )} cruzó nivel clave $${levelPrice.toFixed(2)} (${isLong ? 'LONG' : 'SHORT'}).`,
           strategyName: levels.strategyName,
         };
 
         this.alertsLog.unshift(alertEvent);
         hasNewAlert = true;
 
-        // Dispatch in-app audio & toast notification
-        const title = `🚨 ALERTA: Hito ${milestone} Alcanzado (${pos.symbol})`;
+        // 1. Reproducir sonido táctico de acuerdo al hito cruzado
+        notificationService.playMilestoneSound(milestone);
+
+        // 2. Despachar notificación visual in-app / toast
+        const title = `🚨 ALERTA: Nivel ${milestone} Cruzado (${pos.symbol})`;
         const notifType =
           milestone === 'SL'
             ? 'SL_HIT'
@@ -236,33 +267,81 @@ class TradeMilestonesAlertService {
 
       // 1. SL check (Stop Loss)
       const slHit = isLong ? mark <= levels.slPrice : mark >= levels.slPrice;
-      checkMilestone('SL', levels.slPrice, slHit, '🛑 STOP LOSS IMPACTADO', 'urgent');
+      checkMilestone('SL', levels.slPrice, slHit, '🛑 STOP LOSS CRUZADO', 'urgent');
 
       // 2. TP3 check (Take Profit 3 / Final)
       const tp3Hit = isLong ? mark >= levels.tp3Price : mark <= levels.tp3Price;
-      checkMilestone('TP3', levels.tp3Price, tp3Hit, '🏆 TP3 (OBJETIVO MÁXIMO) ALCANZADO', 'urgent');
+      checkMilestone('TP3', levels.tp3Price, tp3Hit, '🏆 TP3 (OBJETIVO MÁXIMO) CRUZADO', 'urgent');
 
       // 3. TP2 check (Take Profit 2)
       const tp2Hit = isLong ? mark >= levels.tp2Price : mark <= levels.tp2Price;
-      checkMilestone('TP2', levels.tp2Price, tp2Hit, '🚀 TP2 ALCANZADO', 'urgent');
+      checkMilestone('TP2', levels.tp2Price, tp2Hit, '🚀 TP2 CRUZADO', 'urgent');
 
       // 4. TP1 check (Take Profit 1)
       const tp1Hit = isLong ? mark >= levels.tp1Price : mark <= levels.tp1Price;
-      checkMilestone('TP1', levels.tp1Price, tp1Hit, '🎯 TP1 ALCANZADO', 'urgent');
+      checkMilestone('TP1', levels.tp1Price, tp1Hit, '🎯 TP1 CRUZADO', 'urgent');
 
-      // 5. E3 check (DCA Nivel 3)
-      const e3Hit = isLong ? mark <= levels.e3Price && mark > levels.slPrice : mark >= levels.e3Price && mark < levels.slPrice;
-      checkMilestone('E3', levels.e3Price, e3Hit, '⚠️ E3 (DCA 3 / CARGA TOTAL) TOCADO', 'normal');
+      // 5. E1 check (Entrada 1 cruzada / tocada)
+      const e1Hit =
+        levels.e1Price > 0 &&
+        ((prevMark > levels.e1Price && mark <= levels.e1Price) ||
+         (prevMark < levels.e1Price && mark >= levels.e1Price) ||
+         Math.abs(mark - levels.e1Price) / levels.e1Price < 0.001);
+      checkMilestone('E1', levels.e1Price, e1Hit, '⚡ E1 (ENTRADA 1) CRUZADA', 'normal');
 
-      // 6. E2 check (DCA Nivel 2)
-      const e2Hit = isLong ? mark <= levels.e2Price && mark > levels.slPrice : mark >= levels.e2Price && mark < levels.slPrice;
-      checkMilestone('E2', levels.e2Price, e2Hit, '⚠️ E2 (DCA 2 / RECARGA) TOCADO', 'normal');
+      // 6. E2 check (DCA Nivel 2 cruzado)
+      const e2Hit = isLong
+        ? (mark <= levels.e2Price && mark > levels.slPrice)
+        : (mark >= levels.e2Price && mark < levels.slPrice);
+      checkMilestone('E2', levels.e2Price, e2Hit, '⚠️ E2 (DCA 2 / RECARGA) CRUZADO', 'normal');
+
+      // 7. E3 check (DCA Nivel 3)
+      if (levels.e3Price > 0) {
+        const e3Hit = isLong
+          ? (mark <= levels.e3Price && mark > levels.slPrice)
+          : (mark >= levels.e3Price && mark < levels.slPrice);
+        checkMilestone('E3', levels.e3Price, e3Hit, '⚠️ E3 (DCA 3 / CARGA TOTAL) CRUZADO', 'normal');
+      }
     });
 
     if (hasNewAlert) {
       this.saveToStorage();
       this.notify();
     }
+  }
+
+  /**
+   * Dispara una alerta de prueba para validar sonidos y elementos visuales
+   */
+  public triggerTestAlert(milestone: MilestoneType, symbol = 'BTCUSDT', customPrice?: number) {
+    const dummyPrice = customPrice || (milestone === 'SL' ? 88200 : milestone.startsWith('TP') ? 93500 : 91000);
+    const alertEvent: MilestoneAlertEvent = {
+      id: `TEST-${Date.now()}`,
+      symbol,
+      milestone,
+      levelPrice: dummyPrice,
+      triggerPrice: dummyPrice,
+      isLong: true,
+      timestamp: Date.now(),
+      message: `Prueba de Alerta: Nivel ${milestone} alcanzado en ${symbol} a $${dummyPrice.toLocaleString('en-US')}.`,
+      strategyName: 'Estrategia de Prueba',
+    };
+
+    this.alertsLog.unshift(alertEvent);
+    this.saveToStorage();
+
+    // Sonido
+    notificationService.testMilestoneSound(milestone);
+
+    // Notificación
+    notificationService.notify(
+      milestone === 'SL' ? 'SL_HIT' : milestone.startsWith('TP') ? 'TP_HIT' : 'EXECUTION',
+      `🔔 Prueba Sonora & Visual: ${milestone}`,
+      alertEvent.message,
+      'normal'
+    );
+
+    this.notify();
   }
 
   public subscribe(listener: () => void): () => void {

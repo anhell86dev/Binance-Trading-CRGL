@@ -1,16 +1,17 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PositionRisk, OpenOrder } from '../types/binance';
 import { binanceWs } from '../services/binanceWs';
 import { livePriceService } from '../services/livePriceService';
 import { strategyService } from '../services/strategyService';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { notificationService } from '../services/notifications';
+import { tradeMilestonesAlertService } from '../services/tradeMilestonesAlertService';
 import { StrategyPositionTracker } from './StrategyPositionTracker';
 import { getTradeStatusAndPhase } from '../utils/tradeStatusMilestones';
 import { TradeMultiPathChronology } from './TradeMultiPathChronology';
 import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
-import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
 import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
+import { ApexTradePriceChart } from './ApexTradePriceChart';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -25,6 +26,7 @@ import {
   ChevronUp,
   Activity,
   Zap,
+  Volume2,
 } from 'lucide-react';
 
 interface PositionTacticalDetailRowProps {
@@ -42,7 +44,6 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 }) => {
   const [showAdvancedTools, setShowAdvancedTools] = useState<boolean>(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const isLong = position.positionAmt > 0;
   const qty = Math.abs(position.positionAmt || 0);
@@ -126,10 +127,16 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     }
   }, [linkedStrategy, stratPrices, currentLivePrice]);
 
-  // Precios Tácticos
-  const slPrice = tradeStatus.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
-  const tp1Price = tradeStatus.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
-  const tp2Price = tradeStatus.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
+  // Precios Tácticos y de Estrategia
+  const e1Price = stratPrices?.entry1Price || entryPrice;
+  const e2Price = stratPrices?.entry2Price || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
+  const slPrice = tradeStatus.slPrice || stratPrices?.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
+  const tp1Price = tradeStatus.tp1Price || stratPrices?.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
+  const tp2Price = tradeStatus.tp2Price || stratPrices?.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
+  const tp3Price = stratPrices?.tpFinalPrice || (isLong ? entryPrice * 1.08 : entryPrice * 0.92);
+
+  // Alerta de hito reciente para esta posición
+  const recentAlert = tradeMilestonesAlertService.getLatestAlertForSymbol(position.symbol);
 
   // Cálculos financieros
   const calculatedPnl = isLong
@@ -152,138 +159,6 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
     if (num >= 0.01) return num.toFixed(4);
     return num.toFixed(6);
   };
-
-  // Canvas para el Gráfico Táctico
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const render = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      const w = Math.max(100, Math.floor(rect.width));
-      const h = Math.max(60, Math.floor(rect.height || 140));
-
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      ctx.resetTransform();
-      ctx.scale(dpr, dpr);
-
-      // Fondo oscuro
-      ctx.fillStyle = '#0a0d14';
-      ctx.fillRect(0, 0, w, h);
-
-      // Grid suave
-      ctx.strokeStyle = '#1a202c';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let x = 40; x < w; x += 60) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-      }
-      for (let y = 20; y < h; y += 30) {
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-      }
-      ctx.stroke();
-
-      const prices = [entryPrice, currentLivePrice, slPrice, tp1Price];
-      if (tp2Price > 0) prices.push(tp2Price);
-
-      const minP = Math.min(...prices) * 0.997;
-      const maxP = Math.max(...prices) * 1.003;
-      const range = maxP - minP || 1;
-
-      const getY = (val: number) => {
-        const norm = (val - minP) / range;
-        return h - 16 - norm * (h - 32);
-      };
-
-      const chartRightEdge = w - 100;
-
-      // Dibujar niveles clave
-      const drawLevel = (price: number, label: string, color: string, dashed = false) => {
-        const y = Math.round(getY(price));
-        ctx.beginPath();
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.3;
-        if (dashed) ctx.setLineDash([4, 4]);
-        else ctx.setLineDash([]);
-        ctx.moveTo(0, y);
-        ctx.lineTo(chartRightEdge, y);
-        ctx.stroke();
-
-        ctx.fillStyle = '#161c28';
-        ctx.fillRect(chartRightEdge + 4, y - 9, w - chartRightEdge - 8, 18);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(chartRightEdge + 4, y - 9, w - chartRightEdge - 8, 18);
-
-        ctx.fillStyle = color;
-        ctx.font = 'bold 10px monospace';
-        ctx.fillText(`${label} $${formatVal(price)}`, chartRightEdge + 8, y + 4);
-      };
-
-      if (tp2Price) drawLevel(tp2Price, 'TP2', '#10b981', true);
-      drawLevel(tp1Price, 'TP1', '#10b981', true);
-      drawLevel(entryPrice, 'E1', '#0ea5e9');
-      drawLevel(slPrice, 'SL', '#f43f5e');
-
-      // Trayectoria LIVE
-      const liveX = Math.max(70, Math.min(chartRightEdge - 20, chartRightEdge * 0.75));
-      const liveY = getY(currentLivePrice);
-      const entryY = getY(entryPrice);
-
-      ctx.beginPath();
-      ctx.strokeStyle = isProfit ? '#10b981' : '#f43f5e';
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([]);
-      ctx.moveTo(15, entryY);
-      ctx.lineTo(liveX, liveY);
-      ctx.stroke();
-
-      // Marcador LIVE pulsante
-      ctx.beginPath();
-      ctx.arc(liveX, liveY, 7, 0, Math.PI * 2);
-      ctx.fillStyle = isProfit ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)';
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(liveX, liveY, 4, 0, Math.PI * 2);
-      ctx.fillStyle = isProfit ? '#10b981' : '#f43f5e';
-      ctx.fill();
-
-      // Etiqueta LIVE
-      ctx.fillStyle = '#121722';
-      const badgeText = `LIVE: $${formatVal(currentLivePrice)} (${isProfit ? '+' : ''}$${pnl.toFixed(2)})`;
-      ctx.font = 'bold 9.5px monospace';
-      const textW = ctx.measureText(badgeText).width;
-      const badgeX = Math.max(10, Math.min(chartRightEdge - textW - 14, liveX - textW / 2));
-      const badgeY = liveY < 25 ? liveY + 14 : liveY - 14;
-
-      ctx.fillRect(badgeX - 4, badgeY - 9, textW + 8, 16);
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([]);
-      ctx.strokeRect(badgeX - 4, badgeY - 9, textW + 8, 16);
-
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillText(badgeText, badgeX, badgeY + 3);
-    };
-
-    render();
-
-    const ro = new ResizeObserver(() => {
-      render();
-    });
-    ro.observe(canvas);
-
-    return () => {
-      ro.disconnect();
-    };
-  }, [currentLivePrice, entryPrice, slPrice, tp1Price, tp2Price, isLong, pnl, roe, isProfit]);
 
   // Acciones Rápidas
   const handleMoveToBE = async () => {
@@ -431,34 +306,52 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             onMoveToBE={handleMoveToBE}
           />
 
-          {/* 4. GRÁFICO TÁCTICO DE NIVELES EN VIVO (CANVAS) */}
-          <div className="p-3 rounded-xl bg-neutral-900/60 border border-neutral-800 flex flex-col gap-2">
-            <div className="flex items-center justify-between text-[11px] font-mono flex-wrap gap-2 text-neutral-300">
-              <span className="text-rose-400 font-bold flex items-center gap-1">
-                <ShieldAlert className="w-3.5 h-3.5" />
-                SL: ${formatVal(slPrice)}
-              </span>
-              <span className="text-sky-400 font-bold flex items-center gap-1">
-                <Target className="w-3.5 h-3.5" />
-                E1: ${formatVal(entryPrice)}
-              </span>
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <Target className="w-3.5 h-3.5" />
-                TP1: ${formatVal(tp1Price)}
-              </span>
-              {tp2Price > 0 && (
-                <span className="text-emerald-300 font-bold flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                  TP2: ${formatVal(tp2Price)}
-                </span>
-              )}
-            </div>
+          {/* 4. GRÁFICO TÁCTICO DE NIVELES EN VIVO CON APEXCHARTS LINECHART */}
+          <div className="flex flex-col gap-2">
+            {/* Alerta de hito activo en esta posición si cruzó algún nivel clave */}
+            {recentAlert && (
+              <div
+                className={`px-3 py-2 rounded-lg border text-xs font-mono flex items-center justify-between gap-2 ${
+                  recentAlert.milestone === 'SL'
+                    ? 'bg-rose-950/80 border-rose-600 text-rose-200 animate-pulse'
+                    : recentAlert.milestone.startsWith('TP')
+                    ? 'bg-emerald-950/80 border-emerald-600 text-emerald-200'
+                    : 'bg-amber-950/80 border-amber-600 text-amber-200'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">🚨 Hito Cruzado: {recentAlert.milestone}</span>
+                  <span className="text-neutral-300">
+                    a ${formatVal(recentAlert.triggerPrice)} (Nivel ${formatVal(recentAlert.levelPrice)})
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => notificationService.playMilestoneSound(recentAlert.milestone)}
+                  className="px-2 py-0.5 rounded bg-neutral-900 hover:bg-neutral-800 text-[10px] flex items-center gap-1 border border-neutral-700"
+                  title="Re-escuchar sonido de la alerta"
+                >
+                  <Volume2 className="w-3 h-3 text-amber-400" />
+                  <span>Sonido</span>
+                </button>
+              </div>
+            )}
 
-            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-neutral-800">
-              <canvas ref={canvasRef} className="w-full h-full block" />
-            </div>
+            {/* ApexCharts LineChart para seguimiento en vivo del precio y niveles E1, E2, TP1-3, SL */}
+            <ApexTradePriceChart
+              symbol={position.symbol}
+              isLong={isLong}
+              entryPrice={entryPrice}
+              currentPrice={currentLivePrice}
+              e2Price={e2Price}
+              tp1Price={tp1Price}
+              tp2Price={tp2Price}
+              tp3Price={tp3Price}
+              slPrice={slPrice}
+              height={240}
+            />
 
-            <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400">
+            <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 px-1">
               <span>Volumen Nocional: <strong className="text-white">${notionalUsd.toFixed(2)} USDT</strong></span>
               <span>Margen Aislado: <strong className="text-white">${(position.isolatedMargin || margin || 0).toFixed(2)} USDT</strong></span>
               <span>

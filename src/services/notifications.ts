@@ -71,6 +71,10 @@ class NotificationService {
     }
   }
 
+  public isSoundEnabled(): boolean {
+    return this.soundEnabled;
+  }
+
   public setSoundEnabled(enabled: boolean) {
     this.soundEnabled = enabled;
     try {
@@ -78,6 +82,47 @@ class NotificationService {
         localStorage.setItem('binance_sound_alerts_enabled', String(enabled));
       }
     } catch {}
+    this.notifyListeners();
+  }
+
+  /**
+   * Dedicated audio chime player for milestone crossings (E1, E2, TP1, TP2, TP3, SL)
+   */
+  public playMilestoneSound(milestone: 'E1' | 'E2' | 'E3' | 'TP1' | 'TP2' | 'TP3' | 'SL') {
+    if (!this.soundEnabled) return;
+    try {
+      if (milestone === 'TP3') {
+        // Grand victory harmonic arpeggio
+        this.playChime('crystal');
+      } else if (milestone === 'TP2') {
+        // Harmonic triumphant arpeggio
+        this.playChime('harmonic');
+      } else if (milestone === 'TP1') {
+        // Bright target reached arpeggio
+        this.playChime('harmonic');
+      } else if (milestone === 'E1') {
+        // Crisp double confirmation chime for entry
+        this.playChime('fill');
+      } else if (milestone === 'E2' || milestone === 'E3') {
+        // Tactical radar tone for DCA reload
+        this.playChime('radar');
+      } else if (milestone === 'SL') {
+        // Danger warning chime for Stop Loss
+        this.playChime('danger');
+      }
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  }
+
+  /**
+   * Test milestone sound directly (forces audio even if muted, for testing)
+   */
+  public testMilestoneSound(milestone: 'E1' | 'E2' | 'E3' | 'TP1' | 'TP2' | 'TP3' | 'SL') {
+    const prev = this.soundEnabled;
+    this.soundEnabled = true;
+    this.playMilestoneSound(milestone);
+    this.soundEnabled = prev;
   }
 
   public setConfluenceSoundType(type: 'harmonic' | 'crystal' | 'radar') {

@@ -37,7 +37,9 @@ import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
 import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
 import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import { GoogleSheetStrategyRow } from '../types/strategy';
-import { GitBranch, Activity } from 'lucide-react';
+import { GitBranch, Activity, Volume2, VolumeX } from 'lucide-react';
+import { tradeMilestonesAlertService } from '../services/tradeMilestonesAlertService';
+import { notificationService } from '../services/notifications';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -143,11 +145,16 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
       setPriceTick(Date.now());
     });
 
+    const unsubMilestones = tradeMilestonesAlertService.subscribe(() => {
+      setPriceTick(Date.now());
+    });
+
     return () => {
       unsub();
       unsubLivePrices();
       unsubHist();
       unsubStrat();
+      unsubMilestones();
     };
   }, []);
 
@@ -633,6 +640,8 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                 };
 
                 const notionalUsd = qty * (pos.entryPrice || effectiveMarketPrice);
+                const hasMilestoneAlert = tradeMilestonesAlertService.hasRecentAlert(pos.symbol);
+                const latestMilestoneAlert = tradeMilestonesAlertService.getLatestAlertForSymbol(pos.symbol);
 
                 return (
                   <React.Fragment key={pos.symbol}>
@@ -643,6 +652,10 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                         if (onSelectPosition) onSelectPosition(pos);
                       }}
                       className={`group transition-colors cursor-pointer select-none ${
+                        hasMilestoneAlert
+                          ? 'bg-amber-950/20 ring-1 ring-amber-500/50'
+                          : ''
+                      } ${
                         isExpanded
                           ? 'bg-neutral-900/90 border-l-2 border-amber-400 hover:bg-neutral-850'
                           : 'hover:bg-neutral-800/40'
@@ -904,6 +917,29 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                                 showLabels={false}
                                 className="w-full"
                               />
+
+                              {/* Indicador de Hito Cruzado si ocurrió recientemente */}
+                              {latestMilestoneAlert && (
+                                <div
+                                  className={`w-full px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center justify-between shadow-2xs ${
+                                    latestMilestoneAlert.milestone === 'SL'
+                                      ? 'bg-rose-950/90 text-rose-300 border-rose-600 animate-pulse'
+                                      : latestMilestoneAlert.milestone.startsWith('TP')
+                                      ? 'bg-emerald-950/90 text-emerald-300 border-emerald-600'
+                                      : 'bg-amber-950/90 text-amber-300 border-amber-600'
+                                  }`}
+                                  title={`Hito alcanzado: ${latestMilestoneAlert.message}`}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    <Volume2 className="w-2.5 h-2.5 text-amber-400" />
+                                    <span>{latestMilestoneAlert.milestone} Cruzado</span>
+                                  </span>
+                                  <span className="text-[8px] opacity-80 font-normal">
+                                    ${latestMilestoneAlert.triggerPrice.toFixed(2)}
+                                  </span>
+                                </div>
+                              )}
+
                               <div className="flex items-center justify-between w-full text-[9px]">
                                 {tradeStatus.multiPathState === 'TP1_ROUTE_DCA_CANCELED' ? (
                                   <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-700/80 flex items-center gap-1">

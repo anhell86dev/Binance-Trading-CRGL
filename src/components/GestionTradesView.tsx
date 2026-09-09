@@ -21,6 +21,7 @@ import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
 import { PositionRisk, OpenOrder, AccountBalance, NetworkMode, ConnectionStatus, ApiCredentials } from '../types/binance';
 import { PositionsAndOrders } from './PositionsAndOrders';
+import { TradeMilestonesAlertBanner } from './TradeMilestonesAlertBanner';
 
 interface GestionTradesViewProps {
   onOpenOrderModal?: () => void;
@@ -375,6 +376,9 @@ export const GestionTradesView: React.FC<GestionTradesViewProps> = ({
         </div>
 
       </div>
+
+      {/* 4. Notificaciones Sonoras y Visuales de Hitos Clave (E1, E2, TP1, TP2, TP3, SL) */}
+      <TradeMilestonesAlertBanner />
 
       {/* Bandeja Operativa Principal: Posiciones, Órdenes, Historial & Disciplinas */}
       <div
