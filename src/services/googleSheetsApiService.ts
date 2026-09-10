@@ -87,9 +87,10 @@ class GoogleSheetsApiService {
         return reject(new Error('Entorno no soportado para OAuth de Google.'));
       }
 
-      const clientId = localStorage.getItem('custom_google_oauth_client_id') 
+      const clientId = (firebaseConfig as any).oAuthClientId
+        || localStorage.getItem('custom_google_oauth_client_id') 
         || (import.meta as any).env?.VITE_GOOGLE_OAUTH_CLIENT_ID 
-        || '764711974101-7t33frvor40si9fb0lln9cs5jv47jbqr.apps.googleusercontent.com';
+        || '965981731655-egfaa86v2jbo1r42cplt3l17uv7hod93.apps.googleusercontent.com';
 
       const ensureGisScript = (): Promise<void> => {
         return new Promise((res, rej) => {
