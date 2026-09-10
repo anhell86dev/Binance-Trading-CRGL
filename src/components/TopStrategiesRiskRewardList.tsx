@@ -479,7 +479,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
     binanceWs.setSymbol(cleanSym);
 
     // Autofill order form
-    const basePrice = item.entry1Price || item.livePrice || 789.5;
+    const basePrice = item.entry1Price || item.livePrice || livePriceService.getPrice(cleanSym) || 1.0;
     const slPrice = item.prices.slPrice || (item.isLong ? basePrice * 0.985 : basePrice * 1.015);
     const tpPrice = item.prices.tp1Price || (item.isLong ? basePrice * 1.045 : basePrice * 0.955);
 

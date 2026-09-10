@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Play, Sparkles, Zap, CheckCircle2 } from 'lucide-react';
 import { TopStrategyConfig, strategyAutofillService } from '../services/strategyAutofillService';
 import { binanceWs } from '../services/binanceWs';
+import { livePriceService } from '../services/livePriceService';
 
 interface ExecuteStrategyButtonProps {
   strategy: TopStrategyConfig;
@@ -27,8 +28,9 @@ export const ExecuteStrategyButton: React.FC<ExecuteStrategyButtonProps> = ({
       binanceWs.setSymbol(strategy.symbol);
 
       // 2. Fetch live price or calculate based on current ticker
+      const liveP = livePriceService.getPrice(strategy.symbol);
       const ticker = binanceWs.getTicker();
-      const basePrice = ticker.symbol === strategy.symbol && ticker.lastPrice > 0 ? ticker.lastPrice : 789.5;
+      const basePrice = liveP > 0 ? liveP : (ticker.lastPrice > 0 ? ticker.lastPrice : 1.0);
 
       const slPrice = Number((basePrice * (1 - strategy.slPercent / 100)).toFixed(4));
       const tpPrice = Number((basePrice * (1 + strategy.tpPercent / 100)).toFixed(4));

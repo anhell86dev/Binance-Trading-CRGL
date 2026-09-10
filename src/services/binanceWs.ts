@@ -47,6 +47,7 @@ import {
 import { notificationService } from './notifications';
 import { alertsSheetService } from './alertsSheetService';
 import { ordersSheetService } from './ordersSheetService';
+import { normalizeBinanceSymbol } from '../data/binancePairs';
 
 export const BINANCE_ENDPOINTS = {
   production: {
@@ -451,13 +452,31 @@ class BinanceWsEngine {
 
   public setSymbol(newSymbol: string) {
     if (!newSymbol) return;
-    const formatted = newSymbol.trim().toUpperCase();
-    if (this.currentSymbol === formatted && this.ticker.symbol === formatted) return;
+    const formatted = normalizeBinanceSymbol(newSymbol);
+    if (this.currentSymbol === formatted && this.ticker.symbol === formatted && this.ticker.lastPrice > 0) return;
+
     this.currentSymbol = formatted;
-    this.ticker.symbol = formatted;
+
+    // Reset ticker symbol and clear stale prices from previous pair
+    this.ticker = {
+      symbol: formatted,
+      lastPrice: 0,
+      markPrice: 0,
+      indexPrice: 0,
+      high24h: 0,
+      low24h: 0,
+      volume24h: 0,
+      change24h: 0,
+      change24hPercent: 0,
+      bestBid: 0,
+      bestAsk: 0,
+      timestamp: Date.now(),
+    };
+
     try {
       localStorage.setItem('binance_fapi_symbol', formatted);
     } catch {}
+
     this.connectMarketStream();
     this.fetchRecentKlines(formatted);
     this.fetchFuturesMarketData(formatted);
@@ -695,7 +714,8 @@ class BinanceWsEngine {
 
       this.streamWs.onmessage = (event) => {
         try {
-          const payload = JSON.parse(event.data);
+          const raw = JSON.parse(event.data);
+          const payload = raw.data || raw;
           this.handleStreamMessage(payload);
         } catch {}
       };

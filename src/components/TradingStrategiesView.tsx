@@ -59,7 +59,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
     const prices = parsePricesFromStrategy(strat);
     const rr = calculateStrategyRewardToRisk(strat);
     const liveP = livePriceService.getPrice(strat.par);
-    const basePrice = prices.entry1Price || liveP || ticker.lastPrice || 789.5;
+    const basePrice = prices.entry1Price || liveP || (ticker.symbol === strat.par ? ticker.lastPrice : 0) || 1.0;
     const isLong = !strat.tipoDeOrden?.toLowerCase().includes('short') && !strat.tipoDeOrden?.toLowerCase().includes('venta');
 
     // Transfer safely to Futures Order Form with max 5x leverage & isolated margin, and trigger popup

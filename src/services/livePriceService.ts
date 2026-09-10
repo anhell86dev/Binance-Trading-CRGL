@@ -5,6 +5,7 @@
  */
 
 import { binanceWs } from './binanceWs';
+import { normalizeBinanceSymbol } from '../data/binancePairs';
 
 export interface LivePriceData {
   symbol: string;
@@ -28,6 +29,12 @@ const DEFAULT_PRICES: Record<string, { price: number; change24hPercent: number }
   NEARUSDT: { price: 5.4, change24hPercent: 1.9 },
   SUIUSDT: { price: 2.15, change24hPercent: 5.3 },
   LINKUSDT: { price: 17.2, change24hPercent: 0.5 },
+  TIAUSDT: { price: 0.38, change24hPercent: -0.34 },
+  FETUSDT: { price: 1.25, change24hPercent: 1.1 },
+  RENDERUSDT: { price: 5.80, change24hPercent: 0.9 },
+  UNIUSDT: { price: 8.50, change24hPercent: -0.5 },
+  INJUSDT: { price: 22.40, change24hPercent: 1.8 },
+  '1000PEPEUSDT': { price: 0.0098, change24hPercent: 4.2 },
 };
 
 class LivePriceService {
@@ -63,17 +70,21 @@ class LivePriceService {
   }
 
   public getPrice(symbol: string): number {
-    const clean = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+    if (!symbol) return 0;
+    const clean = normalizeBinanceSymbol(symbol);
     const data = this.prices.get(clean);
     if (data && data.price > 0) return data.price;
     return DEFAULT_PRICES[clean]?.price || 0;
   }
 
   public getPriceData(symbol: string): LivePriceData {
-    const clean = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+    if (!symbol) {
+      return { symbol: 'BTCUSDT', price: 87450, change24hPercent: 0, lastUpdated: Date.now() };
+    }
+    const clean = normalizeBinanceSymbol(symbol);
     const data = this.prices.get(clean);
-    if (data) return data;
-    const def = DEFAULT_PRICES[clean] || { price: 100, change24hPercent: 0 };
+    if (data && data.price > 0) return data;
+    const def = DEFAULT_PRICES[clean] || { price: 0, change24hPercent: 0 };
     return {
       symbol: clean,
       price: def.price,
@@ -87,7 +98,8 @@ class LivePriceService {
   }
 
   public updatePrice(symbol: string, price: number, change24hPercent: number = 0) {
-    const clean = symbol.replace(/[^A-Z0-9]/g, '').toUpperCase();
+    if (!symbol || isNaN(price) || price <= 0) return;
+    const clean = normalizeBinanceSymbol(symbol);
     this.prices.set(clean, {
       symbol: clean,
       price,

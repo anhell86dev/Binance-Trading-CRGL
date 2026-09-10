@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { binanceApi, WatchlistPriceUpdate } from '../services/binanceApi';
 import { binanceWs } from '../services/binanceWs';
+import { livePriceService } from '../services/livePriceService';
 import { BINANCE_POPULAR_PAIRS, normalizeBinanceSymbol } from '../data/binancePairs';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 
@@ -46,8 +47,9 @@ export const MarketView: React.FC<MarketViewProps> = ({ onSelectSymbolForTrading
     const defaultPairs = BINANCE_POPULAR_PAIRS;
     const items = defaultPairs.map((pair) => {
       const ticker = tickers.get(pair.symbol);
-      const price = ticker?.price || (pair.symbol === 'BTCUSDT' ? 65420 : pair.symbol === 'ETHUSDT' ? 3480 : pair.symbol === 'SOLUSDT' ? 148.5 : 50);
-      const change24hPercent = ticker?.change24hPercent || (pair.popular ? 2.4 : 0.8);
+      const livePData = livePriceService.getPriceData(pair.symbol);
+      const price = ticker?.price || livePData.price || 1.0;
+      const change24hPercent = ticker?.change24hPercent || livePData.change24hPercent || (pair.popular ? 2.4 : 0.8);
       const volume24h = ticker?.volume24h || 12500;
       const high24h = ticker?.high24h || price * 1.03;
       const low24h = ticker?.low24h || price * 0.97;

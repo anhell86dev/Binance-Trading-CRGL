@@ -100,6 +100,14 @@ export const LiveMarketIndicatorsViewer: React.FC<LiveMarketIndicatorsViewerProp
     return all.find(s => s.par.replace(/[^A-Z0-9]/g, '') === symbol.replace(/[^A-Z0-9]/g, ''));
   }, [symbol]);
 
+  // Ensure binanceWs symbol stays in sync with symbol prop
+  useEffect(() => {
+    if (symbol) {
+      binanceWs.setSymbol(symbol);
+      setTicker(binanceWs.getTicker());
+    }
+  }, [symbol]);
+
   // Subscribe to WebSocket updates
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
