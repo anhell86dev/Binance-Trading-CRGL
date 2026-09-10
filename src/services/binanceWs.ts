@@ -90,19 +90,19 @@ class BinanceWsEngine {
   ];
 
   // Market & Account State
-  private currentSymbol = 'ZECUSDT';
+  private currentSymbol = 'BTCUSDT';
   private ticker: TickerData = {
-    symbol: 'ZECUSDT',
-    lastPrice: 789.5,
-    markPrice: 789.8,
-    indexPrice: 789.6,
-    high24h: 842.0,
-    low24h: 758.0,
-    volume24h: 12540.25,
-    change24h: 18.5,
-    change24hPercent: 2.4,
-    bestBid: 789.2,
-    bestAsk: 789.7,
+    symbol: 'BTCUSDT',
+    lastPrice: 87450.0,
+    markPrice: 87450.0,
+    indexPrice: 87450.0,
+    high24h: 88500.0,
+    low24h: 86100.0,
+    volume24h: 425000000,
+    change24h: 1050.0,
+    change24hPercent: 1.2,
+    bestBid: 87449.0,
+    bestAsk: 87451.0,
     timestamp: Date.now(),
   };
 
@@ -230,11 +230,12 @@ class BinanceWsEngine {
     try {
       const savedSymbol = localStorage.getItem('binance_fapi_symbol');
       if (savedSymbol && savedSymbol.trim().length > 0) {
-        this.currentSymbol = savedSymbol.trim().toUpperCase();
-        this.ticker.symbol = savedSymbol.trim().toUpperCase();
+        const formatted = normalizeBinanceSymbol(savedSymbol);
+        this.currentSymbol = formatted;
+        this.ticker.symbol = formatted;
       } else {
-        this.currentSymbol = 'ZECUSDT';
-        this.ticker.symbol = 'ZECUSDT';
+        this.currentSymbol = 'BTCUSDT';
+        this.ticker.symbol = 'BTCUSDT';
       }
 
       const savedCreds = localStorage.getItem('binance_fapi_creds');
@@ -457,19 +458,20 @@ class BinanceWsEngine {
 
     this.currentSymbol = formatted;
 
-    // Reset ticker symbol and clear stale prices from previous pair
+    const initialPrice = this.ticker.symbol === formatted && this.ticker.lastPrice > 0 ? this.ticker.lastPrice : 0;
+
     this.ticker = {
       symbol: formatted,
-      lastPrice: 0,
-      markPrice: 0,
-      indexPrice: 0,
+      lastPrice: initialPrice,
+      markPrice: initialPrice,
+      indexPrice: initialPrice,
       high24h: 0,
       low24h: 0,
       volume24h: 0,
       change24h: 0,
       change24hPercent: 0,
-      bestBid: 0,
-      bestAsk: 0,
+      bestBid: initialPrice,
+      bestAsk: initialPrice,
       timestamp: Date.now(),
     };
 
@@ -525,7 +527,7 @@ class BinanceWsEngine {
    * - Global Long/Short Account Ratio
    */
   public async fetchFuturesMarketData(symbolToFetch?: string) {
-    const symbol = (symbolToFetch || this.currentSymbol).toUpperCase();
+    const symbol = normalizeBinanceSymbol(symbolToFetch || this.currentSymbol);
     try {
       // 1. Fetch 24hr Ticker immediately for fast switch
       fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`)
@@ -533,21 +535,23 @@ class BinanceWsEngine {
         .then(data => {
           if (data && data.symbol === this.currentSymbol) {
             const newPrice = parseFloat(data.lastPrice);
-            this.ticker = {
-              symbol: data.symbol,
-              lastPrice: newPrice,
-              markPrice: parseFloat(data.lastPrice),
-              indexPrice: parseFloat(data.lastPrice),
-              high24h: parseFloat(data.highPrice),
-              low24h: parseFloat(data.lowPrice),
-              volume24h: parseFloat(data.quoteVolume) || (parseFloat(data.volume) * newPrice),
-              change24h: parseFloat(data.priceChange),
-              change24hPercent: parseFloat(data.priceChangePercent),
-              bestBid: parseFloat(data.bidPrice) || (newPrice * 0.999),
-              bestAsk: parseFloat(data.askPrice) || (newPrice * 1.001),
-              timestamp: data.closeTime || Date.now(),
-            };
-            this.notify();
+            if (!isNaN(newPrice) && newPrice > 0) {
+              this.ticker = {
+                symbol: data.symbol,
+                lastPrice: newPrice,
+                markPrice: parseFloat(data.lastPrice),
+                indexPrice: parseFloat(data.lastPrice),
+                high24h: parseFloat(data.highPrice),
+                low24h: parseFloat(data.lowPrice),
+                volume24h: parseFloat(data.quoteVolume) || (parseFloat(data.volume) * newPrice),
+                change24h: parseFloat(data.priceChange),
+                change24hPercent: parseFloat(data.priceChangePercent),
+                bestBid: parseFloat(data.bidPrice) || (newPrice * 0.999),
+                bestAsk: parseFloat(data.askPrice) || (newPrice * 1.001),
+                timestamp: data.closeTime || Date.now(),
+              };
+              this.notify();
+            }
           }
         })
         .catch(() => {});
@@ -700,10 +704,11 @@ class BinanceWsEngine {
     }
 
     const symbolLower = this.currentSymbol.toLowerCase();
+    const streams = `${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms/${symbolLower}@markPrice@1s`;
     const streamUrl =
       this.mode === 'testnet'
-        ? `${BINANCE_ENDPOINTS.testnet.stream}/${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms/${symbolLower}@markPrice@1s`
-        : `${BINANCE_ENDPOINTS.production.stream}/${symbolLower}@ticker/${symbolLower}@kline_1m/${symbolLower}@depth10@100ms/${symbolLower}@markPrice@1s`;
+        ? `wss://stream.binancefuture.com/stream?streams=${streams}`
+        : `wss://fstream.binance.com/stream?streams=${streams}`;
 
     try {
       this.streamWs = new WebSocket(streamUrl);
@@ -730,27 +735,29 @@ class BinanceWsEngine {
 
   private handleStreamMessage(msg: any) {
     // 24hr Mini Ticker or full Ticker
-    if (msg.e === '24hrTicker') {
+    if (msg.e === '24hrTicker' || msg.e === '24hrMiniTicker') {
       const oldPrice = this.ticker.lastPrice;
       const newPrice = parseFloat(msg.c);
-      this.ticker = {
-        symbol: msg.s,
-        lastPrice: newPrice,
-        markPrice: parseFloat(msg.c),
-        indexPrice: parseFloat(msg.c),
-        high24h: parseFloat(msg.h),
-        low24h: parseFloat(msg.l),
-        volume24h: parseFloat(msg.v),
-        change24h: parseFloat(msg.p),
-        change24hPercent: parseFloat(msg.P),
-        bestBid: parseFloat(msg.b || (newPrice - 0.5).toString()),
-        bestAsk: parseFloat(msg.a || (newPrice + 0.5).toString()),
-        timestamp: msg.E,
-      };
+      if (!isNaN(newPrice) && newPrice > 0) {
+        this.ticker = {
+          symbol: msg.s || this.currentSymbol,
+          lastPrice: newPrice,
+          markPrice: parseFloat(msg.c),
+          indexPrice: parseFloat(msg.c),
+          high24h: parseFloat(msg.h || '0') || this.ticker.high24h,
+          low24h: parseFloat(msg.l || '0') || this.ticker.low24h,
+          volume24h: parseFloat(msg.q || msg.v || '0') || this.ticker.volume24h,
+          change24h: parseFloat(msg.p || '0'),
+          change24hPercent: parseFloat(msg.P || '0'),
+          bestBid: parseFloat(msg.b || newPrice.toString()),
+          bestAsk: parseFloat(msg.a || newPrice.toString()),
+          timestamp: msg.E || Date.now(),
+        };
 
-      this.checkVolatilityAndOrders(oldPrice, newPrice);
-      this.recalculateAccountStats();
-      this.notify();
+        this.checkVolatilityAndOrders(oldPrice, newPrice);
+        this.recalculateAccountStats();
+        this.notify();
+      }
     }
     // Mark Price & Funding Rate stream
     else if (msg.e === 'markPriceUpdate') {

@@ -11,6 +11,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
+import { livePriceService } from '../services/livePriceService';
 import { strategyService } from '../services/strategyService';
 import { AssetSelectorModal } from './AssetSelectorModal';
 
@@ -155,7 +156,8 @@ export const PairSidebar: React.FC = () => {
             const isSelected = sym === currentSymbol;
             const isStrategy = strategyPairs.includes(sym);
             const baseAsset = sym.replace('USDT', '');
-            const priceInfo = tickerPrices[sym];
+            const liveData = livePriceService.getPriceData(sym);
+            const priceInfo = tickerPrices[sym] || (liveData.price > 0 ? { price: liveData.price, change: liveData.change24hPercent } : null);
             const isPositive = (priceInfo?.change ?? 0) >= 0;
 
             if (isCollapsed) {
@@ -226,7 +228,7 @@ export const PairSidebar: React.FC = () => {
                   {priceInfo ? (
                     <>
                       <div className="text-xs font-bold text-neutral-200">
-                        ${priceInfo.price >= 1000 ? priceInfo.price.toFixed(2) : priceInfo.price >= 1 ? priceInfo.price.toFixed(3) : priceInfo.price.toFixed(4)}
+                        ${priceInfo.price >= 1000 ? priceInfo.price.toFixed(2) : priceInfo.price >= 1 ? priceInfo.price.toFixed(3) : priceInfo.price >= 0.01 ? priceInfo.price.toFixed(4) : priceInfo.price.toFixed(6)}
                       </div>
                       <div
                         className={`text-[10px] font-semibold flex items-center justify-end gap-0.5 ${

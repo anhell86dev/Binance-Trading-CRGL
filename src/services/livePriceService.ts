@@ -15,13 +15,18 @@ export interface LivePriceData {
 }
 
 const DEFAULT_PRICES: Record<string, { price: number; change24hPercent: number }> = {
-  ZECUSDT: { price: 789.5, change24hPercent: 2.4 },
-  TAOUSDT: { price: 216.8, change24hPercent: 4.1 },
-  AAVEUSDT: { price: 125.4, change24hPercent: 1.8 },
-  SOLUSDT: { price: 98.4, change24hPercent: -0.9 },
-  XRPUSDT: { price: 1.324, change24hPercent: 0.6 },
+  '1000PEPEUSDT': { price: 0.003452, change24hPercent: 2.4 },
+  '1000PUMPUSDT': { price: 0.0028, change24hPercent: 1.5 },
+  '1000SHIBUSDT': { price: 0.0135, change24hPercent: -0.8 },
+  '1000BONKUSDT': { price: 0.0185, change24hPercent: 3.2 },
+  '1000FLOKIUSDT': { price: 0.125, change24hPercent: 0.4 },
   BTCUSDT: { price: 87450.0, change24hPercent: 1.2 },
   ETHUSDT: { price: 3120.5, change24hPercent: 0.8 },
+  SOLUSDT: { price: 98.4, change24hPercent: -0.9 },
+  TAOUSDT: { price: 216.8, change24hPercent: 4.1 },
+  ZECUSDT: { price: 28.5, change24hPercent: 2.4 },
+  AAVEUSDT: { price: 125.4, change24hPercent: 1.8 },
+  XRPUSDT: { price: 1.324, change24hPercent: 0.6 },
   BNBUSDT: { price: 645.2, change24hPercent: 1.5 },
   DOGEUSDT: { price: 0.185, change24hPercent: 3.2 },
   ADAUSDT: { price: 0.68, change24hPercent: -0.4 },
@@ -34,7 +39,6 @@ const DEFAULT_PRICES: Record<string, { price: number; change24hPercent: number }
   RENDERUSDT: { price: 5.80, change24hPercent: 0.9 },
   UNIUSDT: { price: 8.50, change24hPercent: -0.5 },
   INJUSDT: { price: 22.40, change24hPercent: 1.8 },
-  '1000PEPEUSDT': { price: 0.0098, change24hPercent: 4.2 },
 };
 
 class LivePriceService {
