@@ -25,7 +25,9 @@ import {
   Sliders,
   ChevronRight,
   HelpCircle,
+  Calculator,
 } from 'lucide-react';
+import { DcaLiquidationSimulator } from './DcaLiquidationSimulator';
 
 export interface TradeMatrixProps {
   position: PositionRisk;
@@ -82,6 +84,7 @@ export const TradeMatrix: React.FC<TradeMatrixProps> = ({
 
   const [activeScenario, setActiveScenario] = useState<ScenarioFilter>('ALL');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>('E1');
+  const [showSimulator, setShowSimulator] = useState<boolean>(true);
 
   // Destructure prices & hit flags
   const {
@@ -403,6 +406,20 @@ export const TradeMatrix: React.FC<TradeMatrixProps> = ({
             >
               <ShieldAlert className="w-3 h-3" />
               <span>Ruta Protección</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowSimulator(!showSimulator)}
+              className={`px-2 py-1 rounded font-bold transition-all cursor-pointer flex items-center gap-1 border ${
+                showSimulator
+                  ? 'bg-sky-500 text-neutral-950 border-sky-400 shadow-xs'
+                  : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:text-white'
+              }`}
+              title="Mostrar u ocultar el simulador independiente de DCA y liquidación"
+            >
+              <Calculator className="w-3 h-3" />
+              <span>Simulador DCA</span>
             </button>
           </div>
         </div>
@@ -906,6 +923,20 @@ export const TradeMatrix: React.FC<TradeMatrixProps> = ({
             )}
           </div>
         </div>
+      )}
+
+      {/* 5. SIMULADOR AUTÓNOMO DE DCA Y PUNTOS DE LIQUIDACIÓN */}
+      {showSimulator && (
+        <DcaLiquidationSimulator
+          initialSymbol={position.symbol}
+          initialSide={isLong ? 'BUY' : 'SELL'}
+          initialEntry1Price={entry1Price || position.entryPrice}
+          initialEntry2Price={entry2Price}
+          initialEntry3Price={entry3Price}
+          initialLeverage={leverage}
+          initialCurrentPrice={currentPrice}
+          className="mt-1"
+        />
       )}
     </div>
   );

@@ -22,6 +22,7 @@ import { TradingViewWidget } from './TradingViewWidget';
 import { StrategyChartRenderer } from './StrategyChartRenderer';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { useTheme } from '../context/ThemeContext';
+import { getTradingViewSymbol } from '../data/binancePairs';
 
 interface TimeframeOption {
   label: string;
@@ -292,7 +293,7 @@ export const ChartSection: React.FC = () => {
               : 'TradingView Advanced Real-Time Chart'}
           </span>
           <span>•</span>
-          <span>Símbolo: <strong className="text-neutral-300">BINANCE:{currentSymbol}</strong></span>
+          <span>Símbolo: <strong className="text-neutral-300">{getTradingViewSymbol(currentSymbol)}</strong></span>
           <span>•</span>
           <span>Temporalidad: <strong className="text-amber-400 font-semibold">{timeframe === '240' ? '4 Horas (4H)' : timeframe}</strong></span>
         </div>

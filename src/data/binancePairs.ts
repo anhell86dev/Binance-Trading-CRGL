@@ -94,8 +94,12 @@ export const BINANCE_FUTURES_MULTIPLIERS: Record<string, { futuresSymbol: string
 
   SHIB: { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
   SHIBUSDT: { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  SHIBA: { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  SHIBAUSDT: { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
   '1000SHIB': { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
   '1000SHIBUSDT': { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  '1000SHIBA': { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
+  '1000SHIBAUSDT': { futuresSymbol: '1000SHIBUSDT', multiplier: 1000 },
 
   FLOKI: { futuresSymbol: '1000FLOKIUSDT', multiplier: 1000 },
   FLOKIUSDT: { futuresSymbol: '1000FLOKIUSDT', multiplier: 1000 },
@@ -237,4 +241,29 @@ export function searchBinancePairs(query: string): BinancePairInfo[] {
   }
 
   return matched;
+}
+
+/**
+ * Returns the exact TradingView symbol for Binance Futures USDT Perpetual contracts
+ * e.g. "1000pepe" -> "BINANCE:1000PEPEUSDT.P"
+ * e.g. "1000pump" -> "BINANCE:1000PUMPUSDT.P"
+ * e.g. "1000shiba" -> "BINANCE:1000SHIBUSDT.P"
+ * e.g. "BTCUSDT" -> "BINANCE:BTCUSDT.P"
+ */
+export function getTradingViewSymbol(input: string): string {
+  if (!input) return 'BINANCE:BTCUSDT.P';
+  let raw = input.trim().toUpperCase();
+
+  // Strip existing BINANCE: prefix if present
+  if (raw.startsWith('BINANCE:')) {
+    raw = raw.slice(8);
+  }
+
+  // Strip trailing .P if present
+  if (raw.endsWith('.P')) {
+    raw = raw.slice(0, -2);
+  }
+
+  const normalized = normalizeBinanceSymbol(raw);
+  return `BINANCE:${normalized}.P`;
 }

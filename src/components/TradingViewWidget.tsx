@@ -1,4 +1,5 @@
 import React, { useMemo, memo } from 'react';
+import { getTradingViewSymbol } from '../data/binancePairs';
 
 interface TradingViewWidgetProps {
   symbol: string;
@@ -13,10 +14,9 @@ export const TradingViewWidget: React.FC<TradingViewWidgetProps> = memo(({
   theme = 'dark',
   height = '520px',
 }) => {
-  // Format clean symbol: BINANCE:ZECUSDT, BINANCE:TAOUSDT, etc.
+  // Format clean symbol for Binance Futures Perpetual: BINANCE:1000PEPEUSDT.P, BINANCE:BTCUSDT.P, etc.
   const formattedSymbol = useMemo(() => {
-    const cleanSym = symbol.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    return cleanSym.startsWith('BINANCE:') ? cleanSym : `BINANCE:${cleanSym}`;
+    return getTradingViewSymbol(symbol);
   }, [symbol]);
 
   const iframeSrc = useMemo(() => {
