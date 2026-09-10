@@ -34,6 +34,7 @@ import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
 import { StrategyNewsContextWidget } from './StrategyNewsContextWidget';
+import { StrategySourceBadge } from './StrategySourceBadge';
 
 interface StrategyDetailModalProps {
   strategy: GoogleSheetStrategyRow;
@@ -141,6 +142,13 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
               <p className="text-xs text-neutral-400 font-medium">
                 {strategy.nombreEstrategia} • <span className="text-amber-400 font-mono">{strategy.temporalidad}</span>
               </p>
+              <div className="mt-1">
+                <StrategySourceBadge
+                  source={strategy.fuenteActualizacion}
+                  updatedAt={strategy.fechaActualizacion}
+                  compact={true}
+                />
+              </div>
             </div>
           </div>
 

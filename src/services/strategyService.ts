@@ -59,7 +59,7 @@ class StrategyService {
     }
 
     // Default to official tactical strategies (10 strategies updated from Google Docs)
-    const initial = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
+    const initial = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV, 'Catálogo Base');
     this.strategies = initial;
     this.saveToStorage();
   }
@@ -136,10 +136,10 @@ class StrategyService {
       }
 
       if (csvContent && csvContent.length > 50 && (csvContent.includes('Estrategia') || csvContent.includes('Par'))) {
-        const parsed = parseCsvToStrategies(csvContent);
+        const parsed = parseCsvToStrategies(csvContent, 'Archivo Google Docs');
         if (parsed.length > 0) {
           this.strategies = parsed;
-          this.lastSyncTime = new Date().toLocaleTimeString();
+          this.lastSyncTime = `${new Date().toLocaleTimeString()} (Archivo Google Docs)`;
           this.syncError = null;
           this.saveToStorage();
           this.isSyncing = false;
@@ -340,7 +340,7 @@ class StrategyService {
    * Refreshes strategies from the official Google Sheet CSV specification
    */
   public refreshOfficialStrategies(): GoogleSheetStrategyRow[] {
-    const refreshed = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV);
+    const refreshed = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV, 'Catálogo Base');
     this.strategies = refreshed;
     this.lastSyncTime = new Date().toLocaleTimeString();
     this.saveToStorage();
@@ -417,10 +417,10 @@ class StrategyService {
    */
   public saveRawCsv(csvText: string): boolean {
     try {
-      const parsed = parseCsvToStrategies(csvText);
+      const parsed = parseCsvToStrategies(csvText, 'Datos Pegados CSV');
       if (parsed.length > 0) {
         this.strategies = parsed;
-        this.lastSyncTime = new Date().toLocaleTimeString();
+        this.lastSyncTime = `${new Date().toLocaleTimeString()} (Datos Pegados CSV)`;
         this.saveToStorage();
         this.notify();
         this.syncToWebhook();
@@ -434,12 +434,25 @@ class StrategyService {
   }
 
   /**
+   * Helper to format current timestamp
+   */
+  private getNowFormatted(): string {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
+  /**
    * Updates an existing strategy row in the catalog (Write operation)
    */
   public updateStrategyRow(updated: GoogleSheetStrategyRow): boolean {
     const idx = this.strategies.findIndex((s) => s.noEstrategia === updated.noEstrategia);
     if (idx !== -1) {
-      this.strategies[idx] = { ...updated };
+      this.strategies[idx] = {
+        ...updated,
+        fechaActualizacion: this.getNowFormatted(),
+        fuenteActualizacion: 'Edición Manual',
+      };
       const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
       this.strategies = allResolvedStrategies;
       this.lastSyncTime = new Date().toLocaleTimeString();
@@ -455,7 +468,12 @@ class StrategyService {
    * Adds a new strategy row to the catalog (Write operation)
    */
   public addStrategyRow(newRow: GoogleSheetStrategyRow): boolean {
-    this.strategies.push(newRow);
+    const rowToAdd: GoogleSheetStrategyRow = {
+      ...newRow,
+      fechaActualizacion: newRow.fechaActualizacion || this.getNowFormatted(),
+      fuenteActualizacion: newRow.fuenteActualizacion || 'Edición Manual',
+    };
+    this.strategies.push(rowToAdd);
     const { allResolvedStrategies } = resolveLatestStrategiesPerPair(this.strategies);
     this.strategies = allResolvedStrategies;
     this.lastSyncTime = new Date().toLocaleTimeString();

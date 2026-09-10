@@ -232,7 +232,7 @@ class GoogleSheetsApiService {
       }
 
       const csvText = this.rowsToCsv(rows);
-      const parsed = parseCsvToStrategies(csvText);
+      const parsed = parseCsvToStrategies(csvText, 'API');
 
       if (parsed.length > 0) {
         this.lastSyncError = null;

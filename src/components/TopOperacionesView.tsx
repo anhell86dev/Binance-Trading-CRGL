@@ -63,6 +63,7 @@ import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge
 import { ConfluenceFactorSelector } from './ConfluenceFactorSelector';
 import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
 import { StrategyDetailModal } from './StrategyDetailModal';
+import { StrategySourceBadge } from './StrategySourceBadge';
 
 interface TopOperacionesViewProps {
   onOpenOrderModal?: () => void;
@@ -1156,6 +1157,13 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                     {op.strategy.nombreEstrategia}
                   </span>
                 </div>
+                <div className="mt-0.5">
+                  <StrategySourceBadge
+                    source={op.strategy.fuenteActualizacion}
+                    updatedAt={op.strategy.fechaActualizacion}
+                    compact={true}
+                  />
+                </div>
 
                 {/* Price and E1 Proximity Meter */}
                 <div className="bg-neutral-950/80 rounded-xl p-3 border border-neutral-800/90 flex items-center justify-between gap-3">
@@ -1341,6 +1349,13 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </div>
                       <div className="text-[11px] text-neutral-400 font-sans truncate max-w-[140px] mt-0.5">
                         {op.strategy.nombreEstrategia}
+                      </div>
+                      <div className="mt-0.5">
+                        <StrategySourceBadge
+                          source={op.strategy.fuenteActualizacion}
+                          updatedAt={op.strategy.fechaActualizacion}
+                          compact={true}
+                        />
                       </div>
                     </td>
 

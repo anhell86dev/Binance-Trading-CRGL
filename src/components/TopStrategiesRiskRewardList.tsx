@@ -26,6 +26,7 @@ import { strategyManagedTradesService, ManagedTradeContext } from '../services/s
 import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { StrategyPriceBar } from './StrategyPriceBar';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
+import { StrategySourceBadge } from './StrategySourceBadge';
 import { futuresConfluenceService } from '../services/futuresConfluenceService';
 
 const formatPriceVal = (val: number): string => {
@@ -754,6 +755,13 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
                         title={strat.nombreEstrategia || ''}
                       >
                         {strat.nombreEstrategia || 'Estrategia de Google Sheets'}
+                      </div>
+                      <div className="mt-1">
+                        <StrategySourceBadge
+                          source={strat.fuenteActualizacion}
+                          updatedAt={strat.fechaActualizacion}
+                          compact={true}
+                        />
                       </div>
                     </td>
 

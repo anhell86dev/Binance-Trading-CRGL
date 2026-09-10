@@ -26,6 +26,7 @@ import { ordersSheetService } from '../services/ordersSheetService';
 import { googleSheetsApiService } from '../services/googleSheetsApiService';
 import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
 import { SAMPLE_GOOGLE_SHEET_CSV, normalizeStrategyStatus, DEFAULT_ORDERS_SHEET_CSV_TEMPLATE } from '../utils/sheetParser';
+import { StrategySourceBadge } from './StrategySourceBadge';
 
 interface GoogleDocsManagerModalProps {
   isOpen: boolean;
@@ -444,6 +445,7 @@ function doPost(e) {
                         <th className="py-2.5 px-3">Fecha</th>
                         <th className="py-2.5 px-3">Par</th>
                         <th className="py-2.5 px-3">Nombre & Reglas</th>
+                        <th className="py-2.5 px-3">Fuente & Actualización</th>
                         <th className="py-2.5 px-3">Estado</th>
                         <th className="py-2.5 px-3 text-right">Acciones</th>
                       </tr>
@@ -478,6 +480,13 @@ function doPost(e) {
                               <div className="text-[10px] text-neutral-400 font-mono line-clamp-1 mt-0.5">
                                 {st.reglasDeEntrada}
                               </div>
+                            </td>
+                            <td className="py-3 px-3 whitespace-nowrap">
+                              <StrategySourceBadge
+                                source={st.fuenteActualizacion}
+                                updatedAt={st.fechaActualizacion}
+                                compact={true}
+                              />
                             </td>
                             <td className="py-3 px-3 whitespace-nowrap">
                               <select

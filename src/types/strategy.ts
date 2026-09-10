@@ -1,5 +1,12 @@
 export type StrategyTradeStatus = 'Activa' | 'Obsoleto' | 'Live' | 'Live+' | 'Fallida';
 
+export type StrategySourceType =
+  | 'API'
+  | 'Archivo Google Docs'
+  | 'Datos Pegados CSV'
+  | 'Edición Manual'
+  | 'Catálogo Base';
+
 export interface TradeProcessStageInfo {
   stage: number; // 0 = Obsoleto, 1 = Activa, 2 = Live, 3 = Live+
   status: StrategyTradeStatus;
@@ -24,6 +31,8 @@ export interface GoogleSheetStrategyRow {
   gestionDeRiesgoStopLoss: string;
   comentariosBacktesting: string;
   estado?: StrategyTradeStatus; // 'Activa' | 'Obsoleto' | 'Live' | 'Live+'
+  fechaActualizacion?: string;  // e.g. "09/09/2026 17:10:45"
+  fuenteActualizacion?: StrategySourceType; // 'API' | 'Archivo Google Docs' | 'Datos Pegados CSV' | 'Edición Manual' | 'Catálogo Base'
 }
 
 export interface PlannedStrategyOrder {

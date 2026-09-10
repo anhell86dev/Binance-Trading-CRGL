@@ -16,6 +16,7 @@ import {
   normalizeStrategyStatus,
 } from '../utils/sheetParser';
 import { StrategyFuturesConfluenceBadge } from './StrategyFuturesConfluenceBadge';
+import { StrategySourceBadge } from './StrategySourceBadge';
 
 interface StrategyCardItemProps {
   strat: GoogleSheetStrategyRow;
@@ -126,6 +127,13 @@ export const StrategyCardItem: React.FC<StrategyCardItemProps> = ({
                 MÁS PRÓXIMA
               </span>
             )}
+          </div>
+          <div className="mt-1 flex items-center gap-2">
+            <StrategySourceBadge
+              source={strat.fuenteActualizacion}
+              updatedAt={strat.fechaActualizacion}
+              compact={true}
+            />
           </div>
         </div>
 

@@ -5,6 +5,7 @@ import {
   StrategyTradeStatus,
   TradeProcessStageInfo,
   ParsedStrategyPrices,
+  StrategySourceType,
 } from '../types/strategy';
 import { OpenOrder } from '../types/binance';
 import { normalizeBinanceSymbol, getBinanceSymbolMultiplier } from '../data/binancePairs';
@@ -238,7 +239,10 @@ export function parseCsvRows(text: string): string[][] {
 /**
  * Normalizes headers and maps them to GoogleSheetStrategyRow
  */
-export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] {
+export function parseCsvToStrategies(
+  csvText: string,
+  defaultSource: StrategySourceType = 'Datos Pegados CSV'
+): GoogleSheetStrategyRow[] {
   const rawRows = parseCsvRows(csvText);
   if (rawRows.length < 2) return [];
 
@@ -260,12 +264,26 @@ export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] 
   const riesgoIdx = findColIndex(['riesgo', 'stop', 'sl', 'risk']);
   const comIdx = findColIndex(['comentario', 'backtest', 'nota', 'comment']);
   const estadoIdx = findColIndex(['estado', 'status', 'fase', 'lifecycle', 'proceso']);
+  const fechaActIdx = findColIndex(['fecha_actualizacion', 'actualizacion', 'updated']);
+  const fuenteIdx = findColIndex(['fuente', 'source', 'origen']);
 
+  const nowFormatted = () => {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
+  const currentTs = nowFormatted();
   const strategies: GoogleSheetStrategyRow[] = [];
 
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
     if (!row || row.length === 0 || !row[0]) continue;
+
+    const parsedFechaAct = (fechaActIdx >= 0 && row[fechaActIdx]) ? row[fechaActIdx] : currentTs;
+    const parsedFuente = (fuenteIdx >= 0 && row[fuenteIdx])
+      ? (row[fuenteIdx] as StrategySourceType)
+      : defaultSource;
 
     strategies.push({
       noEstrategia: (idIdx >= 0 && row[idIdx]) ? row[idIdx] : `STRAT-${i}`,
@@ -280,6 +298,8 @@ export function parseCsvToStrategies(csvText: string): GoogleSheetStrategyRow[] 
       gestionDeRiesgoStopLoss: (riesgoIdx >= 0 && row[riesgoIdx]) ? row[riesgoIdx] : '',
       comentariosBacktesting: (comIdx >= 0 && row[comIdx]) ? row[comIdx] : '',
       estado: normalizeStrategyStatus(estadoIdx >= 0 ? row[estadoIdx] : undefined),
+      fechaActualizacion: parsedFechaAct,
+      fuenteActualizacion: parsedFuente,
     });
   }
 

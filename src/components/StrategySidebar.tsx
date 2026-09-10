@@ -41,6 +41,7 @@ import { TOP_3_STRATEGIES_CATALOG, strategyAutofillService } from '../services/s
 import { ExecuteStrategyButton } from './ExecuteStrategyButton';
 import { AssetSelectorModal } from './AssetSelectorModal';
 import { StrategyDetailModal } from './StrategyDetailModal';
+import { StrategySourceBadge } from './StrategySourceBadge';
 
 interface StrategySidebarProps {
   onSelectStrategy?: (strategy: GoogleSheetStrategyRow) => void;
@@ -423,6 +424,14 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
                     <span className="text-[9px] font-mono text-neutral-400 shrink-0">
                       {strat.fecha}
                     </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <StrategySourceBadge
+                      source={strat.fuenteActualizacion}
+                      updatedAt={strat.fechaActualizacion}
+                      compact={true}
+                    />
                   </div>
 
                   {/* Quick Price Highlights: E1 / SL / TP1 */}
