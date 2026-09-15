@@ -406,6 +406,15 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
     let sourceList = activeList;
     if (onlyManagedFilter) {
       sourceList = sourceList.filter((st) => strategyManagedTradesService.isStrategyManaged(st));
+    } else {
+      const activePositions = binanceWs.getPositions().filter((p) => Math.abs(p.positionAmt) > 0);
+      const activeSymbols = new Set(
+        activePositions.map((p) => (p.symbol || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, ''))
+      );
+      sourceList = sourceList.filter((st) => {
+        const cleanPair = (st.par || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return !activeSymbols.has(cleanPair) && !strategyManagedTradesService.isStrategyManaged(st);
+      });
     }
 
     const calculated = sourceList.map((strat) => {

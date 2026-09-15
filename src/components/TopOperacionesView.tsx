@@ -107,253 +107,13 @@ export interface CandidateTradeOperation {
   isConfluent: boolean;
   confluenceResult: StrategyFullConfluenceResult;
   isFullConfluenceMatch: boolean;
+  hasActivePositionOnSymbol: boolean;
+  isManaged: boolean;
 }
 
-interface StrategyPriceLineProps {
-  livePrice: number;
-  entry1Price: number;
-  entry2Price?: number;
-  entry3Price?: number;
-  slPrice: number;
-  tp1Price: number;
-  tp2Price?: number;
-  tpFinalPrice?: number;
-  hasHitSL: boolean;
-  isInDangerZone?: boolean;
-  hasHitTPBeforeE1?: boolean;
-  isNoOperar?: boolean;
-  noOperarReason?: string;
-  decimalPlaces: number;
-  isLong: boolean;
-}
-
-export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
-  livePrice,
-  entry1Price,
-  entry2Price,
-  entry3Price,
-  slPrice,
-  tp1Price,
-  tp2Price,
-  tpFinalPrice,
-  hasHitSL,
-  isInDangerZone,
-  hasHitTPBeforeE1,
-  isNoOperar,
-  noOperarReason,
-  decimalPlaces,
-  isLong,
-}) => {
-  const calcPct = (levelPrice?: number) => {
-    if (!livePrice || livePrice <= 0 || !levelPrice || levelPrice <= 0) return null;
-    return ((levelPrice - livePrice) / livePrice) * 100;
-  };
-
-  const fmtPrice = (p: number) => `$${p.toFixed(decimalPlaces)}`;
-  const fmtPct = (pct: number | null) => {
-    if (pct === null) return '-';
-    const sign = pct > 0 ? '+' : '';
-    return `${sign}${pct.toFixed(2)}%`;
-  };
-
-  const e2 = entry2Price && entry2Price > 0 ? entry2Price : 0;
-  const e3 = entry3Price && entry3Price > 0 ? entry3Price : 0;
-  const tp2 = tp2Price && tp2Price > 0 ? tp2Price : 0;
-  const tp3 = tpFinalPrice && tpFinalPrice > 0 ? tpFinalPrice : 0;
-
-  // Build levels array
-  const rawLevels = [
-    { key: 'SL', label: 'SL', price: slPrice, type: 'SL', isHit: hasHitSL },
-    { key: 'E3', label: 'E3', price: e3, type: 'ENTRY' },
-    { key: 'E2', label: 'E2', price: e2, type: 'ENTRY' },
-    { key: 'E1', label: 'E1', price: entry1Price, type: 'ENTRY' },
-    { key: 'TP1', label: 'TP1', price: tp1Price, type: 'TP' },
-    { key: 'TP2', label: 'TP2', price: tp2, type: 'TP' },
-    { key: 'TP3', label: 'TP3', price: tp3, type: 'TP' },
-  ].filter((l) => l.price > 0);
-
-  const allPrices = [...rawLevels.map((l) => l.price), livePrice].filter((p) => p > 0);
-  const minP = Math.min(...allPrices);
-  const maxP = Math.max(...allPrices);
-  const range = maxP - minP || 1;
-
-  // Map position percentage along horizontal track (padding between 6% and 94%)
-  const getTrackPos = (p: number) => {
-    if (range <= 0) return 50;
-    const rawPct = ((p - minP) / range) * 100;
-    return Math.min(94, Math.max(6, rawPct));
-  };
-
-  const livePosPct = getTrackPos(livePrice);
-
-  // Danger zone calculation (between SL and lowest entry e3/e2/e1)
-  const lowestEntry = e3 > 0 ? e3 : (e2 > 0 ? e2 : entry1Price);
-  const slPos = slPrice > 0 ? getTrackPos(slPrice) : 0;
-  const entryPos = lowestEntry > 0 ? getTrackPos(lowestEntry) : 0;
-  const dangerLeft = slPrice > 0 && lowestEntry > 0 ? Math.min(slPos, entryPos) : 0;
-  const dangerWidth = slPrice > 0 && lowestEntry > 0 ? Math.max(1, Math.abs(slPos - entryPos)) : 0;
-
-  return (
-    <div className={`w-full rounded-xl p-3 font-mono text-xs transition-all ${
-      isInDangerZone || isNoOperar
-        ? 'bg-rose-950/30 border-2 border-rose-500/90 shadow-[0_0_20px_rgba(244,63,94,0.35)]'
-        : 'bg-neutral-950/95 border border-neutral-800/90'
-    }`}>
-      {/* Header Title & Status Badges */}
-      <div className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2 flex items-center justify-between font-bold flex-wrap gap-1.5">
-        <span className="flex items-center gap-1.5 text-neutral-300">
-          <Activity className="w-3.5 h-3.5 text-amber-400" />
-          <span>Barra Horizontal de Precios (Niveles vs. Precio Live)</span>
-        </span>
-
-        <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Danger Zone Active Badge */}
-          {isInDangerZone && (
-            <span className="inline-flex items-center gap-1 text-rose-200 font-extrabold bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-500 animate-pulse text-[10px] shadow-[0_0_12px_rgba(244,63,94,0.5)]">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span>⚠️ EN ZONA DE PELIGRO</span>
-            </span>
-          )}
-
-          {/* Premature TP Hit Badge */}
-          {hasHitTPBeforeE1 && (
-            <span className="inline-flex items-center gap-1 text-amber-200 font-extrabold bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-500 animate-pulse text-[10px] shadow-[0_0_10px_rgba(245,158,11,0.5)]">
-              <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>🎯 TP ALCANZADO ANTES DE E1</span>
-            </span>
-          )}
-
-          {/* SL Hit Badge */}
-          {hasHitSL && (
-            <span className="inline-flex items-center gap-1 text-rose-300 font-extrabold bg-rose-950/90 px-2.5 py-0.5 rounded-full border border-rose-500/80 animate-pulse text-[10px] shadow-[0_0_10px_rgba(244,63,94,0.35)]">
-              <Skull className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span>TOCÓ STOP LOSS</span>
-            </span>
-          )}
-
-          {/* NO OPERAR GLOBAL BADGE */}
-          {isNoOperar && (
-            <span className="inline-flex items-center gap-1 text-white font-extrabold bg-rose-600 px-3 py-0.5 rounded-full border border-rose-300 animate-bounce text-[10px] shadow-[0_0_14px_rgba(244,63,94,0.8)]">
-              <ShieldAlert className="w-3.5 h-3.5 text-white shrink-0" />
-              <span>🚫 NO OPERAR</span>
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* CONTINUOUS HORIZONTAL PRICE TRACK BAR */}
-      <div className="relative w-full pt-8 pb-9 px-2 my-1">
-        {/* Track Line Background */}
-        <div className="h-3 w-full bg-neutral-900 rounded-full border border-neutral-800 relative overflow-hidden flex items-center">
-          <div className="absolute inset-0 bg-gradient-to-r from-rose-950/80 via-amber-950/50 to-emerald-950/80 opacity-60" />
-
-          {/* RED DANGER ZONE HIGHLIGHT OVERLAY (SL ↔ E3 / Lowest Entry) */}
-          {slPrice > 0 && lowestEntry > 0 && (
-            <div
-              className="absolute h-full bg-rose-600/70 border-y border-rose-400/90 shadow-[0_0_12px_rgba(244,63,94,0.8)] animate-pulse"
-              style={{ left: `${dangerLeft}%`, width: `${dangerWidth}%` }}
-              title="ZONA DE PELIGRO ROJA (SL a E3/E1)"
-            />
-          )}
-        </div>
-
-        {/* DANGER ZONE TEXT LABEL ON TRACK */}
-        {slPrice > 0 && lowestEntry > 0 && (
-          <div
-            className="absolute -top-3.5 -translate-x-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/80 text-[8px] font-extrabold uppercase tracking-tight shadow-md z-5 pointer-events-none whitespace-nowrap animate-pulse"
-            style={{ left: `${dangerLeft + dangerWidth / 2}%` }}
-          >
-            <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />
-            <span>ZONA DE PELIGRO (SL ↔ E3)</span>
-          </div>
-        )}
-
-        {/* PRICE LEVEL NODES ALONG THE TRACK */}
-        {rawLevels.map((lvl) => {
-          const posPct = getTrackPos(lvl.price);
-          const distPct = calcPct(lvl.price);
-          const isSL = lvl.type === 'SL';
-          const isTP = lvl.type === 'TP';
-
-          let nodeColor = 'bg-amber-400 border-amber-300 text-amber-300';
-          if (isSL) {
-            nodeColor = lvl.isHit
-              ? 'bg-rose-500 border-rose-300 text-rose-200 animate-bounce'
-              : 'bg-rose-500 border-rose-400 text-rose-400';
-          } else if (isTP) {
-            nodeColor = 'bg-emerald-400 border-emerald-300 text-emerald-400';
-          }
-
-          return (
-            <div
-              key={lvl.key}
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center group cursor-pointer z-10"
-              style={{ left: `${posPct}%` }}
-              title={`${lvl.label}: ${fmtPrice(lvl.price)} (${fmtPct(distPct)} vs Live)`}
-            >
-              {/* TOP LABEL (Name & Price) */}
-              <div className="absolute -top-7 flex flex-col items-center pointer-events-none whitespace-nowrap">
-                <span className="text-[9px] font-extrabold uppercase tracking-tighter flex items-center gap-0.5">
-                  {lvl.isHit && <Skull className="w-2.5 h-2.5 text-rose-400" />}
-                  <span className={isSL ? 'text-rose-400' : isTP ? 'text-emerald-400' : 'text-amber-300'}>
-                    {lvl.label}
-                  </span>
-                </span>
-                <span className="text-[10px] font-bold text-white leading-tight">
-                  {fmtPrice(lvl.price)}
-                </span>
-              </div>
-
-              {/* Node Dot / Pin */}
-              <div
-                className={`w-3.5 h-3.5 rounded-full border-2 transition-transform group-hover:scale-125 shadow-md ${nodeColor}`}
-              />
-
-              {/* BOTTOM LABEL (% Distance from Live) */}
-              <div className="absolute -bottom-6 flex flex-col items-center pointer-events-none whitespace-nowrap">
-                <span
-                  className={`text-[9px] font-bold px-1 py-0.2 rounded ${
-                    (distPct || 0) >= 0
-                      ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-800/50'
-                      : 'text-rose-400 bg-rose-950/80 border border-rose-800/50'
-                  }`}
-                >
-                  {fmtPct(distPct)}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-
-        {/* LIVE PRICE NEEDLE / PIN MARKER */}
-        <div
-          className="absolute top-0 bottom-0 -translate-x-1/2 flex flex-col items-center z-20 pointer-events-none"
-          style={{ left: `${livePosPct}%` }}
-        >
-          {/* Top Live Badge */}
-          <div className={`absolute -top-8 text-cyan-300 border px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 whitespace-nowrap ${
-            isInDangerZone
-              ? 'bg-rose-950/95 text-rose-200 border-rose-400 shadow-[0_0_14px_rgba(244,63,94,0.8)] animate-bounce'
-              : 'bg-cyan-950/95 text-cyan-300 border-cyan-400/90 shadow-[0_0_12px_rgba(34,211,238,0.5)] animate-pulse'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isInDangerZone ? 'bg-rose-400 animate-ping' : 'bg-cyan-400 animate-ping'}`} />
-            <span>LIVE: {fmtPrice(livePrice)}</span>
-          </div>
-
-          {/* Vertical Needle Line */}
-          <div className={`w-0.5 h-full ${
-            isInDangerZone ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]'
-          }`} />
-
-          {/* Bottom Live Reference Pin */}
-          <div className="absolute -bottom-6 bg-cyan-950 text-cyan-300 text-[9px] font-bold px-1 py-0.2 rounded border border-cyan-800 whitespace-nowrap">
-            0.00%
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+import { StrategyPriceLine, StrategyPriceLineProps } from './StrategyPriceLine';
+export { StrategyPriceLine };
+export type { StrategyPriceLineProps };
 
 export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   onOpenOrderModal,
@@ -447,13 +207,14 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   // 1. Process candidate trade operations & evaluate full confluence factors
   const candidateOperations: CandidateTradeOperation[] = useMemo(() => {
     const activePositions = binanceWs.getPositions().filter((p) => Math.abs(p.positionAmt) > 0);
+    const activeSymbols = new Set<string>();
     const linkedStrategyIds = new Set<string>();
-    const managedSymbols = new Set<string>();
 
     activePositions.forEach((pos) => {
+      const sym = pos.symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (sym) activeSymbols.add(sym);
       if (pos.strategyId) {
         linkedStrategyIds.add(pos.strategyId.trim().toUpperCase());
-        managedSymbols.add(pos.symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''));
       }
       if (pos.strategyName) {
         linkedStrategyIds.add(pos.strategyName.trim().toUpperCase());
@@ -464,31 +225,19 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       .filter((s) => {
         const normStatus = normalizeStrategyStatus(s.estado);
         if (normStatus === 'Obsoleto' || normStatus === 'Fallida') return false;
-
-        const stratId = (s.noEstrategia || '').trim().toUpperCase();
-        const stratName = (s.nombreEstrategia || '').trim().toUpperCase();
-        const stratPair = (s.par || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-
-        if (stratId && linkedStrategyIds.has(stratId)) return false;
-        if (stratName && linkedStrategyIds.has(stratName)) return false;
-        if (managedSymbols.has(stratPair)) {
-          const matchingPos = activePositions.find(
-            (p) => p.symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') === stratPair
-          );
-          if (matchingPos && matchingPos.strategyId) {
-            if (
-              matchingPos.strategyId.toUpperCase() === stratId ||
-              matchingPos.strategyId.toUpperCase() === stratName ||
-              matchingPos.strategyName?.toUpperCase() === stratName
-            ) {
-              return false;
-            }
-          }
-        }
-
         return true;
       })
       .map((strat) => {
+        const stratId = (strat.noEstrategia || '').trim().toUpperCase();
+        const stratName = (strat.nombreEstrategia || '').trim().toUpperCase();
+        const stratPair = (strat.par || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+        const isManaged = strategyManagedTradesService.isStrategyManaged(strat);
+        const hasActivePositionOnSymbol =
+          activeSymbols.has(stratPair) ||
+          Boolean(stratId && linkedStrategyIds.has(stratId)) ||
+          Boolean(stratName && linkedStrategyIds.has(stratName)) ||
+          isManaged;
         const prices = parsePricesFromStrategy(strat);
         const livePrice = livePriceService.getPrice(strat.par) || prices.entry1Price || 100;
         const e1 = prices.entry1Price || livePrice;
@@ -654,6 +403,8 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           isConfluent,
           confluenceResult,
           isFullConfluenceMatch,
+          hasActivePositionOnSymbol,
+          isManaged,
         };
       });
   }, [strategies, priceTick, selectedFactors, matchMode, minMetCount]);
@@ -879,9 +630,12 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       );
     }
 
-    // Filter only trades in Management
+    // Filter trades in Management or exclude active open positions on asset
     if (onlyManagedFilter) {
-      list = list.filter((op) => strategyManagedTradesService.isStrategyManaged(op.strategy));
+      list = list.filter((op) => op.hasActivePositionOnSymbol || op.isManaged);
+    } else {
+      // Si el activo ya tiene una posición abierta en Gestión de Trades no se debe mostrar esa estrategia en el Plan de Trabajo
+      list = list.filter((op) => !op.hasActivePositionOnSymbol && !op.isManaged);
     }
 
     // Direction filter
@@ -958,18 +712,23 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
     priceTick,
   ]);
 
+  // Candidate operations for Plan de Trabajo (excluding assets already in Trade Management)
+  const unmanagedCandidateOps = useMemo(() => {
+    return candidateOperations.filter((op) => !op.hasActivePositionOnSymbol && !op.isManaged);
+  }, [candidateOperations]);
+
   // Quick stats
   const inZoneCount = useMemo(
-    () => candidateOperations.filter((op) => op.isInZone || op.absDiffPct <= 1.5).length,
-    [candidateOperations]
+    () => unmanagedCandidateOps.filter((op) => op.isInZone || op.absDiffPct <= 1.5).length,
+    [unmanagedCandidateOps]
   );
   const bestRatio = useMemo(() => {
-    if (candidateOperations.length === 0) return 0;
-    return Math.max(...candidateOperations.map((op) => op.ratio));
-  }, [candidateOperations]);
+    if (unmanagedCandidateOps.length === 0) return 0;
+    return Math.max(...unmanagedCandidateOps.map((op) => op.ratio));
+  }, [unmanagedCandidateOps]);
   const highConfluenceCount = useMemo(
-    () => candidateOperations.filter((op) => op.confluenceResult.metFactorsCount >= 6).length,
-    [candidateOperations]
+    () => unmanagedCandidateOps.filter((op) => op.confluenceResult.metFactorsCount >= 6).length,
+    [unmanagedCandidateOps]
   );
 
   // Autofill and open modal
@@ -1082,7 +841,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               <div>
                 <span className="text-secondary small d-block">Alta Confluencia</span>
                 <span className="fw-bold font-monospace text-light fs-6">
-                  {highConfluenceCount} / {candidateOperations.length || 16} Estrategias
+                  {highConfluenceCount} / {unmanagedCandidateOps.length || 16} Estrategias
                 </span>
               </div>
             </div>
@@ -1230,7 +989,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
         minMetCount={minMetCount}
         onChangeMinMetCount={setMinMetCount}
         factorMatchCounts={factorMatchCounts}
-        totalStrategiesCount={candidateOperations.length}
+        totalStrategiesCount={unmanagedCandidateOps.length}
         filteredStrategiesCount={filteredAndSortedOperations.length}
         soundAlertsEnabled={soundAlertsEnabled}
         onToggleSoundAlerts={handleToggleSoundAlerts}

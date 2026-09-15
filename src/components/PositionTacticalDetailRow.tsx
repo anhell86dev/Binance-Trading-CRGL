@@ -12,7 +12,10 @@ import { evaluateStrategyConfluence } from '../utils/confluenceEngine';
 import { StrategyConfluenceStatusBadge } from './StrategyConfluenceStatusBadge';
 import { ApexTradePriceChart } from './ApexTradePriceChart';
 import { TacticalPairVolatilityCard } from './TacticalPairVolatilityCard';
+import { StrategyPriceLine } from './StrategyPriceLine';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
+import { ScoredPosition } from '../utils/positionRanker';
+import { PositionQualityBadge } from './PositionQualityBadge';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -26,6 +29,8 @@ import {
   Activity,
   Zap,
   Volume2,
+  Scale,
+  Award,
 } from 'lucide-react';
 
 interface PositionTacticalDetailRowProps {
@@ -33,6 +38,7 @@ interface PositionTacticalDetailRowProps {
   openOrders: OpenOrder[];
   onOpenEditModal: (pos: PositionRisk) => void;
   onLinkStrategy?: (pos: PositionRisk) => void;
+  scored?: ScoredPosition;
 }
 
 export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps> = ({
@@ -40,6 +46,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   openOrders,
   onOpenEditModal,
   onLinkStrategy,
+  scored,
 }) => {
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
@@ -137,6 +144,25 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   const tp1Price = stratPrices?.tp1Price || tradeStatus.tp1Price || (isLong ? entryPrice * 1.025 : entryPrice * 0.975);
   const tp2Price = stratPrices?.tp2Price || tradeStatus.tp2Price || (isLong ? entryPrice * 1.05 : entryPrice * 0.95);
   const tp3Price = stratPrices?.tpFinalPrice || tradeStatus.tp3Price || (isLong ? entryPrice * 1.08 : entryPrice * 0.92);
+
+  const hasHitSL = slPrice > 0 && (isLong ? currentLivePrice <= slPrice : currentLivePrice >= slPrice);
+  const lowestEntry = isLong
+    ? (e3Price > 0 ? e3Price : (e2Price > 0 ? e2Price : (e1Price > 0 ? e1Price : entryPrice)))
+    : (e3Price > 0 ? e3Price : (e2Price > 0 ? e2Price : (e1Price > 0 ? e1Price : entryPrice)));
+  const highestEntry = !isLong
+    ? (e3Price > 0 ? e3Price : (e2Price > 0 ? e2Price : (e1Price > 0 ? e1Price : entryPrice)))
+    : (e3Price > 0 ? e3Price : (e2Price > 0 ? e2Price : (e1Price > 0 ? e1Price : entryPrice)));
+
+  const isInDangerZone = useMemo(() => {
+    if (slPrice <= 0) return false;
+    if (isLong && lowestEntry > 0) {
+      return currentLivePrice > 0 && currentLivePrice <= lowestEntry && currentLivePrice >= slPrice;
+    }
+    if (!isLong && highestEntry > 0) {
+      return currentLivePrice > 0 && currentLivePrice >= highestEntry && currentLivePrice <= slPrice;
+    }
+    return false;
+  }, [slPrice, isLong, lowestEntry, highestEntry, currentLivePrice]);
 
   // Fecha/Hora de apertura de la primera operación (en ms)
   const openTime = useMemo(() => {
@@ -259,12 +285,17 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
 
   return (
     <tr className="bg-neutral-950/95 border-b border-neutral-800">
-      <td colSpan={9} className="p-3 sm:p-4 bg-neutral-950/95">
+      <td colSpan={10} className="p-3 sm:p-4 bg-neutral-950/95">
         <div className="flex flex-col gap-3.5 w-full max-w-7xl mx-auto">
           
           {/* 1. BARRA SUPERIOR DE CABECERA Y ACCIONES RÁPIDAS */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 pb-2.5 border-b border-neutral-800">
             <div className="flex items-center gap-2 flex-wrap">
+              {scored && (
+                <div className="mr-1">
+                  <PositionQualityBadge scored={scored} showDetails={false} />
+                </div>
+              )}
               <span className="text-sm font-bold text-white font-mono flex items-center gap-1.5">
                 <Activity className="w-4 h-4 text-amber-400" />
                 {position.symbol}
@@ -303,6 +334,23 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
                 hasPosition={true}
                 compact={true}
               />
+
+              {/* R:B Metric if available */}
+              {scored && (
+                <span
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 ${
+                    !scored.hasSL
+                      ? 'bg-rose-950/70 text-rose-300 border-rose-600'
+                      : scored.effectiveRB >= 2.5
+                      ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600'
+                      : 'bg-neutral-900 text-amber-300 border-neutral-700'
+                  }`}
+                  title={`Ratio R:B: ${scored.rbFormatted}`}
+                >
+                  <Scale className="w-3 h-3" />
+                  <span>R:B {scored.rbFormatted}</span>
+                </span>
+              )}
 
               {/* Badge PnL / ROE */}
               <span
@@ -358,6 +406,23 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
               </button>
             </div>
           </div>
+
+          {/* BARRA HORIZONTAL DE PRECIOS (NIVELES VS PRECIO LIVE) CON PRECIO DE ENTRADA */}
+          <StrategyPriceLine
+            livePrice={currentLivePrice}
+            entry1Price={e1Price}
+            entry2Price={e2Price}
+            entry3Price={e3Price}
+            actualEntryPrice={entryPrice}
+            slPrice={slPrice}
+            tp1Price={tp1Price}
+            tp2Price={tp2Price}
+            tpFinalPrice={tp3Price}
+            hasHitSL={hasHitSL}
+            isInDangerZone={isInDangerZone}
+            isLong={isLong}
+            symbol={position.symbol}
+          />
 
           {/* 2. MATRIZ MULTICAMINO DEL TRADE (NODOS INTERCONECTADOS) */}
           <TradeMatrix
