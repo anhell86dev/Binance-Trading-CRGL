@@ -3,6 +3,7 @@ import ApexCharts, { ApexOptions } from 'apexcharts';
 import { tradePriceHistoryService, PricePoint } from '../services/tradePriceHistoryService';
 import { livePriceService } from '../services/livePriceService';
 import { binanceWs } from '../services/binanceWs';
+import { binanceFetch } from '../utils/binanceInterceptor';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import {
   TrendingUp,
@@ -187,7 +188,7 @@ export const ApexTradePriceChart: React.FC<ApexTradePriceChartProps> = ({
       let loaded = false;
       for (const url of endpoints) {
         try {
-          const res = await fetch(url);
+          const res = await binanceFetch(url);
           if (res.ok) {
             const raw = await res.json();
             if (Array.isArray(raw) && raw.length > 0) {

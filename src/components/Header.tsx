@@ -12,6 +12,7 @@ import {
   Search,
   Server,
   Shield,
+  ShieldCheck,
   Volume2,
   VolumeX,
   Wifi,
@@ -21,6 +22,8 @@ import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
 import { NetworkMode } from '../types/binance';
 import { APP_CONFIG, APP_VERSION } from '../config/version';
+import { BinanceProxyModal } from './BinanceProxyModal';
+import { binanceInterceptor, InterceptorStatus } from '../utils/binanceInterceptor';
 
 interface HeaderProps {
   onOpenApiModal: () => void;
@@ -37,6 +40,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
   const [pushGranted, setPushGranted] = useState(notificationService.pushGranted);
   const [latency, setLatency] = useState(24);
   const [isApiDropdownOpen, setIsApiDropdownOpen] = useState(false);
+  const [isProxyModalOpen, setIsProxyModalOpen] = useState(false);
+  const [interceptorStatus, setInterceptorStatus] = useState<InterceptorStatus>(binanceInterceptor.getStatus());
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,6 +50,10 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
       setMode(binanceWs.getMode());
       setStatus(binanceWs.getConnectionStatus());
       setRateLimits(binanceWs.getRateLimits());
+    });
+
+    const unsubInterceptor = binanceInterceptor.subscribe((s) => {
+      setInterceptorStatus(s);
     });
 
     const interval = setInterval(() => {
@@ -60,6 +69,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
 
     return () => {
       unsubWs();
+      unsubInterceptor();
       clearInterval(interval);
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -324,6 +334,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
             <span className="hidden md:inline">Frames</span>
           </button>
 
+          {/* Binance Proxy Interceptor Button */}
+          <button
+            id="binance-proxy-modal-btn"
+            onClick={() => setIsProxyModalOpen(true)}
+            className={`px-3 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+              interceptorStatus.isRateLimited
+                ? 'bg-red-500/20 text-red-300 border-red-500/50 animate-pulse'
+                : 'bg-neutral-800 hover:bg-neutral-700 border-neutral-700 text-neutral-200'
+            }`}
+            title="Gestor de Proxy & Interceptor de Rate Limit Binance"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Proxy / Interceptor</span>
+          </button>
+
           {/* API Keys Configuration Modal Button */}
           <button
             id="api-keys-modal-btn"
@@ -335,6 +360,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenApiModal, onOpenConsole, i
           </button>
         </div>
       </div>
+
+      <BinanceProxyModal isOpen={isProxyModalOpen} onClose={() => setIsProxyModalOpen(false)} />
     </header>
   );
 };

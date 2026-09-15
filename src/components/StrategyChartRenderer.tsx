@@ -27,6 +27,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
+import { binanceFetch } from '../utils/binanceInterceptor';
 import { strategyService } from '../services/strategyService';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
@@ -134,7 +135,7 @@ export const StrategyChartRenderer: React.FC<StrategyChartRendererProps> = ({
 
     for (const url of urls) {
       try {
-        const res = await fetch(url);
+        const res = await binanceFetch(url);
         if (res.ok) {
           const raw = await res.json();
           if (Array.isArray(raw) && raw.length > 0) {

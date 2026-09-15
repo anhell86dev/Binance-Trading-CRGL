@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
+import { binanceFetch } from '../utils/binanceInterceptor';
 import {
   Activity,
   AlertTriangle,
@@ -157,7 +158,7 @@ export const LiveMarketIndicatorsViewer: React.FC<LiveMarketIndicatorsViewerProp
     const fetchKlinesAndCalculate = async () => {
       try {
         const url = `https://fapi.binance.com/fapi/v1/klines?symbol=${cleanSym}&interval=15m&limit=60`;
-        const res = await fetch(url);
+        const res = await binanceFetch(url);
         if (!res.ok) return;
         const data = await res.json();
         if (!Array.isArray(data) || data.length < 20) return;

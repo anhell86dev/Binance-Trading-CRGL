@@ -6,6 +6,7 @@
 
 import { binanceWs } from './binanceWs';
 import { livePriceService } from './livePriceService';
+import { binanceFetch } from '../utils/binanceInterceptor';
 
 export type MarketCategory =
   | 'all'
@@ -400,15 +401,16 @@ class MarketsService {
   private isFetching: boolean = false;
   private pollingTimer: any = null;
   private lastFetchTime: number = 0;
+  private rateLimitUntil: number = 0;
 
   constructor() {
     this.initializeCatalog();
     this.fetchLiveMarkets();
 
-    // Regular polling every 5 seconds for live real-time tickers
+    // Regular polling every 30 seconds for live tickers (avoids Binance IP rate limits)
     this.pollingTimer = setInterval(() => {
       this.fetchLiveMarkets();
-    }, 5000);
+    }, 30000);
 
     // Sync when livePriceService emits updates
     livePriceService.subscribe(() => {
@@ -685,18 +687,28 @@ class MarketsService {
   }
 
   public async fetchLiveMarkets() {
-    if (this.isFetching) return;
+    if (this.isFetching || Date.now() < this.rateLimitUntil) {
+      this.syncWithLivePrices();
+      return;
+    }
     this.isFetching = true;
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4000);
 
-      // Fetch all 24hr tickers from Binance Futures REST API
-      const res = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr', {
+      // Fetch all 24hr tickers from Binance Futures REST API via binanceFetch Interceptor
+      const res = await binanceFetch('https://fapi.binance.com/fapi/v1/ticker/24hr', {
         signal: controller.signal,
       });
       clearTimeout(timeout);
+
+      if (res.status === 429 || res.status === 418 || res.status === 403) {
+        console.warn('Binance Markets API rate limit hit (HTTP ' + res.status + '). Pausing REST polling for 3 minutes.');
+        this.rateLimitUntil = Date.now() + 3 * 60 * 1000;
+        this.syncWithLivePrices();
+        return;
+      }
 
       if (res.ok) {
         const data = await res.json();

@@ -2,6 +2,7 @@ import { FuturesMarketMetrics, TickerData } from '../types/binance';
 import { analyzeFuturesMetrics, FuturesAnalysisResult } from '../utils/futuresMetricsHelper';
 import { livePriceService } from './livePriceService';
 import { binanceWs } from './binanceWs';
+import { binanceFetch } from '../utils/binanceInterceptor';
 
 interface SymbolConfluenceEntry {
   metrics: FuturesMarketMetrics;
@@ -155,21 +156,21 @@ class FuturesConfluenceService {
       const live = livePriceService.getPriceData(clean);
       const currentPrice = live.price > 0 ? live.price : 100;
 
-      const premPromise = fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${clean}`)
+      const premPromise = binanceFetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${clean}`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
 
-      const oiPromise = fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${clean}`)
+      const oiPromise = binanceFetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${clean}`)
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
 
-      const takerPromise = fetch(
+      const takerPromise = binanceFetch(
         `https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${clean}&period=5m&limit=1`
       )
         .then((r) => (r.ok ? r.json() : null))
         .catch(() => null);
 
-      const topPosPromise = fetch(
+      const topPosPromise = binanceFetch(
         `https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${clean}&period=5m&limit=1`
       )
         .then((r) => (r.ok ? r.json() : null))

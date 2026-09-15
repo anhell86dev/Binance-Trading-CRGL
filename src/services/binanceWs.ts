@@ -48,6 +48,7 @@ import { notificationService } from './notifications';
 import { alertsSheetService } from './alertsSheetService';
 import { ordersSheetService } from './ordersSheetService';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
+import { binanceFetch } from '../utils/binanceInterceptor';
 
 export const BINANCE_ENDPOINTS = {
   production: {
@@ -165,6 +166,7 @@ class BinanceWsEngine {
   private listenKey: string | null = null;
   private listenKeyPingTimer: any = null;
   private isUserDataConnected: boolean = false;
+  private rateLimitUntil: number = 0;
 
   // Listeners
   private stateListeners: Set<Function> = new Set();
@@ -178,11 +180,11 @@ class BinanceWsEngine {
     this.fetchFuturesMarketData(this.currentSymbol);
     this.fetchRecentKlines(this.currentSymbol);
 
-    // Periodic market metrics refresh (every 10s)
+    // Periodic market metrics refresh (every 45s to avoid Binance IP rate limits)
     if (this.marketMetricsInterval) clearInterval(this.marketMetricsInterval);
     this.marketMetricsInterval = setInterval(() => {
       this.fetchFuturesMarketData(this.currentSymbol).catch(() => {});
-    }, 10000);
+    }, 45000);
   }
 
   private initDemoData() {
@@ -490,7 +492,7 @@ class BinanceWsEngine {
    */
   public async fetchRecentKlines(symbol: string) {
     try {
-      const res = await fetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=60`);
+      const res = await binanceFetch(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=1m&limit=60`);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -527,11 +529,25 @@ class BinanceWsEngine {
    * - Global Long/Short Account Ratio
    */
   public async fetchFuturesMarketData(symbolToFetch?: string) {
+    if (Date.now() < this.rateLimitUntil) return;
     const symbol = normalizeBinanceSymbol(symbolToFetch || this.currentSymbol);
     try {
+      const safeFetchJson = async (url: string) => {
+        try {
+          const res = await binanceFetch(url);
+          if (res.status === 429 || res.status === 418 || res.status === 403) {
+            console.warn('Binance Market Data Rate Limit hit (HTTP ' + res.status + '). Pausing REST calls for 3 min.');
+            this.rateLimitUntil = Date.now() + 3 * 60 * 1000;
+            return null;
+          }
+          return res.ok ? await res.json() : null;
+        } catch {
+          return null;
+        }
+      };
+
       // 1. Fetch 24hr Ticker immediately for fast switch
-      fetch(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`)
-        .then(res => res.ok ? res.json() : null)
+      safeFetchJson(`https://fapi.binance.com/fapi/v1/ticker/24hr?symbol=${symbol}`)
         .then(data => {
           if (data && data.symbol === this.currentSymbol) {
             const newPrice = parseFloat(data.lastPrice);
@@ -553,38 +569,25 @@ class BinanceWsEngine {
               this.notify();
             }
           }
-        })
-        .catch(() => {});
+        });
 
       // 2. Fetch Premium Index (Funding rate & Next Funding Time)
-      const premiumPromise = fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null);
+      const premiumPromise = safeFetchJson(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`);
 
       // 3. Fetch Open Interest
-      const oiPromise = fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null);
+      const oiPromise = safeFetchJson(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`);
 
       // 4. Fetch Taker Long/Short Buy/Sell Volume Ratio (5m)
-      const takerPromise = fetch(`https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${symbol}&period=5m&limit=1`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null);
+      const takerPromise = safeFetchJson(`https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=${symbol}&period=5m&limit=1`);
 
       // 5. Fetch Top Trader Long/Short Position Ratio (5m)
-      const topPosPromise = fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=5m&limit=1`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null);
+      const topPosPromise = safeFetchJson(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=5m&limit=1`);
 
       // 6. Fetch Top Trader Long/Short Account Ratio (5m)
-      const topAccPromise = fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null);
+      const topAccPromise = safeFetchJson(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`);
 
       // 7. Fetch Global Long/Short Account Ratio (5m)
-      const globalAccPromise = fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`)
-        .then(res => res.ok ? res.json() : null)
-        .catch(() => null);
+      const globalAccPromise = safeFetchJson(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`);
 
       const [premData, oiData, takerData, topPosData, topAccData, globalAccData] = await Promise.all([
         premiumPromise,

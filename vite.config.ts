@@ -75,10 +75,49 @@ function diarioBitcoinProxyPlugin(): Plugin {
   };
 }
 
+function binanceProxyPlugin(): Plugin {
+  return {
+    name: 'binance-proxy',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !req.url.startsWith('/api/binance-proxy')) {
+          return next();
+        }
+        try {
+          const parsedUrl = new URL(req.url, 'http://localhost:3000');
+          const relativePath = parsedUrl.searchParams.get('path') || '/fapi/v1/ticker/24hr';
+          const targetUrl = `https://fapi.binance.com${relativePath}`;
+
+          const response = await fetch(targetUrl, {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              Accept: 'application/json, text/plain, */*',
+            },
+          });
+
+          res.statusCode = response.status;
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          const contentType = response.headers.get('content-type') || 'application/json; charset=utf-8';
+          res.setHeader('Content-Type', contentType);
+
+          const data = await response.text();
+          res.end(data);
+        } catch (err: any) {
+          res.statusCode = 502;
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: err?.message || 'Error proxying Binance request' }));
+        }
+      });
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
     base: './',
-    plugins: [react(), tailwindcss(), googleSheetsProxyPlugin(), diarioBitcoinProxyPlugin()],
+    plugins: [react(), tailwindcss(), googleSheetsProxyPlugin(), diarioBitcoinProxyPlugin(), binanceProxyPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

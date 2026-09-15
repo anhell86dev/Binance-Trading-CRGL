@@ -130,7 +130,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [proximityFilter, setProximityFilter] = useState<'ALL' | 'ZONE' | 'VERY_CLOSE' | 'CLOSE'>('ALL');
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
   const [confluenceFilter, setConfluenceFilter] = useState<'ALL' | 'CONFLUENT' | 'BULLISH' | 'BEARISH' | 'NEUTRAL'>('ALL');
-  const [sortBy, setSortBy] = useState<'RB' | 'CONFLUENCE' | 'PROXIMITY' | 'TP_POTENTIAL'>('RB');
+  const [sortBy, setSortBy] = useState<'RB' | 'CONFLUENCE' | 'CONFLUENCE_RB' | 'PROXIMITY' | 'TP_POTENTIAL'>('CONFLUENCE_RB');
   const [viewLayout, setViewLayout] = useState<'TABLE' | 'GRID'>('TABLE');
 
   // Modal
@@ -570,7 +570,20 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
     }
 
     // Sorting
-    if (sortBy === 'RB') {
+    if (sortBy === 'CONFLUENCE_RB') {
+      list.sort((a, b) => {
+        // Primary sort: Confluence Met Factors Count
+        const diffConfluence = b.confluenceResult.metFactorsCount - a.confluenceResult.metFactorsCount;
+        if (diffConfluence !== 0) return diffConfluence;
+
+        // Secondary sort: Risk to Reward Ratio (R:B)
+        const diffRatio = b.ratio - a.ratio;
+        if (Math.abs(diffRatio) > 0.01) return diffRatio;
+
+        // Tertiary sort: Confluence Score Percentage
+        return b.confluenceResult.confluenceScorePercent - a.confluenceResult.confluenceScorePercent;
+      });
+    } else if (sortBy === 'RB') {
       list.sort((a, b) => b.ratio - a.ratio);
     } else if (sortBy === 'CONFLUENCE') {
       list.sort(
@@ -982,8 +995,21 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           </div>
 
           {/* Ordenamiento */}
-          <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px]">
+          <div className="flex items-center gap-1 bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px] flex-wrap">
             <span className="text-neutral-500 px-1 text-[10px]">Orden:</span>
+            <button
+              id="sort-confluence-rb"
+              onClick={() => setSortBy('CONFLUENCE_RB')}
+              className={`px-2 py-0.5 rounded font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                sortBy === 'CONFLUENCE_RB'
+                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Ordenar simultáneamente por Mayor Confluencia y Mayor R:B de forma combinada"
+            >
+              <Sparkles className="w-3 h-3 text-amber-500 fill-amber-500" />
+              <span>Confluencia + R:B</span>
+            </button>
             <button
               id="sort-rb"
               onClick={() => setSortBy('RB')}

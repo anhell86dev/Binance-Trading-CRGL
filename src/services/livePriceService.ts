@@ -6,6 +6,7 @@
 
 import { binanceWs } from './binanceWs';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
+import { binanceFetch } from '../utils/binanceInterceptor';
 
 export interface LivePriceData {
   symbol: string;
@@ -46,6 +47,7 @@ class LivePriceService {
   private listeners: Set<() => void> = new Set();
   private pollingInterval: any = null;
   private isFetching: boolean = false;
+  private rateLimitUntil: number = 0;
 
   constructor() {
     // Initialize default prices
@@ -66,11 +68,11 @@ class LivePriceService {
       }
     });
 
-    // Start fetching from Binance FAPI
+    // Start fetching from Binance FAPI (throttled to 30s to respect Binance rate limits)
     this.fetchAllPrices();
     this.pollingInterval = setInterval(() => {
       this.fetchAllPrices();
-    }, 4000);
+    }, 30000);
   }
 
   public getPrice(symbol: string): number {
@@ -131,18 +133,25 @@ class LivePriceService {
   }
 
   public async fetchAllPrices() {
-    if (this.isFetching) return;
+    if (this.isFetching || Date.now() < this.rateLimitUntil) return;
     this.isFetching = true;
 
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-      // Fetch 24h ticker data from Binance Futures FAPI
-      const response = await fetch('https://fapi.binance.com/fapi/v1/ticker/24hr', {
+      // Fetch 24h ticker data from Binance Futures FAPI via binanceFetch Interceptor
+      const response = await binanceFetch('https://fapi.binance.com/fapi/v1/ticker/24hr', {
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
+
+      if (response.status === 429 || response.status === 418 || response.status === 403) {
+        // Binance IP Rate limit or WAF block: pause polling for 3 minutes
+        console.warn('Binance API rate limit hit (HTTP ' + response.status + '). Pausing REST polling for 3 minutes.');
+        this.rateLimitUntil = Date.now() + 3 * 60 * 1000;
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();

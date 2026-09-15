@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { livePriceService } from '../services/livePriceService';
 import { futuresConfluenceService } from '../services/futuresConfluenceService';
+import { binanceFetch } from '../utils/binanceInterceptor';
 
 export type TimeframeOption = '5m' | '15m' | '30m' | '1h' | '2h' | '4h';
 export type WindowOption = '6h' | '12h' | '24h' | '48h';
@@ -105,7 +106,7 @@ export const TacticalPairVolatilityCard: React.FC<TacticalPairVolatilityCardProp
   const fetchKlines = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
+      const response = await binanceFetch(
         `https://fapi.binance.com/fapi/v1/klines?symbol=${cleanSymbol}&interval=${timeframe}&limit=${candleLimits}`
       );
 
