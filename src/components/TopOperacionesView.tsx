@@ -97,6 +97,11 @@ export interface CandidateTradeOperation {
   isClose: boolean;
   hasTouchedE1: boolean;
   hasHitSL: boolean;
+  isInDangerZone: boolean;
+  hasTouchedDangerZone: boolean;
+  hasHitTPBeforeE1: boolean;
+  isNoOperar: boolean;
+  noOperarReason?: string;
   decimalPlaces: number;
   trafficLight: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   isConfluent: boolean;
@@ -114,6 +119,10 @@ interface StrategyPriceLineProps {
   tp2Price?: number;
   tpFinalPrice?: number;
   hasHitSL: boolean;
+  isInDangerZone?: boolean;
+  hasHitTPBeforeE1?: boolean;
+  isNoOperar?: boolean;
+  noOperarReason?: string;
   decimalPlaces: number;
   isLong: boolean;
 }
@@ -128,6 +137,10 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   tp2Price,
   tpFinalPrice,
   hasHitSL,
+  isInDangerZone,
+  hasHitTPBeforeE1,
+  isNoOperar,
+  noOperarReason,
   decimalPlaces,
   isLong,
 }) => {
@@ -148,74 +161,195 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   const tp2 = tp2Price && tp2Price > 0 ? tp2Price : 0;
   const tp3 = tpFinalPrice && tpFinalPrice > 0 ? tpFinalPrice : 0;
 
-  const levels = [
-    { key: 'LIVE', label: 'PRECIO LIVE', price: livePrice, pct: 0, colorClass: 'bg-cyan-950/80 border-cyan-500/70 text-cyan-300 font-extrabold shadow-sm' },
-    { key: 'E1', label: 'E1 (50%)', price: entry1Price, pct: calcPct(entry1Price), colorClass: 'bg-amber-950/60 border-amber-500/60 text-amber-300 font-bold' },
-    ...(e2 > 0 ? [{ key: 'E2', label: 'E2 (30%)', price: e2, pct: calcPct(e2), colorClass: 'bg-amber-950/40 border-amber-600/40 text-amber-300/90' }] : []),
-    ...(e3 > 0 ? [{ key: 'E3', label: 'E3 (20%)', price: e3, pct: calcPct(e3), colorClass: 'bg-amber-950/30 border-amber-700/30 text-amber-400/80' }] : []),
-    ...(slPrice > 0 ? [{
-      key: 'SL',
-      label: 'SL GLOBAL',
-      price: slPrice,
-      pct: calcPct(slPrice),
-      colorClass: hasHitSL
-        ? 'bg-rose-950 border-rose-500 text-rose-200 font-extrabold animate-pulse ring-1 ring-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.4)]'
-        : 'bg-rose-950/60 border-rose-500/60 text-rose-300 font-bold',
-      isSkull: hasHitSL,
-    }] : []),
-    ...(tp1Price > 0 ? [{ key: 'TP1', label: 'TP1', price: tp1Price, pct: calcPct(tp1Price), colorClass: 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300 font-bold' }] : []),
-    ...(tp2 > 0 ? [{ key: 'TP2', label: 'TP2', price: tp2, pct: calcPct(tp2), colorClass: 'bg-emerald-950/40 border-emerald-600/40 text-emerald-300/90' }] : []),
-    ...(tp3 > 0 ? [{ key: 'TP3', label: 'TP3 / FINAL', price: tp3, pct: calcPct(tp3), colorClass: 'bg-emerald-950/30 border-emerald-700/30 text-emerald-400/80' }] : []),
-  ];
+  // Build levels array
+  const rawLevels = [
+    { key: 'SL', label: 'SL', price: slPrice, type: 'SL', isHit: hasHitSL },
+    { key: 'E3', label: 'E3', price: e3, type: 'ENTRY' },
+    { key: 'E2', label: 'E2', price: e2, type: 'ENTRY' },
+    { key: 'E1', label: 'E1', price: entry1Price, type: 'ENTRY' },
+    { key: 'TP1', label: 'TP1', price: tp1Price, type: 'TP' },
+    { key: 'TP2', label: 'TP2', price: tp2, type: 'TP' },
+    { key: 'TP3', label: 'TP3', price: tp3, type: 'TP' },
+  ].filter((l) => l.price > 0);
+
+  const allPrices = [...rawLevels.map((l) => l.price), livePrice].filter((p) => p > 0);
+  const minP = Math.min(...allPrices);
+  const maxP = Math.max(...allPrices);
+  const range = maxP - minP || 1;
+
+  // Map position percentage along horizontal track (padding between 6% and 94%)
+  const getTrackPos = (p: number) => {
+    if (range <= 0) return 50;
+    const rawPct = ((p - minP) / range) * 100;
+    return Math.min(94, Math.max(6, rawPct));
+  };
+
+  const livePosPct = getTrackPos(livePrice);
+
+  // Danger zone calculation (between SL and lowest entry e3/e2/e1)
+  const lowestEntry = e3 > 0 ? e3 : (e2 > 0 ? e2 : entry1Price);
+  const slPos = slPrice > 0 ? getTrackPos(slPrice) : 0;
+  const entryPos = lowestEntry > 0 ? getTrackPos(lowestEntry) : 0;
+  const dangerLeft = slPrice > 0 && lowestEntry > 0 ? Math.min(slPos, entryPos) : 0;
+  const dangerWidth = slPrice > 0 && lowestEntry > 0 ? Math.max(1, Math.abs(slPos - entryPos)) : 0;
 
   return (
-    <div className="w-full bg-neutral-950/90 rounded-xl p-2.5 border border-neutral-800/90 font-mono text-xs">
-      <div className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2 flex items-center justify-between font-bold flex-wrap gap-1">
+    <div className={`w-full rounded-xl p-3 font-mono text-xs transition-all ${
+      isInDangerZone || isNoOperar
+        ? 'bg-rose-950/30 border-2 border-rose-500/90 shadow-[0_0_20px_rgba(244,63,94,0.35)]'
+        : 'bg-neutral-950/95 border border-neutral-800/90'
+    }`}>
+      {/* Header Title & Status Badges */}
+      <div className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2 flex items-center justify-between font-bold flex-wrap gap-1.5">
         <span className="flex items-center gap-1.5 text-neutral-300">
           <Activity className="w-3.5 h-3.5 text-amber-400" />
-          <span>Línea Nivelada de Precios & Distancia (%) respecto a Precio Live</span>
+          <span>Barra Horizontal de Precios (Niveles vs. Precio Live)</span>
         </span>
-        {hasHitSL && (
-          <span className="inline-flex items-center gap-1 text-rose-300 font-extrabold bg-rose-950/90 px-2.5 py-0.5 rounded-full border border-rose-500/80 animate-pulse text-[10px] shadow-[0_0_10px_rgba(244,63,94,0.35)]">
-            <Skull className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span>TOCÓ SL</span>
-          </span>
-        )}
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* Danger Zone Active Badge */}
+          {isInDangerZone && (
+            <span className="inline-flex items-center gap-1 text-rose-200 font-extrabold bg-rose-950 px-2.5 py-0.5 rounded-full border border-rose-500 animate-pulse text-[10px] shadow-[0_0_12px_rgba(244,63,94,0.5)]">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>⚠️ EN ZONA DE PELIGRO</span>
+            </span>
+          )}
+
+          {/* Premature TP Hit Badge */}
+          {hasHitTPBeforeE1 && (
+            <span className="inline-flex items-center gap-1 text-amber-200 font-extrabold bg-amber-950 px-2.5 py-0.5 rounded-full border border-amber-500 animate-pulse text-[10px] shadow-[0_0_10px_rgba(245,158,11,0.5)]">
+              <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>🎯 TP ALCANZADO ANTES DE E1</span>
+            </span>
+          )}
+
+          {/* SL Hit Badge */}
+          {hasHitSL && (
+            <span className="inline-flex items-center gap-1 text-rose-300 font-extrabold bg-rose-950/90 px-2.5 py-0.5 rounded-full border border-rose-500/80 animate-pulse text-[10px] shadow-[0_0_10px_rgba(244,63,94,0.35)]">
+              <Skull className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              <span>TOCÓ STOP LOSS</span>
+            </span>
+          )}
+
+          {/* NO OPERAR GLOBAL BADGE */}
+          {isNoOperar && (
+            <span className="inline-flex items-center gap-1 text-white font-extrabold bg-rose-600 px-3 py-0.5 rounded-full border border-rose-300 animate-bounce text-[10px] shadow-[0_0_14px_rgba(244,63,94,0.8)]">
+              <ShieldAlert className="w-3.5 h-3.5 text-white shrink-0" />
+              <span>🚫 NO OPERAR</span>
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Horizontal Grid/Scroll of Price Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-1.5 overflow-x-auto pb-0.5">
-        {levels.map((lvl) => {
-          const isLive = lvl.key === 'LIVE';
-          const pctVal = lvl.pct || 0;
-          const isPositive = pctVal > 0;
+      {/* CONTINUOUS HORIZONTAL PRICE TRACK BAR */}
+      <div className="relative w-full pt-8 pb-9 px-2 my-1">
+        {/* Track Line Background */}
+        <div className="h-3 w-full bg-neutral-900 rounded-full border border-neutral-800 relative overflow-hidden flex items-center">
+          <div className="absolute inset-0 bg-gradient-to-r from-rose-950/80 via-amber-950/50 to-emerald-950/80 opacity-60" />
+
+          {/* RED DANGER ZONE HIGHLIGHT OVERLAY (SL ↔ E3 / Lowest Entry) */}
+          {slPrice > 0 && lowestEntry > 0 && (
+            <div
+              className="absolute h-full bg-rose-600/70 border-y border-rose-400/90 shadow-[0_0_12px_rgba(244,63,94,0.8)] animate-pulse"
+              style={{ left: `${dangerLeft}%`, width: `${dangerWidth}%` }}
+              title="ZONA DE PELIGRO ROJA (SL a E3/E1)"
+            />
+          )}
+        </div>
+
+        {/* DANGER ZONE TEXT LABEL ON TRACK */}
+        {slPrice > 0 && lowestEntry > 0 && (
+          <div
+            className="absolute -top-3.5 -translate-x-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 border border-rose-500/80 text-[8px] font-extrabold uppercase tracking-tight shadow-md z-5 pointer-events-none whitespace-nowrap animate-pulse"
+            style={{ left: `${dangerLeft + dangerWidth / 2}%` }}
+          >
+            <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />
+            <span>ZONA DE PELIGRO (SL ↔ E3)</span>
+          </div>
+        )}
+
+        {/* PRICE LEVEL NODES ALONG THE TRACK */}
+        {rawLevels.map((lvl) => {
+          const posPct = getTrackPos(lvl.price);
+          const distPct = calcPct(lvl.price);
+          const isSL = lvl.type === 'SL';
+          const isTP = lvl.type === 'TP';
+
+          let nodeColor = 'bg-amber-400 border-amber-300 text-amber-300';
+          if (isSL) {
+            nodeColor = lvl.isHit
+              ? 'bg-rose-500 border-rose-300 text-rose-200 animate-bounce'
+              : 'bg-rose-500 border-rose-400 text-rose-400';
+          } else if (isTP) {
+            nodeColor = 'bg-emerald-400 border-emerald-300 text-emerald-400';
+          }
 
           return (
             <div
               key={lvl.key}
-              className={`p-2 rounded-lg border flex flex-col items-center justify-between text-center transition-all ${lvl.colorClass}`}
+              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center group cursor-pointer z-10"
+              style={{ left: `${posPct}%` }}
+              title={`${lvl.label}: ${fmtPrice(lvl.price)} (${fmtPct(distPct)} vs Live)`}
             >
-              <div className="text-[9px] uppercase tracking-tight opacity-90 font-bold flex items-center justify-center gap-1 w-full">
-                {lvl.isSkull && <Skull className="w-3 h-3 text-rose-400 animate-bounce" />}
-                <span className="truncate">{lvl.label}</span>
+              {/* TOP LABEL (Name & Price) */}
+              <div className="absolute -top-7 flex flex-col items-center pointer-events-none whitespace-nowrap">
+                <span className="text-[9px] font-extrabold uppercase tracking-tighter flex items-center gap-0.5">
+                  {lvl.isHit && <Skull className="w-2.5 h-2.5 text-rose-400" />}
+                  <span className={isSL ? 'text-rose-400' : isTP ? 'text-emerald-400' : 'text-amber-300'}>
+                    {lvl.label}
+                  </span>
+                </span>
+                <span className="text-[10px] font-bold text-white leading-tight">
+                  {fmtPrice(lvl.price)}
+                </span>
               </div>
-              <div className="font-extrabold text-[12px] my-0.5 truncate w-full text-white">
-                {fmtPrice(lvl.price)}
-              </div>
+
+              {/* Node Dot / Pin */}
               <div
-                className={`text-[10px] font-bold px-1 py-0.2 rounded w-full truncate ${
-                  isLive
-                    ? 'text-cyan-300 bg-cyan-900/40'
-                    : isPositive
-                    ? 'text-emerald-400 bg-emerald-950/60'
-                    : 'text-rose-400 bg-rose-950/60'
-                }`}
-              >
-                {isLive ? '0.00% (LIVE)' : fmtPct(lvl.pct)}
+                className={`w-3.5 h-3.5 rounded-full border-2 transition-transform group-hover:scale-125 shadow-md ${nodeColor}`}
+              />
+
+              {/* BOTTOM LABEL (% Distance from Live) */}
+              <div className="absolute -bottom-6 flex flex-col items-center pointer-events-none whitespace-nowrap">
+                <span
+                  className={`text-[9px] font-bold px-1 py-0.2 rounded ${
+                    (distPct || 0) >= 0
+                      ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-800/50'
+                      : 'text-rose-400 bg-rose-950/80 border border-rose-800/50'
+                  }`}
+                >
+                  {fmtPct(distPct)}
+                </span>
               </div>
             </div>
           );
         })}
+
+        {/* LIVE PRICE NEEDLE / PIN MARKER */}
+        <div
+          className="absolute top-0 bottom-0 -translate-x-1/2 flex flex-col items-center z-20 pointer-events-none"
+          style={{ left: `${livePosPct}%` }}
+        >
+          {/* Top Live Badge */}
+          <div className={`absolute -top-8 text-cyan-300 border px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 whitespace-nowrap ${
+            isInDangerZone
+              ? 'bg-rose-950/95 text-rose-200 border-rose-400 shadow-[0_0_14px_rgba(244,63,94,0.8)] animate-bounce'
+              : 'bg-cyan-950/95 text-cyan-300 border-cyan-400/90 shadow-[0_0_12px_rgba(34,211,238,0.5)] animate-pulse'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isInDangerZone ? 'bg-rose-400 animate-ping' : 'bg-cyan-400 animate-ping'}`} />
+            <span>LIVE: {fmtPrice(livePrice)}</span>
+          </div>
+
+          {/* Vertical Needle Line */}
+          <div className={`w-0.5 h-full ${
+            isInDangerZone ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.9)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]'
+          }`} />
+
+          {/* Bottom Live Reference Pin */}
+          <div className="absolute -bottom-6 bg-cyan-950 text-cyan-300 text-[9px] font-bold px-1 py-0.2 rounded border border-cyan-800 whitespace-nowrap">
+            0.00%
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -381,7 +515,12 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
         const decimalPlaces = livePrice < 10 ? 4 : 2;
 
         // Check if Stop Loss (SL) was hit by Live Price or 24h Low/High
+        const e2 = prices.entry2Price || 0;
+        const e3 = prices.entry3Price || 0;
+        const lowestEntry = e3 > 0 ? e3 : (e2 > 0 ? e2 : e1);
         const sl = prices.slPrice;
+        const tp1 = prices.tp1Price || 0;
+
         const ticker = binanceWs.getTicker();
         let hasHitSL = false;
         if (sl > 0) {
@@ -394,6 +533,60 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             const tickerHit = Boolean(ticker && ticker.symbol === strat.par && ticker.high24h > 0 && ticker.high24h >= sl && sl > e1);
             hasHitSL = liveHit || tickerHit;
           }
+        }
+
+        // Danger Zone: between SL and lowest entry (E3/E2/E1)
+        let isInDangerZone = false;
+        let hasTouchedDangerZone = false;
+        if (sl > 0 && lowestEntry > 0) {
+          if (isLong) {
+            const dangerTop = lowestEntry;
+            const dangerBottom = sl;
+            isInDangerZone = livePrice > 0 && livePrice <= dangerTop && livePrice >= dangerBottom;
+            const tickerTouch = Boolean(
+              ticker && ticker.symbol === strat.par && ticker.low24h > 0 && ticker.low24h <= dangerTop && ticker.low24h >= dangerBottom
+            );
+            hasTouchedDangerZone = isInDangerZone || tickerTouch;
+          } else {
+            const dangerBottom = lowestEntry;
+            const dangerTop = sl;
+            isInDangerZone = livePrice > 0 && livePrice >= dangerBottom && livePrice <= dangerTop;
+            const tickerTouch = Boolean(
+              ticker && ticker.symbol === strat.par && ticker.high24h > 0 && ticker.high24h >= dangerBottom && ticker.high24h <= dangerTop
+            );
+            hasTouchedDangerZone = isInDangerZone || tickerTouch;
+          }
+        }
+
+        // Check if TP1, TP2, or TP3 was hit before touching E1
+        let hasHitTPBeforeE1 = false;
+        if (e1 > 0 && tp1 > 0) {
+          if (isLong) {
+            const liveHitTP = livePrice >= tp1;
+            const tickerHitTP = Boolean(ticker && ticker.symbol === strat.par && ticker.high24h >= tp1);
+            const liveHitE1 = livePrice <= e1 * 1.001;
+            const tickerHitE1 = Boolean(ticker && ticker.symbol === strat.par && ticker.low24h <= e1 * 1.001);
+            hasHitTPBeforeE1 = (liveHitTP || tickerHitTP) && !(liveHitE1 || tickerHitE1);
+          } else {
+            const liveHitTP = livePrice <= tp1;
+            const tickerHitTP = Boolean(ticker && ticker.symbol === strat.par && ticker.low24h <= tp1);
+            const liveHitE1 = livePrice >= e1 * 0.999;
+            const tickerHitE1 = Boolean(ticker && ticker.symbol === strat.par && ticker.high24h >= e1 * 0.999);
+            hasHitTPBeforeE1 = (liveHitTP || tickerHitTP) && !(liveHitE1 || tickerHitE1);
+          }
+        }
+
+        // Overall "NO OPERAR" condition
+        const isNoOperar = hasHitSL || isInDangerZone || hasTouchedDangerZone || hasHitTPBeforeE1;
+        let noOperarReason = '';
+        if (hasHitSL) {
+          noOperarReason = 'Stop Loss Tocado (💀 SL)';
+        } else if (isInDangerZone) {
+          noOperarReason = 'Precio Live en Zona de Peligro (entre SL y E3)';
+        } else if (hasTouchedDangerZone) {
+          noOperarReason = 'Zona de Peligro Tocada (entre SL y E3)';
+        } else if (hasHitTPBeforeE1) {
+          noOperarReason = 'TP Alcanzado antes de Entrada E1 (Inválida)';
         }
 
         const confluence = futuresConfluenceService.getConfluence(strat.par);
@@ -451,6 +644,11 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           isClose,
           hasTouchedE1,
           hasHitSL,
+          isInDangerZone,
+          hasTouchedDangerZone,
+          hasHitTPBeforeE1,
+          isNoOperar,
+          noOperarReason,
           decimalPlaces,
           trafficLight,
           isConfluent,
@@ -1290,7 +1488,9 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               <div
                 key={op.strategy.noEstrategia}
                 className={`bg-neutral-900/90 border rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-lg transition-all relative overflow-hidden ${
-                  isManaged
+                  op.isNoOperar
+                    ? 'border-2 border-rose-500/90 shadow-[0_0_25px_rgba(244,63,94,0.45)] ring-1 ring-rose-500/80 bg-gradient-to-b from-rose-950/30 via-neutral-900 to-neutral-900'
+                    : isManaged
                     ? 'border-emerald-500/70 ring-1 ring-emerald-500/30 bg-gradient-to-b from-emerald-950/15 via-neutral-900 to-neutral-900'
                     : isFlashActive
                     ? 'border-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.35)] ring-1 ring-emerald-400/80 bg-gradient-to-b from-emerald-950/20 via-neutral-900 to-neutral-900'
@@ -1301,8 +1501,19 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                     : 'border-neutral-800 hover:border-neutral-700'
                 }`}
               >
-                {/* Visual Flash Header Strip when Confluence is 100% matched */}
-                {isFlashActive && (
+                {/* Visual Header Strip when NO OPERAR */}
+                {op.isNoOperar ? (
+                  <div className="bg-gradient-to-r from-rose-950 via-rose-900 to-rose-950 border-b border-rose-500/80 px-3 py-1.5 flex items-center justify-between text-[11px] font-mono text-rose-100 font-extrabold -mx-4 -mt-4 mb-1 shadow-[0_0_12px_rgba(244,63,94,0.5)]">
+                    <div className="flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-rose-300 animate-bounce shrink-0" />
+                      <span>🚫 TRADE NO OPERAR: {op.noOperarReason}</span>
+                    </div>
+                    <span className="text-[10px] bg-rose-600 text-white px-2 py-0.5 rounded-full font-extrabold border border-rose-300">
+                      INAPLICABLE
+                    </span>
+                  </div>
+                ) : isFlashActive && (
+                  /* Visual Flash Header Strip when Confluence is 100% matched */
                   <div className="bg-gradient-to-r from-emerald-500/30 via-emerald-500/20 to-teal-500/30 border-b border-emerald-500/40 px-3 py-1.5 flex items-center justify-between text-[11px] font-mono text-emerald-300 font-bold -mx-4 -mt-4 mb-1">
                     <div className="flex items-center gap-1.5">
                       <span className="relative flex h-2 w-2">
@@ -1350,6 +1561,30 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       />
                     )}
 
+                    {/* NO OPERAR BADGE */}
+                    {op.isNoOperar && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-600 text-white border border-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.6)] animate-pulse">
+                        <ShieldAlert className="w-3.5 h-3.5 text-white" />
+                        <span>NO OPERAR</span>
+                      </span>
+                    )}
+
+                    {/* Danger Zone Badge */}
+                    {op.isInDangerZone && !op.hasHitSL && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-950 text-rose-300 border border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-pulse">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                        <span>ZONA PELIGRO</span>
+                      </span>
+                    )}
+
+                    {/* Premature TP Hit Badge */}
+                    {op.hasHitTPBeforeE1 && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-amber-950 text-amber-300 border border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse">
+                        <Target className="w-3.5 h-3.5 text-amber-400" />
+                        <span>TP ALCANZADO</span>
+                      </span>
+                    )}
+
                     {/* SL Hit Badge */}
                     {op.hasHitSL && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-950 text-rose-300 border border-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.4)] animate-pulse">
@@ -1380,7 +1615,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                   />
                 </div>
 
-                {/* Linea Nivelada de Precios (% desde Precio Live) */}
+                {/* Linea Horizontal de Precios (% desde Precio Live) */}
                 <StrategyPriceLine
                   livePrice={op.livePrice}
                   entry1Price={op.entry1Price}
@@ -1391,6 +1626,10 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                   tp2Price={op.tp2Price}
                   tpFinalPrice={op.tpFinalPrice}
                   hasHitSL={op.hasHitSL}
+                  isInDangerZone={op.isInDangerZone}
+                  hasHitTPBeforeE1={op.hasHitTPBeforeE1}
+                  isNoOperar={op.isNoOperar}
+                  noOperarReason={op.noOperarReason}
                   decimalPlaces={op.decimalPlaces}
                   isLong={op.isLong}
                 />
@@ -1430,14 +1669,27 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                   <button
                     id={`btn-card-execute-${op.strategy.noEstrategia}`}
                     onClick={() => handleAutofillOrder(op)}
-                    className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs font-mono transition-all flex items-center justify-center gap-1.5 shadow-md active:scale-98 cursor-pointer ${
-                      isFlashActive
-                        ? 'bg-emerald-400 hover:bg-emerald-300 text-neutral-950 shadow-[0_0_15px_rgba(52,211,153,0.4)]'
-                        : 'bg-amber-500 hover:bg-amber-400 text-neutral-950'
+                    disabled={op.isNoOperar}
+                    className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs font-mono transition-all flex items-center justify-center gap-1.5 shadow-md ${
+                      op.isNoOperar
+                        ? 'bg-rose-950/80 text-rose-300 border border-rose-600/80 cursor-not-allowed opacity-80'
+                        : isFlashActive
+                        ? 'bg-emerald-400 hover:bg-emerald-300 text-neutral-950 shadow-[0_0_15px_rgba(52,211,153,0.4)] cursor-pointer active:scale-98'
+                        : 'bg-amber-500 hover:bg-amber-400 text-neutral-950 cursor-pointer active:scale-98'
                     }`}
+                    title={op.isNoOperar ? `Trade NO OPERAR: ${op.noOperarReason}` : 'Autoejecutar en E1'}
                   >
-                    <Zap className="w-3.5 h-3.5 fill-current" />
-                    <span>Autoejecutar en E1</span>
+                    {op.isNoOperar ? (
+                      <>
+                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                        <span>🚫 NO OPERAR</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                        <span>Autoejecutar en E1</span>
+                      </>
+                    )}
                   </button>
 
                   <button
@@ -1490,7 +1742,9 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                   <React.Fragment key={op.strategy.noEstrategia}>
                     <tr
                       className={`transition-colors relative ${
-                        isManaged
+                        op.isNoOperar
+                          ? 'bg-rose-950/25 hover:bg-rose-900/30 border-l-4 border-l-rose-500'
+                          : isManaged
                           ? 'bg-emerald-950/20 hover:bg-emerald-900/30 border-l-4 border-l-emerald-500'
                           : isFlashActive
                           ? 'bg-emerald-500/10 hover:bg-emerald-500/15 border-l-4 border-l-emerald-400'
@@ -1521,7 +1775,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                         )}
 
                         {/* Visual Flash Badge */}
-                        {isFlashActive && (
+                        {isFlashActive && !op.isNoOperar && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-emerald-500/25 text-emerald-300 border border-emerald-400/90 shadow-[0_0_12px_rgba(52,211,153,0.4)] animate-pulse">
                             <Zap className="w-2.5 h-2.5 fill-emerald-400 text-emerald-400" />
                             <span>DETECTADO</span>
@@ -1535,6 +1789,30 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                             onNavigateToGestionTrades={onNavigateToGestionTrades}
                             compact={true}
                           />
+                        )}
+
+                        {/* NO OPERAR BADGE */}
+                        {op.isNoOperar && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-600 text-white border border-rose-300 shadow-[0_0_12px_rgba(244,63,94,0.6)] animate-pulse">
+                            <ShieldAlert className="w-3 h-3 text-white" />
+                            <span>NO OPERAR</span>
+                          </span>
+                        )}
+
+                        {/* Danger Zone Badge */}
+                        {op.isInDangerZone && !op.hasHitSL && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-950 text-rose-300 border border-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-pulse">
+                            <AlertTriangle className="w-3 h-3 text-rose-400" />
+                            <span>ZONA PELIGRO</span>
+                          </span>
+                        )}
+
+                        {/* Premature TP Hit Badge */}
+                        {op.hasHitTPBeforeE1 && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-amber-950 text-amber-300 border border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse">
+                            <Target className="w-3 h-3 text-amber-400" />
+                            <span>TP ALCANZADO</span>
+                          </span>
                         )}
 
                         {/* SL Hit Badge */}
@@ -1684,14 +1962,17 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                         <button
                           id={`btn-table-execute-${op.strategy.noEstrategia}`}
                           onClick={() => handleAutofillOrder(op)}
-                          className={`p-2 rounded-lg font-bold transition-all flex items-center justify-center shadow-xs cursor-pointer active:scale-95 ${
-                            isFlashActive
-                              ? 'bg-emerald-400 hover:bg-emerald-300 text-neutral-950 shadow-[0_0_12px_rgba(52,211,153,0.5)]'
-                              : 'bg-amber-500 hover:bg-amber-400 text-neutral-950'
+                          disabled={op.isNoOperar}
+                          className={`p-2 rounded-lg font-bold transition-all flex items-center justify-center shadow-xs ${
+                            op.isNoOperar
+                              ? 'bg-rose-950 text-rose-300 border border-rose-700 cursor-not-allowed opacity-80'
+                              : isFlashActive
+                              ? 'bg-emerald-400 hover:bg-emerald-300 text-neutral-950 shadow-[0_0_12px_rgba(52,211,153,0.5)] cursor-pointer active:scale-95'
+                              : 'bg-amber-500 hover:bg-amber-400 text-neutral-950 cursor-pointer active:scale-95'
                           }`}
-                          title="Autoejecutar orden en E1"
+                          title={op.isNoOperar ? `Trade NO OPERAR: ${op.noOperarReason}` : 'Autoejecutar orden en E1'}
                         >
-                          <Zap className="w-4 h-4 fill-current" />
+                          {op.isNoOperar ? <ShieldAlert className="w-4 h-4 text-rose-400" /> : <Zap className="w-4 h-4 fill-current" />}
                         </button>
                         <button
                           id={`btn-table-detail-${op.strategy.noEstrategia}`}
@@ -1718,6 +1999,10 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                         tp2Price={op.tp2Price}
                         tpFinalPrice={op.tpFinalPrice}
                         hasHitSL={op.hasHitSL}
+                        isInDangerZone={op.isInDangerZone}
+                        hasHitTPBeforeE1={op.hasHitTPBeforeE1}
+                        isNoOperar={op.isNoOperar}
+                        noOperarReason={op.noOperarReason}
                         decimalPlaces={op.decimalPlaces}
                         isLong={op.isLong}
                       />
