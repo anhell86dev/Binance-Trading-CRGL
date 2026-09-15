@@ -36,6 +36,7 @@ import {
   Volume2,
   VolumeX,
   BellRing,
+  Skull,
 } from 'lucide-react';
 import { GoogleSheetStrategyRow, ParsedStrategyPrices } from '../types/strategy';
 import {
@@ -49,6 +50,8 @@ import { livePriceService } from '../services/livePriceService';
 import { binanceWs } from '../services/binanceWs';
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { futuresConfluenceService } from '../services/futuresConfluenceService';
+import { strategyManagedTradesService } from '../services/strategyManagedTradesService';
+import { StrategyManagedBadge } from './StrategyManagedBadge';
 import { notificationService } from '../services/notifications';
 import {
   parsePricesFromStrategy,
@@ -93,12 +96,130 @@ export interface CandidateTradeOperation {
   isVeryClose: boolean;
   isClose: boolean;
   hasTouchedE1: boolean;
+  hasHitSL: boolean;
   decimalPlaces: number;
   trafficLight: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   isConfluent: boolean;
   confluenceResult: StrategyFullConfluenceResult;
   isFullConfluenceMatch: boolean;
 }
+
+interface StrategyPriceLineProps {
+  livePrice: number;
+  entry1Price: number;
+  entry2Price?: number;
+  entry3Price?: number;
+  slPrice: number;
+  tp1Price: number;
+  tp2Price?: number;
+  tpFinalPrice?: number;
+  hasHitSL: boolean;
+  decimalPlaces: number;
+  isLong: boolean;
+}
+
+export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
+  livePrice,
+  entry1Price,
+  entry2Price,
+  entry3Price,
+  slPrice,
+  tp1Price,
+  tp2Price,
+  tpFinalPrice,
+  hasHitSL,
+  decimalPlaces,
+  isLong,
+}) => {
+  const calcPct = (levelPrice?: number) => {
+    if (!livePrice || livePrice <= 0 || !levelPrice || levelPrice <= 0) return null;
+    return ((levelPrice - livePrice) / livePrice) * 100;
+  };
+
+  const fmtPrice = (p: number) => `$${p.toFixed(decimalPlaces)}`;
+  const fmtPct = (pct: number | null) => {
+    if (pct === null) return '-';
+    const sign = pct > 0 ? '+' : '';
+    return `${sign}${pct.toFixed(2)}%`;
+  };
+
+  const e2 = entry2Price && entry2Price > 0 ? entry2Price : 0;
+  const e3 = entry3Price && entry3Price > 0 ? entry3Price : 0;
+  const tp2 = tp2Price && tp2Price > 0 ? tp2Price : 0;
+  const tp3 = tpFinalPrice && tpFinalPrice > 0 ? tpFinalPrice : 0;
+
+  const levels = [
+    { key: 'LIVE', label: 'PRECIO LIVE', price: livePrice, pct: 0, colorClass: 'bg-cyan-950/80 border-cyan-500/70 text-cyan-300 font-extrabold shadow-sm' },
+    { key: 'E1', label: 'E1 (50%)', price: entry1Price, pct: calcPct(entry1Price), colorClass: 'bg-amber-950/60 border-amber-500/60 text-amber-300 font-bold' },
+    ...(e2 > 0 ? [{ key: 'E2', label: 'E2 (30%)', price: e2, pct: calcPct(e2), colorClass: 'bg-amber-950/40 border-amber-600/40 text-amber-300/90' }] : []),
+    ...(e3 > 0 ? [{ key: 'E3', label: 'E3 (20%)', price: e3, pct: calcPct(e3), colorClass: 'bg-amber-950/30 border-amber-700/30 text-amber-400/80' }] : []),
+    ...(slPrice > 0 ? [{
+      key: 'SL',
+      label: 'SL GLOBAL',
+      price: slPrice,
+      pct: calcPct(slPrice),
+      colorClass: hasHitSL
+        ? 'bg-rose-950 border-rose-500 text-rose-200 font-extrabold animate-pulse ring-1 ring-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.4)]'
+        : 'bg-rose-950/60 border-rose-500/60 text-rose-300 font-bold',
+      isSkull: hasHitSL,
+    }] : []),
+    ...(tp1Price > 0 ? [{ key: 'TP1', label: 'TP1', price: tp1Price, pct: calcPct(tp1Price), colorClass: 'bg-emerald-950/60 border-emerald-500/60 text-emerald-300 font-bold' }] : []),
+    ...(tp2 > 0 ? [{ key: 'TP2', label: 'TP2', price: tp2, pct: calcPct(tp2), colorClass: 'bg-emerald-950/40 border-emerald-600/40 text-emerald-300/90' }] : []),
+    ...(tp3 > 0 ? [{ key: 'TP3', label: 'TP3 / FINAL', price: tp3, pct: calcPct(tp3), colorClass: 'bg-emerald-950/30 border-emerald-700/30 text-emerald-400/80' }] : []),
+  ];
+
+  return (
+    <div className="w-full bg-neutral-950/90 rounded-xl p-2.5 border border-neutral-800/90 font-mono text-xs">
+      <div className="text-[10px] text-neutral-400 uppercase tracking-wider mb-2 flex items-center justify-between font-bold flex-wrap gap-1">
+        <span className="flex items-center gap-1.5 text-neutral-300">
+          <Activity className="w-3.5 h-3.5 text-amber-400" />
+          <span>Línea Nivelada de Precios & Distancia (%) respecto a Precio Live</span>
+        </span>
+        {hasHitSL && (
+          <span className="inline-flex items-center gap-1 text-rose-300 font-extrabold bg-rose-950/90 px-2.5 py-0.5 rounded-full border border-rose-500/80 animate-pulse text-[10px] shadow-[0_0_10px_rgba(244,63,94,0.35)]">
+            <Skull className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span>TOCÓ SL</span>
+          </span>
+        )}
+      </div>
+
+      {/* Horizontal Grid/Scroll of Price Badges */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-1.5 overflow-x-auto pb-0.5">
+        {levels.map((lvl) => {
+          const isLive = lvl.key === 'LIVE';
+          const pctVal = lvl.pct || 0;
+          const isPositive = pctVal > 0;
+
+          return (
+            <div
+              key={lvl.key}
+              className={`p-2 rounded-lg border flex flex-col items-center justify-between text-center transition-all ${lvl.colorClass}`}
+            >
+              <div className="text-[9px] uppercase tracking-tight opacity-90 font-bold flex items-center justify-center gap-1 w-full">
+                {lvl.isSkull && <Skull className="w-3 h-3 text-rose-400 animate-bounce" />}
+                <span className="truncate">{lvl.label}</span>
+              </div>
+              <div className="font-extrabold text-[12px] my-0.5 truncate w-full text-white">
+                {fmtPrice(lvl.price)}
+              </div>
+              <div
+                className={`text-[10px] font-bold px-1 py-0.2 rounded w-full truncate ${
+                  isLive
+                    ? 'text-cyan-300 bg-cyan-900/40'
+                    : isPositive
+                    ? 'text-emerald-400 bg-emerald-950/60'
+                    : 'text-rose-400 bg-rose-950/60'
+                }`}
+              >
+                {isLive ? '0.00% (LIVE)' : fmtPct(lvl.pct)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   onOpenOrderModal,
@@ -127,6 +248,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
 
   // Standard Filters & Controls
   const [searchTerm, setSearchTerm] = useState('');
+  const [onlyManagedFilter, setOnlyManagedFilter] = useState<boolean>(false);
   const [proximityFilter, setProximityFilter] = useState<'ALL' | 'ZONE' | 'VERY_CLOSE' | 'CLOSE'>('ALL');
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
   const [confluenceFilter, setConfluenceFilter] = useState<'ALL' | 'CONFLUENT' | 'BULLISH' | 'BEARISH' | 'NEUTRAL'>('ALL');
@@ -171,11 +293,16 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       setPriceTick((t) => t + 1);
     });
 
+    const unsubManaged = strategyManagedTradesService.subscribe(() => {
+      setPriceTick((t) => t + 1);
+    });
+
     return () => {
       unsubStrat();
       unsubPrice();
       unsubConfluence();
       unsubBinance();
+      unsubManaged();
     };
   }, []);
 
@@ -253,6 +380,22 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
 
         const decimalPlaces = livePrice < 10 ? 4 : 2;
 
+        // Check if Stop Loss (SL) was hit by Live Price or 24h Low/High
+        const sl = prices.slPrice;
+        const ticker = binanceWs.getTicker();
+        let hasHitSL = false;
+        if (sl > 0) {
+          if (isLong) {
+            const liveHit = livePrice > 0 && livePrice <= sl;
+            const tickerHit = Boolean(ticker && ticker.symbol === strat.par && ticker.low24h > 0 && ticker.low24h <= sl && sl < e1);
+            hasHitSL = liveHit || tickerHit;
+          } else {
+            const liveHit = livePrice > 0 && livePrice >= sl;
+            const tickerHit = Boolean(ticker && ticker.symbol === strat.par && ticker.high24h > 0 && ticker.high24h >= sl && sl > e1);
+            hasHitSL = liveHit || tickerHit;
+          }
+        }
+
         const confluence = futuresConfluenceService.getConfluence(strat.par);
         const trafficLight = confluence.analysis.trafficLight;
         const isConfluent =
@@ -307,6 +450,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           isVeryClose,
           isClose,
           hasTouchedE1,
+          hasHitSL,
           decimalPlaces,
           trafficLight,
           isConfluent,
@@ -537,6 +681,11 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
       );
     }
 
+    // Filter only trades in Management
+    if (onlyManagedFilter) {
+      list = list.filter((op) => strategyManagedTradesService.isStrategyManaged(op.strategy));
+    }
+
     // Direction filter
     if (directionFilter === 'LONG') {
       list = list.filter((op) => op.isLong);
@@ -602,11 +751,13 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   }, [
     candidateOperations,
     searchTerm,
+    onlyManagedFilter,
     directionFilter,
     proximityFilter,
     confluenceFilter,
     selectedFactors,
     sortBy,
+    priceTick,
   ]);
 
   // Quick stats
@@ -918,6 +1069,23 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
 
         {/* Filtros rápidos: Dirección, Proximidad a E1, Orden y Selector de Vista */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
+          {/* En Gestión Trade Filter */}
+          <div className="flex items-center bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px]">
+            <button
+              id="filter-managed-trades"
+              onClick={() => setOnlyManagedFilter(!onlyManagedFilter)}
+              className={`px-2 py-0.5 rounded font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                onlyManagedFilter
+                  ? 'bg-emerald-500/30 text-emerald-300 font-bold border border-emerald-500/50 shadow-xs'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Filtrar únicamente activos que tienen un trade o posición activa en gestión"
+            >
+              <Layers className="w-3 h-3 text-emerald-400" />
+              <span>En Gestión</span>
+            </button>
+          </div>
+
           {/* Dirección */}
           <div className="flex items-center bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px]">
             <button
@@ -1115,12 +1283,16 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           {filteredAndSortedOperations.map((op, idx) => {
             const metFactors = Object.values(op.confluenceResult.factors).filter((f) => f.isMet);
             const isFlashActive = op.isFullConfluenceMatch;
+            const managedCtx = strategyManagedTradesService.getManagedTradeContext(op.strategy);
+            const isManaged = Boolean(managedCtx?.isManaged);
 
             return (
               <div
                 key={op.strategy.noEstrategia}
                 className={`bg-neutral-900/90 border rounded-2xl p-4 flex flex-col justify-between gap-3 shadow-lg transition-all relative overflow-hidden ${
-                  isFlashActive
+                  isManaged
+                    ? 'border-emerald-500/70 ring-1 ring-emerald-500/30 bg-gradient-to-b from-emerald-950/15 via-neutral-900 to-neutral-900'
+                    : isFlashActive
                     ? 'border-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.35)] ring-1 ring-emerald-400/80 bg-gradient-to-b from-emerald-950/20 via-neutral-900 to-neutral-900'
                     : op.isInZone
                     ? 'border-amber-500/60 ring-1 ring-amber-500/20 bg-amber-950/10'
@@ -1168,6 +1340,23 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       )}
                       <span>{op.isLong ? 'LONG' : 'SHORT'}</span>
                     </span>
+
+                    {/* Managed Trade Badge */}
+                    {isManaged && (
+                      <StrategyManagedBadge
+                        tradeContext={managedCtx}
+                        onNavigateToGestionTrades={onNavigateToGestionTrades}
+                        compact={true}
+                      />
+                    )}
+
+                    {/* SL Hit Badge */}
+                    {op.hasHitSL && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-950 text-rose-300 border border-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.4)] animate-pulse">
+                        <Skull className="w-3.5 h-3.5 text-rose-400" />
+                        <span>TOCÓ SL</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* Confluence Badge */}
@@ -1191,58 +1380,20 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                   />
                 </div>
 
-                {/* Price and E1 Proximity Meter */}
-                <div className="bg-neutral-950/80 rounded-xl p-3 border border-neutral-800/90 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] text-neutral-500 font-mono uppercase">Precio en Vivo</div>
-                    <div className="text-base font-extrabold font-mono text-white">
-                      ${op.livePrice.toFixed(op.decimalPlaces)}
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="text-[10px] text-neutral-500 font-mono uppercase">Distancia a E1</div>
-                    <div
-                      className={`text-sm font-bold font-mono ${
-                        op.isInZone
-                          ? 'text-amber-300 font-extrabold animate-pulse'
-                          : op.absDiffPct <= 2.5
-                          ? 'text-emerald-400'
-                          : 'text-neutral-300'
-                      }`}
-                    >
-                      {op.isInZone ? '🔥 EN ZONA E1' : `${op.diffPct > 0 ? '+' : ''}${op.diffPct.toFixed(2)}%`}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Tactical Levels (E1, SL, TP1, R:B) */}
-                <div className="grid grid-cols-4 gap-1.5 text-center font-mono text-xs">
-                  <div className="bg-neutral-950/60 p-2 rounded-lg border border-neutral-800">
-                    <div className="text-[9px] text-amber-400 uppercase">E1 (50%)</div>
-                    <div className="text-amber-300 font-bold truncate">
-                      ${op.entry1Price.toFixed(op.decimalPlaces)}
-                    </div>
-                  </div>
-                  <div className="bg-neutral-950/60 p-2 rounded-lg border border-neutral-800">
-                    <div className="text-[9px] text-rose-400 uppercase">SL Global</div>
-                    <div className="text-rose-400 font-bold truncate">
-                      ${op.slPrice.toFixed(op.decimalPlaces)}
-                    </div>
-                  </div>
-                  <div className="bg-neutral-950/60 p-2 rounded-lg border border-neutral-800">
-                    <div className="text-[9px] text-emerald-400 uppercase">TP1</div>
-                    <div className="text-emerald-400 font-bold truncate">
-                      ${op.tp1Price.toFixed(op.decimalPlaces)}
-                    </div>
-                  </div>
-                  <div className="bg-neutral-950/60 p-2 rounded-lg border border-neutral-800">
-                    <div className="text-[9px] text-emerald-400 uppercase">Ratio R:B</div>
-                    <div className="text-emerald-300 font-extrabold truncate">
-                      1:{op.ratio.toFixed(1)}
-                    </div>
-                  </div>
-                </div>
+                {/* Linea Nivelada de Precios (% desde Precio Live) */}
+                <StrategyPriceLine
+                  livePrice={op.livePrice}
+                  entry1Price={op.entry1Price}
+                  entry2Price={op.entry2Price}
+                  entry3Price={op.entry3Price}
+                  slPrice={op.slPrice}
+                  tp1Price={op.tp1Price}
+                  tp2Price={op.tp2Price}
+                  tpFinalPrice={op.tpFinalPrice}
+                  hasHitSL={op.hasHitSL}
+                  decimalPlaces={op.decimalPlaces}
+                  isLong={op.isLong}
+                />
 
                 {/* Validated Confluence Factor Chips */}
                 <div className="flex flex-col gap-1.5 pt-1">
@@ -1332,18 +1483,22 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               {filteredAndSortedOperations.map((op, idx) => {
                 const metFactors = Object.values(op.confluenceResult.factors).filter((f) => f.isMet);
                 const isFlashActive = op.isFullConfluenceMatch;
+                const managedCtx = strategyManagedTradesService.getManagedTradeContext(op.strategy);
+                const isManaged = Boolean(managedCtx?.isManaged);
 
                 return (
-                  <tr
-                    key={op.strategy.noEstrategia}
-                    className={`transition-colors relative ${
-                      isFlashActive
-                        ? 'bg-emerald-500/10 hover:bg-emerald-500/15 border-l-4 border-l-emerald-400'
-                        : op.isInZone
-                        ? 'bg-amber-500/5 hover:bg-neutral-850/60'
-                        : 'hover:bg-neutral-850/60'
-                    }`}
-                  >
+                  <React.Fragment key={op.strategy.noEstrategia}>
+                    <tr
+                      className={`transition-colors relative ${
+                        isManaged
+                          ? 'bg-emerald-950/20 hover:bg-emerald-900/30 border-l-4 border-l-emerald-500'
+                          : isFlashActive
+                          ? 'bg-emerald-500/10 hover:bg-emerald-500/15 border-l-4 border-l-emerald-400'
+                          : op.isInZone
+                          ? 'bg-amber-500/5 hover:bg-neutral-850/60'
+                          : 'hover:bg-neutral-850/60'
+                      }`}
+                    >
                     {/* Ranking */}
                     <td className="p-3">
                       <span className="font-bold text-amber-400 text-base">#{idx + 1}</span>
@@ -1370,6 +1525,23 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-emerald-500/25 text-emerald-300 border border-emerald-400/90 shadow-[0_0_12px_rgba(52,211,153,0.4)] animate-pulse">
                             <Zap className="w-2.5 h-2.5 fill-emerald-400 text-emerald-400" />
                             <span>DETECTADO</span>
+                          </span>
+                        )}
+
+                        {/* Managed Trade Badge */}
+                        {isManaged && (
+                          <StrategyManagedBadge
+                            tradeContext={managedCtx}
+                            onNavigateToGestionTrades={onNavigateToGestionTrades}
+                            compact={true}
+                          />
+                        )}
+
+                        {/* SL Hit Badge */}
+                        {op.hasHitSL && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold font-mono uppercase bg-rose-950 text-rose-300 border border-rose-500/80 shadow-[0_0_12px_rgba(244,63,94,0.4)] animate-pulse">
+                            <Skull className="w-3 h-3 text-rose-400" />
+                            <span>TOCÓ SL</span>
                           </span>
                         )}
                       </div>
@@ -1400,7 +1572,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
 
                     {/* Precio Live & Proximidad a E1 */}
                     <td className="p-3 num-data text-right">
-                      <div className="flex flex-col items-end">
+                      <div className="flex flex-col items-end font-mono">
                         <span className="font-extrabold text-white text-base">
                           ${op.livePrice.toFixed(op.decimalPlaces)}
                         </span>
@@ -1425,44 +1597,57 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </div>
                     </td>
 
-                    {/* Entradas DCA */}
+                    {/* Entradas DCA con % a Live */}
                     <td className="p-3 num-data">
-                      <div className="flex flex-col text-xs leading-relaxed">
+                      <div className="flex flex-col text-xs leading-relaxed font-mono">
                         <span className="text-amber-300 font-bold">
-                          E1: ${op.entry1Price.toFixed(op.decimalPlaces)} (50%)
+                          E1: ${op.entry1Price.toFixed(op.decimalPlaces)} ({((op.entry1Price - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}{(((op.entry1Price - op.livePrice)/op.livePrice)*100).toFixed(2)}%)
                         </span>
                         <span className="text-neutral-300">
-                          E2: ${op.entry2Price > 0 ? op.entry2Price.toFixed(op.decimalPlaces) : '-'} (30%)
+                          E2: ${op.entry2Price > 0 ? op.entry2Price.toFixed(op.decimalPlaces) : '-'} {op.entry2Price > 0 ? `(${((op.entry2Price - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}${(((op.entry2Price - op.livePrice)/op.livePrice)*100).toFixed(2)}%)` : ''}
                         </span>
                         {op.entry3Price && op.entry3Price > 0 && (
                           <span className="text-neutral-400 text-[10px]">
-                            E3: ${op.entry3Price.toFixed(op.decimalPlaces)} (20%)
+                            E3: ${op.entry3Price.toFixed(op.decimalPlaces)} ({((op.entry3Price - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}{(((op.entry3Price - op.livePrice)/op.livePrice)*100).toFixed(2)}%)
                           </span>
                         )}
                       </div>
                     </td>
 
-                    {/* SL Global */}
+                    {/* SL Global con Skull e Indicador de Hit */}
                     <td className="p-3 num-data">
-                      <div className="flex flex-col text-xs leading-relaxed">
-                        <span className="text-rose-400 font-bold">
-                          ${op.slPrice.toFixed(op.decimalPlaces)}
+                      <div className="flex flex-col text-xs leading-relaxed font-mono">
+                        <span className={`font-bold flex items-center gap-1 ${op.hasHitSL ? 'text-rose-200 font-extrabold bg-rose-950/80 px-1.5 py-0.5 rounded animate-pulse border border-rose-500/80' : 'text-rose-400'}`}>
+                          {op.hasHitSL && <Skull className="w-3.5 h-3.5 text-rose-400 shrink-0" />}
+                          ${op.slPrice.toFixed(op.decimalPlaces)} ({((op.slPrice - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}{(((op.slPrice - op.livePrice)/op.livePrice)*100).toFixed(2)}%)
                         </span>
-                        <span className="text-neutral-400 text-[10px]">
-                          ROE: -{op.rewardToRisk.maxLossPct.toFixed(1)}%
-                        </span>
+                        {op.hasHitSL ? (
+                          <span className="text-rose-400 font-extrabold text-[10px] uppercase flex items-center gap-0.5 mt-0.5">
+                            <Skull className="w-2.5 h-2.5 text-rose-400" />
+                            <span>TOCÓ STOP LOSS</span>
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400 text-[10px]">
+                            ROE: -{op.rewardToRisk.maxLossPct.toFixed(1)}%
+                          </span>
+                        )}
                       </div>
                     </td>
 
-                    {/* Take Profits */}
+                    {/* Take Profits con % a Live */}
                     <td className="p-3 num-data">
-                      <div className="flex flex-col text-xs leading-relaxed">
+                      <div className="flex flex-col text-xs leading-relaxed font-mono">
                         <span className="text-emerald-400 font-bold">
-                          TP1: ${op.tp1Price.toFixed(op.decimalPlaces)}
+                          TP1: ${op.tp1Price.toFixed(op.decimalPlaces)} ({((op.tp1Price - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}{(((op.tp1Price - op.livePrice)/op.livePrice)*100).toFixed(2)}%)
                         </span>
                         <span className="text-neutral-300">
-                          TP2: ${op.tp2Price > 0 ? op.tp2Price.toFixed(op.decimalPlaces) : '-'}
+                          TP2: ${op.tp2Price > 0 ? `${op.tp2Price.toFixed(op.decimalPlaces)} (${((op.tp2Price - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}${(((op.tp2Price - op.livePrice)/op.livePrice)*100).toFixed(2)}%)` : '-'}
                         </span>
+                        {op.tpFinalPrice > 0 && (
+                          <span className="text-emerald-300/80 text-[10px]">
+                            TP3: ${op.tpFinalPrice.toFixed(op.decimalPlaces)} ({((op.tpFinalPrice - op.livePrice)/op.livePrice * 100) >= 0 ? '+' : ''}{(((op.tpFinalPrice - op.livePrice)/op.livePrice)*100).toFixed(2)}%)
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -1519,7 +1704,27 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                       </div>
                     </td>
                   </tr>
-                );
+
+                  {/* Subrow for StrategyPriceLine */}
+                  <tr className="bg-neutral-950/60 border-b border-neutral-800">
+                    <td colSpan={9} className="p-2 pt-0 pb-2.5">
+                      <StrategyPriceLine
+                        livePrice={op.livePrice}
+                        entry1Price={op.entry1Price}
+                        entry2Price={op.entry2Price}
+                        entry3Price={op.entry3Price}
+                        slPrice={op.slPrice}
+                        tp1Price={op.tp1Price}
+                        tp2Price={op.tp2Price}
+                        tpFinalPrice={op.tpFinalPrice}
+                        hasHitSL={op.hasHitSL}
+                        decimalPlaces={op.decimalPlaces}
+                        isLong={op.isLong}
+                      />
+                    </td>
+                  </tr>
+                </React.Fragment>
+              );
               })}
             </tbody>
           </table>
