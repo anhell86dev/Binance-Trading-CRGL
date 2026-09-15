@@ -438,15 +438,15 @@ export const StrategySidebar: React.FC<StrategySidebarProps> = ({ onSelectStrate
                   <div className="grid grid-cols-3 gap-1 py-1 px-1.5 bg-neutral-950 rounded border border-neutral-800/80 text-[10px] font-mono">
                     <div className="flex flex-col">
                       <span className="text-neutral-500 text-[8px] uppercase">Entrada 1</span>
-                      <span className="text-sky-300 font-bold">${strat.parsed.entry1Price || '0.00'}</span>
+                      <span className="text-sky-300 font-bold">${strat.parsed?.entry1Price || '0.00'}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-neutral-500 text-[8px] uppercase">Stop Loss</span>
-                      <span className="text-rose-400 font-bold">${strat.parsed.slPrice || '0.00'}</span>
+                      <span className="text-rose-400 font-bold">${strat.parsed?.slPrice || '0.00'}</span>
                     </div>
                     <div className="flex flex-col">
                       <span className="text-neutral-500 text-[8px] uppercase">TP 1</span>
-                      <span className="text-emerald-400 font-bold">${strat.parsed.tp1Price || '0.00'}</span>
+                      <span className="text-emerald-400 font-bold">${strat.parsed?.tp1Price || '0.00'}</span>
                     </div>
                   </div>
 

@@ -7,7 +7,7 @@ import {
 import { GoogleSheetStrategyRow, ParsedStrategyPrices } from '../types/strategy';
 import { livePriceService } from '../services/livePriceService';
 import { futuresConfluenceService } from '../services/futuresConfluenceService';
-import { calculateStrategyRewardToRisk } from './sheetParser';
+import { calculateStrategyRewardToRisk, parsePricesFromStrategy } from './sheetParser';
 
 export const CONFLUENCE_FACTOR_DEFINITIONS: ConfluenceFactorDefinition[] = [
   {
@@ -212,21 +212,22 @@ function deriveTechnicalIndicators(
  */
 export function evaluateStrategyConfluence(
   strategy: GoogleSheetStrategyRow,
-  prices: ParsedStrategyPrices,
+  prices?: ParsedStrategyPrices,
   livePriceInput?: number
 ): StrategyFullConfluenceResult {
+  const safePrices = prices || parsePricesFromStrategy(strategy);
   const cleanSymbol = strategy.par.replace(/[^A-Z0-9]/g, '').toUpperCase();
   const livePriceData = livePriceService.getPriceData(cleanSymbol);
   const livePrice =
     livePriceInput && livePriceInput > 0
       ? livePriceInput
-      : livePriceData.price || prices.entry1Price || 100;
+      : livePriceData.price || safePrices.entry1Price || 100;
 
   const isLong =
     !strategy.tipoDeOrden?.toLowerCase().includes('short') &&
     !strategy.tipoDeOrden?.toLowerCase().includes('venta');
 
-  const e1 = prices.entry1Price || livePrice;
+  const e1 = safePrices.entry1Price || livePrice;
   const diffDollar = livePrice - e1;
   const diffPct = e1 > 0 ? ((livePrice - e1) / e1) * 100 : 0;
   const absDiffPct = Math.abs(diffPct);

@@ -605,9 +605,28 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
   let tpFinalPct = 20;
   let leverage = 5; // Default 5x isolated as per risk protocol
 
+  if (!strategy) {
+    return {
+      entry1Price: 0,
+      entry1Pct: 50,
+      entry2Price: 0,
+      entry2Pct: 30,
+      avgEntryPrice: 0,
+      slPrice: 0,
+      tp1Price: 0,
+      tp1Pct: 50,
+      tp2Price: 0,
+      tp2Pct: 30,
+      tpFinalPrice: 0,
+      tpFinalPct: 20,
+      leverage: 5,
+    };
+  }
+
   // Extract leverage from risk rules (e.g. "ROE Máx 5X" or "Apalancamiento: 5x aislado" or "3x aislado")
-  const levMatch = strategy.gestionDeRiesgoStopLoss.match(/(\d+)x(?:-(\d+)x)?/i) ||
-                   strategy.gestionDeRiesgoStopLoss.match(/ROE\s*M[aá]x\s*(\d+)X/i);
+  const riskRules = strategy.gestionDeRiesgoStopLoss || '';
+  const levMatch = riskRules.match(/(\d+)x(?:-(\d+)x)?/i) ||
+                   riskRules.match(/ROE\s*M[aá]x\s*(\d+)X/i);
   if (levMatch) {
     const levVal = parseInt(levMatch[1], 10);
     leverage = Math.min(5, Math.max(1, levVal));
