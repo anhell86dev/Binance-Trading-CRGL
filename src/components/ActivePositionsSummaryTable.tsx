@@ -145,49 +145,49 @@ const MiniPriceGauge: React.FC<{
   const tpOrderPctVal = !tp1 && tpPrice && tpPrice > 0 ? getPercent(tpPrice) : null;
 
   return (
-    <div className="flex flex-col gap-1 w-full p-2 bg-neutral-950/80 border border-neutral-800/90 rounded-lg shadow-inner">
-      {/* 1. Header Integrado Alargado: Tamaño & Nocional | Entrada Promedio | PnL Flotante & ROE */}
-      <div className="flex items-center justify-between gap-2 text-xs font-mono border-b border-neutral-800/60 pb-1">
+    <div className="flex flex-col gap-0.5 w-full p-1.5 bg-neutral-950/80 border border-neutral-800/90 rounded-lg shadow-inner">
+      {/* 1. Header Integrado Alargado y Compacto: Tamaño & Nocional | Entrada Promedio | PnL Flotante & ROE */}
+      <div className="flex items-center justify-between gap-1.5 text-[10.5px] font-mono border-b border-neutral-800/60 pb-0.5">
         {/* Tamaño y Nocional */}
-        <div className="flex items-center gap-2 leading-tight">
-          <div className="text-white font-bold text-xs flex items-center gap-1">
+        <div className="flex items-center gap-1.5 leading-tight">
+          <div className="text-white font-bold text-[11px] flex items-center gap-0.5">
             <span>{size.toLocaleString('en-US', { maximumFractionDigits: 4 })}</span>
-            <span className="text-[9px] text-neutral-400 font-normal">contratos</span>
+            <span className="text-[8.5px] text-neutral-400 font-normal">ctos</span>
           </div>
           <span className="text-neutral-600">·</span>
-          <div className="text-[11px] text-neutral-300 font-semibold">
+          <div className="text-[10.5px] text-neutral-300 font-semibold">
             ${notional.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
         </div>
 
         {/* Entrada Promedio */}
-        <div className="flex items-center gap-1 text-[11px] text-neutral-300 font-mono">
-          <span className="text-neutral-400">E Prom:</span>
+        <div className="flex items-center gap-1 text-[10.5px] text-neutral-300 font-mono">
+          <span className="text-neutral-400 text-[9px]">E Prom:</span>
           <strong className="text-sky-300 font-bold">${formatPriceUtil(entryPrice)}</strong>
         </div>
 
         {/* PnL Flotante & ROE */}
-        <div className="flex items-center gap-2 leading-tight">
-          <div className={`text-xs font-black flex items-center gap-1 px-1.5 py-0.2 rounded border ${
+        <div className="flex items-center gap-1.5 leading-tight">
+          <div className={`text-[10.5px] font-black flex items-center gap-0.5 px-1 py-0 rounded border ${
             isWinner
               ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50 shadow-xs'
               : 'bg-rose-950/90 text-rose-300 border-rose-500/50 shadow-xs'
           }`}>
-            {isWinner ? <TrendingUp className="w-3 h-3 text-emerald-400" /> : <TrendingDown className="w-3 h-3 text-rose-400" />}
+            {isWinner ? <TrendingUp className="w-2.5 h-2.5 text-emerald-400" /> : <TrendingDown className="w-2.5 h-2.5 text-rose-400" />}
             <span>{isWinner ? '+' : '-'}${Math.abs(unRealizedProfit).toFixed(2)}</span>
           </div>
-          <div className={`text-[10px] font-bold ${
+          <div className={`text-[9.5px] font-bold ${
             roePct >= 0 ? 'text-emerald-300' : 'text-rose-300'
           }`}>
-            {roePct >= 0 ? '+' : ''}{roePct.toFixed(2)}% ROE
+            {roePct >= 0 ? '+' : ''}{roePct.toFixed(2)}%
           </div>
         </div>
       </div>
 
-      {/* 2. Mini Línea Gráfica de Precios con Etiqueta Live Flotante Encima del Punto */}
-      <div className="relative w-full pt-6 pb-0.5">
-        {/* Contenedor de la barra física */}
-        <div className="relative w-full h-4 bg-neutral-950 rounded-md border border-neutral-800 flex items-center px-2 select-none shadow-inner overflow-visible">
+      {/* 2. Mini Línea Gráfica de Precios Optimizada con Altura Reducida */}
+      <div className="relative w-full pt-4 pb-0">
+        {/* Contenedor de la barra física más compacta */}
+        <div className="relative w-full h-3 bg-neutral-950 rounded-md border border-neutral-800 flex items-center px-1.5 select-none shadow-inner overflow-visible">
           {/* Fondo de zona de riesgo (Rojo) */}
           <div
             className="absolute top-0 bottom-0 left-0 bg-rose-950/40 border-r border-rose-500/20 rounded-l-md"
@@ -200,14 +200,14 @@ const MiniPriceGauge: React.FC<{
           />
 
           {/* Guía central */}
-          <div className="absolute left-2 right-2 h-1 bg-neutral-800/90 rounded-full" />
+          <div className="absolute left-1.5 right-1.5 h-0.5 bg-neutral-800/90 rounded-full" />
 
           {/* Barra de progreso de precio actual */}
           <div
-            className={`absolute h-1.5 rounded-full transition-all duration-300 ${
+            className={`absolute h-1 rounded-full transition-all duration-300 ${
               isWinner
-                ? 'bg-gradient-to-r from-sky-400 via-emerald-400 to-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-                : 'bg-gradient-to-r from-rose-500 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.6)]'
+                ? 'bg-gradient-to-r from-sky-400 via-emerald-400 to-emerald-300 shadow-[0_0_6px_rgba(52,211,153,0.6)]'
+                : 'bg-gradient-to-r from-rose-500 to-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]'
             }`}
             style={{
               left: `${Math.min(entryPct, currentPct)}%`,
@@ -222,14 +222,14 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${slPct}%`, transform: 'translateX(-50%)' }}
               title={`Stop Loss: $${formatPriceUtil(effectiveSl)}`}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-rose-500 border border-rose-200 shadow-sm" />
+              <div className="w-2 h-2 rounded-full bg-rose-500 border border-rose-200 shadow-sm" />
             </div>
           ) : (
             <div
-              className="absolute left-1.5 flex items-center z-10"
+              className="absolute left-1 flex items-center z-10"
               title="¡Sin Stop Loss Configurado!"
             >
-              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping opacity-80" />
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping opacity-80" />
             </div>
           )}
 
@@ -240,7 +240,7 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${e1PctVal}%`, transform: 'translateX(-50%)' }}
               title={`Entrada 1 (E1): $${formatPriceUtil(e1!)}${e1Pct ? ` (${e1Pct}%)` : ''}`}
             >
-              <div className="w-2.5 h-2.5 rotate-45 bg-sky-400 border border-sky-100 shadow-sm" />
+              <div className="w-2 h-2 rotate-45 bg-sky-400 border border-sky-100 shadow-xs" />
             </div>
           )}
           {e2PctVal !== null && (
@@ -249,7 +249,7 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${e2PctVal}%`, transform: 'translateX(-50%)' }}
               title={`Entrada 2 (E2): $${formatPriceUtil(e2!)}${e2Pct ? ` (${e2Pct}%)` : ''}`}
             >
-              <div className="w-2 h-2 rotate-45 bg-cyan-400 border border-cyan-100 shadow-xs" />
+              <div className="w-1.5 h-1.5 rotate-45 bg-cyan-400 border border-cyan-100 shadow-xs" />
             </div>
           )}
           {e3PctVal !== null && (
@@ -258,7 +258,7 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${e3PctVal}%`, transform: 'translateX(-50%)' }}
               title={`Entrada 3 (E3): $${formatPriceUtil(e3!)}${e3Pct ? ` (${e3Pct}%)` : ''}`}
             >
-              <div className="w-2 h-2 rotate-45 bg-indigo-400 border border-indigo-100 shadow-xs" />
+              <div className="w-1.5 h-1.5 rotate-45 bg-indigo-400 border border-indigo-100 shadow-xs" />
             </div>
           )}
 
@@ -269,7 +269,7 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${tp1PctVal}%`, transform: 'translateX(-50%)' }}
               title={`Take Profit 1 (TP1): $${formatPriceUtil(tp1!)}${tp1Pct ? ` (${tp1Pct}%)` : ''}`}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 shadow-xs" />
+              <div className="w-2 h-2 rounded-full bg-emerald-400 border border-emerald-200 shadow-xs" />
             </div>
           )}
           {tp2PctVal !== null && (
@@ -278,7 +278,7 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${tp2PctVal}%`, transform: 'translateX(-50%)' }}
               title={`Take Profit 2 (TP2): $${formatPriceUtil(tp2!)}${tp2Pct ? ` (${tp2Pct}%)` : ''}`}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-100 shadow-xs" />
+              <div className="w-2 h-2 rounded-full bg-emerald-400 border border-emerald-100 shadow-xs" />
             </div>
           )}
           {tp3PctVal !== null && (
@@ -287,7 +287,7 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${tp3PctVal}%`, transform: 'translateX(-50%)' }}
               title={`Take Profit 3 (TP3 / Final): $${formatPriceUtil(tp3!)}${tp3Pct ? ` (${tp3Pct}%)` : ''}`}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 border border-white shadow-sm" />
+              <div className="w-2 h-2 rounded-full bg-emerald-300 border border-white shadow-xs" />
             </div>
           )}
           {tpOrderPctVal !== null && (
@@ -296,26 +296,26 @@ const MiniPriceGauge: React.FC<{
               style={{ left: `${tpOrderPctVal}%`, transform: 'translateX(-50%)' }}
               title={`TP Orden: $${formatPriceUtil(tpPrice!)}`}
             >
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white shadow-sm" />
+              <div className="w-2 h-2 rounded-full bg-emerald-400 border border-white shadow-xs" />
             </div>
           )}
 
           {/* Marcador Precio en Vivo: Etiqueta Flotante Directamente SOBRE el Punto */}
           <div
-            className="absolute -top-6 flex flex-col items-center justify-center z-30 transition-all duration-300 pointer-events-none"
+            className="absolute -top-4.5 flex flex-col items-center justify-center z-30 transition-all duration-300 pointer-events-none"
             style={{ left: `${currentPct}%`, transform: 'translateX(-50%)' }}
           >
             <div
-              className={`px-1.5 py-0.2 rounded shadow-lg text-[9.5px] font-mono font-black whitespace-nowrap border flex items-center gap-1 ${
+              className={`px-1 py-0 rounded shadow-md text-[8.5px] font-mono font-black whitespace-nowrap border flex items-center gap-0.5 leading-tight ${
                 isWinner
-                  ? 'bg-emerald-950 text-emerald-300 border-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]'
-                  : 'bg-rose-950 text-rose-300 border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.7)]'
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.7)]'
+                  : 'bg-rose-950 text-rose-300 border-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.7)]'
               }`}
             >
               <span>Live: ${formatPriceUtil(currentPrice)}</span>
-              <span className="text-[8.5px] font-bold">({priceDiffPct >= 0 ? '+' : ''}{priceDiffPct.toFixed(2)}%)</span>
+              <span className="text-[7.5px] font-bold">({priceDiffPct >= 0 ? '+' : ''}{priceDiffPct.toFixed(2)}%)</span>
             </div>
-            <div className={`w-1.5 h-1.5 rotate-45 -mt-0.5 ${isWinner ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+            <div className={`w-1 h-1 rotate-45 -mt-0.5 ${isWinner ? 'bg-emerald-400' : 'bg-rose-400'}`} />
           </div>
 
           {/* Punto de Representación del Precio en Vivo */}
@@ -324,107 +324,107 @@ const MiniPriceGauge: React.FC<{
             style={{ left: `${currentPct}%`, transform: 'translateX(-50%)' }}
           >
             <div
-              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-[0_0_8px_rgba(255,255,255,0.9)] ${
+              className={`w-2.5 h-2.5 rounded-full flex items-center justify-center shadow-[0_0_6px_rgba(255,255,255,0.9)] ${
                 isWinner
-                  ? 'bg-emerald-400 text-neutral-950 ring-2 ring-emerald-300 animate-pulse'
-                  : 'bg-rose-500 text-white ring-2 ring-rose-300 animate-pulse'
+                  ? 'bg-emerald-400 text-neutral-950 ring-1.5 ring-emerald-300 animate-pulse'
+                  : 'bg-rose-500 text-white ring-1.5 ring-rose-300 animate-pulse'
               }`}
             >
-              <div className="w-1.5 h-1.5 rounded-full bg-neutral-950" />
+              <div className="w-1 h-1 rounded-full bg-neutral-950" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. Desglose Numérico Completo: SL + Todas las E (E1, E2, E3) + Todos los TP (TP1, TP2, TP3) */}
-      <div className="flex items-center justify-between gap-1.5 text-[9.5px] font-mono flex-wrap pt-0.5 border-t border-neutral-800/40">
+      {/* 3. Desglose Numérico Completo y Compacto: SL + Todas las E (E1, E2, E3) + Todos los TP (TP1, TP2, TP3) */}
+      <div className="flex items-center justify-between gap-1 text-[8.5px] font-mono flex-wrap pt-0.5 border-t border-neutral-800/40">
         {/* SL */}
         {effectiveSl ? (
           <div
-            className="flex items-center gap-1 bg-rose-950/80 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/40 font-bold"
+            className="flex items-center gap-0.5 bg-rose-950/80 text-rose-300 px-1 py-0 rounded border border-rose-500/40 font-bold"
             title={distToSlPct !== null ? `Distancia al SL: ${distToSlPct.toFixed(1)}%` : undefined}
           >
-            <span className="text-[8px] text-rose-400 uppercase">SL:</span>
-            <span className="text-[9.5px] text-rose-200 font-extrabold">${formatPriceUtil(effectiveSl)}</span>
+            <span className="text-[7.5px] text-rose-400 uppercase">SL:</span>
+            <span className="text-[8.5px] text-rose-200 font-extrabold">${formatPriceUtil(effectiveSl)}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 bg-rose-950 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/80 text-[8.5px] font-bold animate-pulse">
-            <ShieldAlert className="w-2.5 h-2.5 text-rose-400" />
+          <div className="flex items-center gap-0.5 bg-rose-950 text-rose-300 px-1 py-0 rounded border border-rose-500/80 text-[8px] font-bold animate-pulse">
+            <ShieldAlert className="w-2 h-2 text-rose-400" />
             <span>SIN SL</span>
           </div>
         )}
 
         {/* Todas las Entradas (E1, E2, E3) */}
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-0.5 flex-wrap">
           {e1 && e1 > 0 && (
-            <div className="flex items-center gap-0.5 bg-neutral-900 text-sky-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
-              <span className="text-[8px] text-sky-400">E1:</span>
-              <span className="text-[9.5px] text-sky-200">${formatPriceUtil(e1)}</span>
-              {e1Pct ? <span className="text-[7.5px] text-neutral-400">({e1Pct}%)</span> : null}
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-sky-300 px-1 py-0 rounded border border-neutral-800 font-bold">
+              <span className="text-[7.5px] text-sky-400">E1:</span>
+              <span className="text-[8.5px] text-sky-200">${formatPriceUtil(e1)}</span>
+              {e1Pct ? <span className="text-[7px] text-neutral-400">({e1Pct}%)</span> : null}
             </div>
           )}
           {e2 && e2 > 0 && (
-            <div className="flex items-center gap-0.5 bg-neutral-900 text-cyan-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
-              <span className="text-[8px] text-cyan-400">E2:</span>
-              <span className="text-[9.5px] text-cyan-200">${formatPriceUtil(e2)}</span>
-              {e2Pct ? <span className="text-[7.5px] text-neutral-400">({e2Pct}%)</span> : null}
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-cyan-300 px-1 py-0 rounded border border-neutral-800 font-bold">
+              <span className="text-[7.5px] text-cyan-400">E2:</span>
+              <span className="text-[8.5px] text-cyan-200">${formatPriceUtil(e2)}</span>
+              {e2Pct ? <span className="text-[7px] text-neutral-400">({e2Pct}%)</span> : null}
             </div>
           )}
           {e3 && e3 > 0 && (
-            <div className="flex items-center gap-0.5 bg-neutral-900 text-indigo-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
-              <span className="text-[8px] text-indigo-400">E3:</span>
-              <span className="text-[9.5px] text-indigo-200">${formatPriceUtil(e3)}</span>
-              {e3Pct ? <span className="text-[7.5px] text-neutral-400">({e3Pct}%)</span> : null}
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-indigo-300 px-1 py-0 rounded border border-neutral-800 font-bold">
+              <span className="text-[7.5px] text-indigo-400">E3:</span>
+              <span className="text-[8.5px] text-indigo-200">${formatPriceUtil(e3)}</span>
+              {e3Pct ? <span className="text-[7px] text-neutral-400">({e3Pct}%)</span> : null}
             </div>
           )}
           {!e1 && !e2 && !e3 && (
-            <div className="flex items-center gap-0.5 bg-neutral-900 text-sky-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
-              <span className="text-[8px] text-sky-400">E:</span>
-              <span className="text-[9.5px] text-sky-200">${formatPriceUtil(entryPrice)}</span>
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-sky-300 px-1 py-0 rounded border border-neutral-800 font-bold">
+              <span className="text-[7.5px] text-sky-400">E:</span>
+              <span className="text-[8.5px] text-sky-200">${formatPriceUtil(entryPrice)}</span>
             </div>
           )}
         </div>
 
         {/* Todos los Take Profits (TP1, TP2, TP3) */}
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-0.5 flex-wrap">
           {tp1 && tp1 > 0 && (
             <div
-              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
+              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1 py-0 rounded border border-emerald-500/40 font-bold"
               title={`TP1: $${formatPriceUtil(tp1)}`}
             >
-              <span className="text-[8px] text-emerald-400">TP1:</span>
-              <span className="text-[9.5px] text-emerald-200">${formatPriceUtil(tp1)}</span>
-              {tp1Pct ? <span className="text-[7.5px] text-emerald-400/80">({tp1Pct}%)</span> : null}
+              <span className="text-[7.5px] text-emerald-400">TP1:</span>
+              <span className="text-[8.5px] text-emerald-200">${formatPriceUtil(tp1)}</span>
+              {tp1Pct ? <span className="text-[7px] text-emerald-400/80">({tp1Pct}%)</span> : null}
             </div>
           )}
           {tp2 && tp2 > 0 && (
             <div
-              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
+              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1 py-0 rounded border border-emerald-500/40 font-bold"
               title={`TP2: $${formatPriceUtil(tp2)}`}
             >
-              <span className="text-[8px] text-emerald-400">TP2:</span>
-              <span className="text-[9.5px] text-emerald-200">${formatPriceUtil(tp2)}</span>
-              {tp2Pct ? <span className="text-[7.5px] text-emerald-400/80">({tp2Pct}%)</span> : null}
+              <span className="text-[7.5px] text-emerald-400">TP2:</span>
+              <span className="text-[8.5px] text-emerald-200">${formatPriceUtil(tp2)}</span>
+              {tp2Pct ? <span className="text-[7px] text-emerald-400/80">({tp2Pct}%)</span> : null}
             </div>
           )}
           {tp3 && tp3 > 0 && (
             <div
-              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
+              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1 py-0 rounded border border-emerald-500/40 font-bold"
               title={`TP3 / Final: $${formatPriceUtil(tp3)}`}
             >
-              <span className="text-[8px] text-emerald-300 font-extrabold">TP3:</span>
-              <span className="text-[9.5px] text-white font-extrabold">${formatPriceUtil(tp3)}</span>
-              {tp3Pct ? <span className="text-[7.5px] text-emerald-400/80">({tp3Pct}%)</span> : null}
+              <span className="text-[7.5px] text-emerald-300 font-extrabold">TP3:</span>
+              <span className="text-[8.5px] text-white font-extrabold">${formatPriceUtil(tp3)}</span>
+              {tp3Pct ? <span className="text-[7px] text-emerald-400/80">({tp3Pct}%)</span> : null}
             </div>
           )}
           {!tp1 && !tp2 && !tp3 && tpPrice && tpPrice > 0 && (
-            <div className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold">
-              <span className="text-[8px] text-emerald-400">TP:</span>
-              <span className="text-[9.5px] text-emerald-200">${formatPriceUtil(tpPrice)}</span>
+            <div className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1 py-0 rounded border border-emerald-500/40 font-bold">
+              <span className="text-[7.5px] text-emerald-400">TP:</span>
+              <span className="text-[8.5px] text-emerald-200">${formatPriceUtil(tpPrice)}</span>
             </div>
           )}
           {!tp1 && !tp2 && !tp3 && (!tpPrice || tpPrice <= 0) && (
-            <div className="text-[8.5px] text-neutral-500 bg-neutral-900 px-1.5 py-0.2 rounded border border-neutral-800">
+            <div className="text-[8px] text-neutral-500 bg-neutral-900 px-1 py-0 rounded border border-neutral-800">
               Sin TP
             </div>
           )}
@@ -805,13 +805,13 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left border-collapse table-auto">
             <thead>
-              <tr className="bg-neutral-950/90 text-neutral-400 text-[11px] font-bold border-b border-neutral-800 uppercase tracking-wider font-mono">
-                <th className="py-1.5 px-2 text-center" style={{ width: '32px' }}>#</th>
-                <th className="py-1.5 px-2" style={{ width: '125px' }}>Par / Dir</th>
-                <th className="py-1.5 px-2 text-start w-full" style={{ minWidth: '420px' }}>Progreso &amp; Niveles (E / Live / TP / SL / PnL)</th>
-                <th className="py-1.5 px-2 text-center" style={{ width: '115px' }}>ATR (14)</th>
-                <th className="py-1.5 px-2 text-center" style={{ width: '160px' }}>SL Dinámico</th>
-                <th className="py-1.5 px-2 text-start" style={{ width: '165px' }}>Confluencia</th>
+              <tr className="bg-neutral-950/90 text-neutral-400 text-[10.5px] font-bold border-b border-neutral-800 uppercase tracking-wider font-mono">
+                <th className="py-1 px-2 text-center" style={{ width: '32px' }}>#</th>
+                <th className="py-1 px-2" style={{ width: '120px' }}>Par / Dir</th>
+                <th className="py-1 px-2 text-start w-full" style={{ minWidth: '400px' }}>Progreso &amp; Niveles (E / Live / TP / SL / PnL)</th>
+                <th className="py-1 px-2 text-center" style={{ width: '110px' }}>ATR (14)</th>
+                <th className="py-1 px-2 text-center" style={{ width: '150px' }}>SL Dinámico</th>
+                <th className="py-1 px-2 text-start" style={{ width: '175px' }}>2 Confluencias (Téc / Der)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/80 bg-neutral-900/60 font-sans">
@@ -827,12 +827,12 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                     }`}
                   >
                     {/* # Índice */}
-                    <td className="py-1.5 px-2 text-center font-mono text-neutral-400 font-bold text-xs">
+                    <td className="py-1 px-2 text-center font-mono text-neutral-400 font-bold text-xs">
                       {r.index}
                     </td>
 
                     {/* Par y Dirección (LONG / SHORT + LEVERAGE) Pegado a la Izquierda */}
-                    <td className="py-1.5 px-2">
+                    <td className="py-1 px-2">
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
                           <div className={`w-2 h-2 rounded-full shrink-0 ${isWinner ? 'bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.8)]' : 'bg-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.8)]'}`} />
@@ -841,7 +841,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                           </span>
                         </div>
                         <span
-                          className={`w-fit px-1.5 py-0.2 rounded text-[10px] font-mono font-bold tracking-tight ${
+                          className={`w-fit px-1.5 py-0.2 rounded text-[9.5px] font-mono font-bold tracking-tight ${
                             r.isLong
                               ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                               : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
@@ -853,7 +853,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                     </td>
 
                     {/* Progreso & Niveles: Mini Línea Gráfica Alargada y Flexible */}
-                    <td className="py-1.5 px-2 font-mono w-full">
+                    <td className="py-1 px-2 font-mono w-full">
                       <MiniPriceGauge
                         isLong={r.isLong}
                         size={r.size}
@@ -884,17 +884,17 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                     </td>
 
                     {/* ATR (14) & Volatilidad */}
-                    <td className="py-1.5 px-2 text-center font-mono">
+                    <td className="py-1 px-2 text-center font-mono">
                       <div className="flex flex-col items-center gap-0.5">
                         <div className="flex items-center gap-1 font-extrabold text-xs text-amber-300">
                           <Activity className="w-3 h-3 text-amber-400 shrink-0" />
                           <span>${formatPriceUtil(r.atrValue)}</span>
                         </div>
-                        <div className="text-[10px] text-neutral-300 font-bold">
+                        <div className="text-[9.5px] text-neutral-300 font-bold">
                           ({r.atrPercent.toFixed(2)}%)
                         </div>
                         <span
-                          className={`px-1.5 py-0.2 rounded text-[8px] font-extrabold uppercase tracking-wider border ${
+                          className={`px-1.5 py-0.2 rounded text-[7.5px] font-extrabold uppercase tracking-wider border ${
                             r.isAtrCritical
                               ? 'bg-rose-950/90 text-rose-300 border-rose-500/70 animate-pulse'
                               : r.volatilityRegime === 'Alta Volatilidad'
@@ -911,12 +911,12 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                       </div>
                     </td>
 
-                    {/* SL Dinámico (Tasa de Callback & Stop Inicial Estimado) */}
-                    <td className="py-1.5 px-2 text-center font-mono">
+                    {/* SL Dinámico (Tasa de Callback & Stop Inicial Estimado - Sin botón) */}
+                    <td className="py-1 px-2 text-center font-mono">
                       <div className="flex flex-col items-center gap-0.5">
                         {/* Tasa de Callback */}
                         <div className="flex items-center gap-1">
-                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-black border ${
+                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-black border ${
                             r.activeTrailingStop
                               ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500/70 shadow-xs'
                               : 'bg-neutral-800 text-cyan-300 border-neutral-700'
@@ -926,35 +926,23 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                           </span>
                         </div>
 
-                        {/* Stop Inicial Estimado / Actual */}
-                        <div className="text-[10px] text-neutral-300 font-semibold flex items-center gap-0.5">
-                          <span className="text-[9px] text-neutral-400">Stop Inic:</span>
+                        {/* Stop Inicial Estimado */}
+                        <div className="text-[9.5px] text-neutral-300 font-semibold flex items-center gap-0.5">
+                          <span className="text-[8.5px] text-neutral-400">Stop Inic:</span>
                           <strong className="text-amber-300 font-extrabold">${formatPriceUtil(r.estimatedInitialStop)}</strong>
                         </div>
 
-                        {/* Estado Dinámico o Botón de Ajuste */}
-                        {r.activeTrailingStop ? (
-                          <div className="text-[9px] text-cyan-400 font-medium">
+                        {/* Estado Dinámico si está en tracking activo */}
+                        {r.activeTrailingStop && (
+                          <div className="text-[8.5px] text-cyan-400 font-medium">
                             Stop Act: ${formatPriceUtil(r.activeTrailingStop.dynamicStopPrice)} ({r.activeTrailingStop.distanceToStopPct ? `${r.activeTrailingStop.distanceToStopPct.toFixed(1)}%` : 'Track'})
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (onOpenTrailingStop) onOpenTrailingStop(pos);
-                              setSelectedTrailingPos(pos);
-                            }}
-                            className="px-1.5 py-0.2 rounded bg-neutral-800 hover:bg-neutral-700 text-cyan-400 hover:text-cyan-300 border border-neutral-700 hover:border-cyan-500/50 text-[9px] font-bold transition-all cursor-pointer"
-                            title="Activar Trailing Stop dinámico con Callback y Stop inicial calculados"
-                          >
-                            + Activar TS
-                          </button>
                         )}
                       </div>
                     </td>
 
-                    {/* Confluencia (Solo Luz del Semáforo y Resultado) */}
-                    <td className="py-1.5 px-2">
+                    {/* Confluencia (Ambas Confluencias Téc / Der con Semáforo y Puntuación) */}
+                    <td className="py-1 px-2">
                       <AdvancedConfluenceCell
                         symbol={r.cleanSym}
                         isLong={r.isLong}
