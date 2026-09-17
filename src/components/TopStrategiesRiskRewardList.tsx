@@ -3,6 +3,7 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  BarChart3,
   Crown,
   ExternalLink,
   Eye,
@@ -112,6 +113,7 @@ interface TopStrategiesRiskRewardListProps {
   onOpenDetails?: (strategy: GoogleSheetStrategyRow) => void;
   highlightSymbol?: string;
   onOpenDocsManager?: () => void;
+  onOpenHistoricalStats?: () => void;
   onSync?: () => void;
   isSyncing?: boolean;
   lastSyncTime?: string;
@@ -359,6 +361,7 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
   onOpenDetails,
   highlightSymbol,
   onOpenDocsManager,
+  onOpenHistoricalStats,
   onSync,
   isSyncing = false,
   lastSyncTime,
@@ -584,6 +587,18 @@ export const TopStrategiesRiskRewardList: React.FC<TopStrategiesRiskRewardListPr
             <Radio className="w-2.5 h-2.5 animate-pulse text-emerald-400" />
             <span>Live FAPI</span>
           </div>
+
+          {onOpenHistoricalStats && (
+            <button
+              type="button"
+              onClick={onOpenHistoricalStats}
+              className="px-2.5 py-1 rounded-lg bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 border border-amber-600/60 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              title="Abrir Panel de Estadísticas Históricas: Win Rate, Profit Factor y Drawdown Acumulado desde Google Sheets"
+            >
+              <BarChart3 className="w-3.5 h-3.5 text-amber-400" />
+              <span>Estadísticas Históricas</span>
+            </button>
+          )}
 
           {onOpenDocsManager && (
             <button

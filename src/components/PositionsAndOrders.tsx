@@ -26,6 +26,7 @@ import {
   X,
   XCircle,
   Zap,
+  BarChart3,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { ordersSheetService } from '../services/ordersSheetService';
@@ -42,9 +43,10 @@ import { LinkStrategyModal } from './LinkStrategyModal';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 import { TrailingStopOrderCard } from './TrailingStopOrderCard';
 import { trailingStopService } from '../services/trailingStopService';
+import { HistoricalStatsDashboard } from './HistoricalStatsDashboard';
 
 interface PositionsAndOrdersProps {
-  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines';
+  defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines' | 'historical_stats';
   onOpenOrderModal?: () => void;
   onSelectPosition?: (pos: PositionRisk) => void;
 }
@@ -54,7 +56,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
   onOpenOrderModal,
   onSelectPosition,
 }) => {
-  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines'>(defaultTab);
+  const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines' | 'historical_stats'>(defaultTab);
   const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional' | 'trailing'>('all');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
@@ -250,6 +252,23 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
             <span>Historial de Trades</span>
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-neutral-800 text-neutral-300 font-mono">
               {history.length}
+            </span>
+          </button>
+
+          {/* Tab 3.5: Estadísticas Históricas Google Sheets */}
+          <button
+            id="tab-historical-stats-btn"
+            onClick={() => setTab('historical_stats')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 shrink-0 ${
+              tab === 'historical_stats'
+                ? 'border-amber-400 text-white bg-neutral-900'
+                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Estadísticas Históricas</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-emerald-950/90 text-emerald-300 border border-emerald-700/80 font-bold">
+              Sheets
             </span>
           </button>
 
@@ -945,6 +964,22 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
               </div>
             )}
 
+            <div className="p-3 bg-neutral-950/70 border-b border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="text-xs text-neutral-300 font-mono">
+                  ¿Deseas ver el cálculo de <strong className="text-amber-300">Win Rate</strong>, <strong className="text-emerald-300">Profit Factor</strong> y <strong className="text-rose-300">Drawdown Acumulado</strong> desde Google Sheets?
+                </span>
+              </div>
+              <button
+                onClick={() => setTab('historical_stats')}
+                className="px-3 py-1 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+              >
+                <span>Abrir Panel Estadísticas Históricas</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
             {history.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
                 <Clock className="w-10 h-10 text-neutral-600 mb-3" />
@@ -1013,6 +1048,13 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
           </div>
         );
       })()}
+
+      {/* Tab 3.5: Panel de Estadísticas Históricas Google Sheets */}
+      {tab === 'historical_stats' && (
+        <div className="p-2 sm:p-4">
+          <HistoricalStatsDashboard />
+        </div>
+      )}
 
       {/* Tab 4: Alertas de Volatilidad Guardadas en Hoja de Sheets */}
       {tab === 'alerts' && (

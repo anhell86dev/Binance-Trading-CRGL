@@ -9,6 +9,7 @@ import { parsePricesFromStrategy, calculateStrategyRewardToRisk, normalizeStrate
 import { strategyAutofillService } from '../services/strategyAutofillService';
 import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
 import { MarketNewsWidget } from './MarketNewsWidget';
+import { HistoricalStatsDashboard } from './HistoricalStatsDashboard';
 
 interface TradingStrategiesViewProps {
   onOpenOrderModal?: () => void;
@@ -26,6 +27,7 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => strategyService.getLastSyncTime());
   const [selectedStrategy, setSelectedStrategy] = useState<GoogleSheetStrategyRow | null>(null);
   const [isDocsManagerOpen, setIsDocsManagerOpen] = useState(false);
+  const [isHistoricalStatsOpen, setIsHistoricalStatsOpen] = useState(false);
   const [ticker, setTicker] = useState(() => binanceWs.getTicker());
   const [, setPriceTick] = useState(0);
 
@@ -103,11 +105,21 @@ export const TradingStrategiesView: React.FC<TradingStrategiesViewProps> = ({
         onOpenDetails={setSelectedStrategy}
         highlightSymbol={ticker.symbol}
         onOpenDocsManager={() => setIsDocsManagerOpen(true)}
+        onOpenHistoricalStats={() => setIsHistoricalStatsOpen(true)}
         onSync={handleSync}
         isSyncing={isSyncing}
         lastSyncTime={lastSyncTime}
         onNavigateToGestionTrades={onNavigateToGestionTrades}
       />
+
+      {/* Modal de Estadísticas Históricas Google Sheets */}
+      {isHistoricalStatsOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="relative w-full max-w-6xl my-auto">
+            <HistoricalStatsDashboard onClose={() => setIsHistoricalStatsOpen(false)} />
+          </div>
+        </div>
+      )}
 
       {/* Contexto de Mercado: Noticias de DiarioBitcoin vinculadas a Estrategias Activas */}
       <MarketNewsWidget
