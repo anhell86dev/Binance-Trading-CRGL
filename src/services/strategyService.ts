@@ -127,15 +127,15 @@ class StrategyService {
         }
       }
 
-      // 1. Fallback Path: Try fetching tab 'Estrategias' specifically via CSV
-      let csvContent = await fetchGoogleSheetCsv(targetUrl, { sheetTabName: 'Estrategias' });
+      // 1. Primary Path: Direct Google Sheets export
+      let csvContent = await fetchGoogleSheetCsv(targetUrl);
 
-      // 2. Fallback to primary sheet export if tab 'Estrategias' returned empty
-      if (!csvContent || !csvContent.includes('Estrategia') || csvContent.length < 50) {
-        csvContent = await fetchGoogleSheetCsv(targetUrl);
+      // 2. Fallback to tab 'Estrategias' if main sheet returned empty or invalid
+      if (!csvContent || csvContent.length < 30) {
+        csvContent = await fetchGoogleSheetCsv(targetUrl, { sheetTabName: 'Estrategias' });
       }
 
-      if (csvContent && csvContent.length > 50 && (csvContent.includes('Estrategia') || csvContent.includes('Par'))) {
+      if (csvContent && csvContent.length > 30) {
         const parsed = parseCsvToStrategies(csvContent, 'Archivo Google Docs');
         if (parsed.length > 0) {
           this.strategies = parsed;

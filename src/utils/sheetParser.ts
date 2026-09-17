@@ -237,7 +237,62 @@ export function parseCsvRows(text: string): string[][] {
 }
 
 /**
+ * Helper to parse numbers formatted in Spanish (e.g. 10,82 or 75.798,38 or $1.04 or USD $11,92)
+ */
+export function parseSpanishPrice(rawStr: any, referencePrice = 0): number {
+  if (rawStr === null || rawStr === undefined) return 0;
+  if (typeof rawStr === 'number') return isNaN(rawStr) ? 0 : rawStr;
+  
+  let str = rawStr.toString().trim()
+    .replace(/^USD\s*/i, '')
+    .replace(/^\$\s*/, '')
+    .replace(/USD$/i, '')
+    .replace(/[\s\t\r\n]+/g, ' ')
+    .trim();
+
+  if (!str) return 0;
+
+  // Format: "75.798,38" (thousands dot, decimal comma)
+  if (/^\d{1,3}(\.\d{3})+,\d+$/.test(str)) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  }
+  // Format: "75,798.38" (thousands comma, decimal dot)
+  else if (/^\d{1,3}(,\d{3})+\.\d+$/.test(str)) {
+    str = str.replace(/,/g, '');
+  }
+  // Format: "1,04" or "0,0795352" or "11,92" (simple decimal comma)
+  else if (/^\d+,\d+$/.test(str)) {
+    str = str.replace(',', '.');
+  }
+  // Standard decimal dot or integer
+  else {
+    str = str.replace(/,/g, '');
+  }
+
+  const val = parseFloat(str);
+  if (isNaN(val) || val <= 0) return 0;
+
+  // Auto-scale if decimal place was misplaced relative to reference price
+  if (referencePrice > 0) {
+    if (val > referencePrice * 20 && val / 100 <= referencePrice * 2 && val / 100 >= referencePrice * 0.5) {
+      return Number((val / 100).toFixed(6));
+    }
+    if (val > referencePrice * 200 && val / 1000 <= referencePrice * 2 && val / 1000 >= referencePrice * 0.5) {
+      return Number((val / 1000).toFixed(6));
+    }
+    if (val > referencePrice * 2000 && val / 10000 <= referencePrice * 2 && val / 10000 >= referencePrice * 0.5) {
+      return Number((val / 10000).toFixed(6));
+    }
+  }
+
+  return val;
+}
+
+/**
  * Normalizes headers and maps them to GoogleSheetStrategyRow
+ * Dual support for:
+ * 1. Multi-scenario Analysis Sheet (Fecha, Hora, Activo, Link, Tabla soportes/resistencias, Escenarios, Evaluación, Conclusiones, Estrategia, Ordenes)
+ * 2. Standard Binance Futures Tactical Format (No. Estrategia, Fecha, Nombre, Par, Temporalidad, etc.)
  */
 export function parseCsvToStrategies(
   csvText: string,
@@ -252,20 +307,12 @@ export function parseCsvToStrategies(
     return headers.findIndex(h => keywords.some(k => h.includes(k)));
   };
 
-  const idIdx = findColIndex(['no', 'estrategia', 'id']);
-  const fechaIdx = findColIndex(['fecha', 'date']);
-  const nombreIdx = findColIndex(['nombre', 'name', 'titulo']);
-  const parIdx = findColIndex(['par', 'symbol', 'activo', 'paridad']);
-  const tempIdx = findColIndex(['temporalidad', 'timeframe', 'tiempo']);
-  const tipoOrdenIdx = findColIndex(['tipo de orden', 'tipo', 'order type']);
-  const indIdx = findColIndex(['indicadores', 'indicator']);
-  const entradaIdx = findColIndex(['entrada', 'entry', 'compra']);
-  const salidaIdx = findColIndex(['salida', 'tp', 'take profit', 'exit']);
-  const riesgoIdx = findColIndex(['riesgo', 'stop', 'sl', 'risk']);
-  const comIdx = findColIndex(['comentario', 'backtest', 'nota', 'comment']);
-  const estadoIdx = findColIndex(['estado', 'status', 'fase', 'lifecycle', 'proceso']);
-  const fechaActIdx = findColIndex(['fecha_actualizacion', 'actualizacion', 'updated']);
-  const fuenteIdx = findColIndex(['fuente', 'source', 'origen']);
+  // Check if sheet corresponds to DiarioBitcoin / Multi-scenario structural layout
+  const isMultiScenarioFormat = 
+    findColIndex(['soportes', 'resistencias', 'tabla de soportes']) >= 0 ||
+    findColIndex(['escenarios', 'niveles probables']) >= 0 ||
+    findColIndex(['evaluacion de senales', 'senales']) >= 0 ||
+    findColIndex(['conclusiones', 'estrategias de inversion']) >= 0;
 
   const nowFormatted = () => {
     const d = new Date();
@@ -276,31 +323,185 @@ export function parseCsvToStrategies(
   const currentTs = nowFormatted();
   const strategies: GoogleSheetStrategyRow[] = [];
 
-  for (let i = 1; i < rawRows.length; i++) {
-    const row = rawRows[i];
-    if (!row || row.length === 0 || !row[0]) continue;
+  if (isMultiScenarioFormat) {
+    const fechaIdx = findColIndex(['fecha', 'date']);
+    const horaIdx = findColIndex(['hora', 'time']);
+    const activoIdx = findColIndex(['activo', 'symbol', 'par', 'paridad', 'moneda']);
+    const linkIdx = findColIndex(['link', 'url', 'fuente', 'source']);
+    const supResIdx = findColIndex(['tabla de soportes', 'soportes y resistencias', 'soportes']);
+    const escenariosIdx = findColIndex(['escenarios', 'niveles probables']);
+    const evalIdx = findColIndex(['evaluacion', 'senales de trading', 'senales']);
+    const conclIdx = findColIndex(['conclusiones', 'estrategias de inversion', 'conclusion']);
+    const stratIdIdx = findColIndex(['estrategia', 'no', 'id']);
+    const ordenesIdx = findColIndex(['ordenes', 'estado', 'status']);
 
-    const parsedFechaAct = (fechaActIdx >= 0 && row[fechaActIdx]) ? row[fechaActIdx] : currentTs;
-    const parsedFuente = (fuenteIdx >= 0 && row[fuenteIdx])
-      ? (row[fuenteIdx] as StrategySourceType)
-      : defaultSource;
+    for (let i = 1; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0 || !row.some(f => f && f.trim().length > 0)) continue;
 
-    strategies.push({
-      noEstrategia: (idIdx >= 0 && row[idIdx]) ? row[idIdx] : `STRAT-${i}`,
-      fecha: (fechaIdx >= 0 && row[fechaIdx]) ? row[fechaIdx] : new Date().toISOString().split('T')[0],
-      nombreEstrategia: (nombreIdx >= 0 && row[nombreIdx]) ? row[nombreIdx] : `Estrategia #${i}`,
-      par: ((parIdx >= 0 && row[parIdx]) ? row[parIdx] : 'ZECUSDT').replace(/[^a-zA-Z0-9]/g, '').toUpperCase(),
-      temporalidad: (tempIdx >= 0 && row[tempIdx]) ? row[tempIdx] : '1D / 4H',
-      tipoDeOrden: (tipoOrdenIdx >= 0 && row[tipoOrdenIdx]) ? row[tipoOrdenIdx] : 'Límite / Stop Market / TP Límite',
-      indicadoresClave: (indIdx >= 0 && row[indIdx]) ? row[indIdx] : '',
-      reglasDeEntrada: (entradaIdx >= 0 && row[entradaIdx]) ? row[entradaIdx] : '',
-      reglasDeSalidaTP: (salidaIdx >= 0 && row[salidaIdx]) ? row[salidaIdx] : '',
-      gestionDeRiesgoStopLoss: (riesgoIdx >= 0 && row[riesgoIdx]) ? row[riesgoIdx] : '',
-      comentariosBacktesting: (comIdx >= 0 && row[comIdx]) ? row[comIdx] : '',
-      estado: normalizeStrategyStatus(estadoIdx >= 0 ? row[estadoIdx] : undefined),
-      fechaActualizacion: parsedFechaAct,
-      fuenteActualizacion: parsedFuente,
-    });
+      const rawFecha = (fechaIdx >= 0 && row[fechaIdx]) ? row[fechaIdx].trim() : '';
+      const rawHora = (horaIdx >= 0 && row[horaIdx]) ? row[horaIdx].trim() : '';
+      const rawActivo = (activoIdx >= 0 && row[activoIdx]) ? row[activoIdx].trim().toUpperCase() : '';
+      const rawLink = (linkIdx >= 0 && row[linkIdx]) ? row[linkIdx].trim() : '';
+      const rawSupRes = (supResIdx >= 0 && row[supResIdx]) ? row[supResIdx].trim() : '';
+      const rawEscenarios = (escenariosIdx >= 0 && row[escenariosIdx]) ? row[escenariosIdx].trim() : '';
+      const rawEval = (evalIdx >= 0 && row[evalIdx]) ? row[evalIdx].trim() : '';
+      const rawConcl = (conclIdx >= 0 && row[conclIdx]) ? row[conclIdx].trim() : '';
+      const rawStratId = (stratIdIdx >= 0 && row[stratIdIdx]) ? row[stratIdIdx].trim() : '';
+      const rawOrdenes = (ordenesIdx >= 0 && row[ordenesIdx]) ? row[ordenesIdx].trim() : '';
+
+      // Clean asset name and format trading pair
+      let par = rawActivo.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+      if (!par) par = 'BTCUSDT';
+      else if (par === 'PEPE') par = '1000PEPEUSDT';
+      else if (par === 'SHIB') par = '1000SHIBUSDT';
+      else if (par === 'BONK') par = '1000BONKUSDT';
+      else if (par === 'FLOKI') par = '1000FLOKIUSDT';
+      else if (par === 'LUNC') par = '1000LUNCUSDT';
+      else if (!par.endsWith('USDT') && !par.endsWith('BUSD') && !par.endsWith('USDC')) {
+        par = `${par}USDT`;
+      }
+
+      // Extract current price
+      let currentPrice = 0;
+      const curMatch = rawSupRes.match(/Precio actual:\s*(?:USD\s*)?\$?([\d.,]+)/i) ||
+                       rawConcl.match(/cotiza en (?:USD\s*)?\$?([\d.,]+)/i) ||
+                       rawConcl.match(/(?:cae|cede|retrocede|avanza)[^\$]*?hasta (?:USD\s*)?\$?([\d.,]+)/i);
+      if (curMatch) currentPrice = parseSpanishPrice(curMatch[1]);
+
+      // Extract Stop Loss
+      let slPrice = 0;
+      const pctSlMatch = rawConcl.match(/stop loss de\s*([\d.,]+)[–-]([\d.,]+)%\s*por debajo/i);
+      if (pctSlMatch && currentPrice > 0) {
+        const pct = (parseFloat(pctSlMatch[1]) + parseFloat(pctSlMatch[2])) / 2;
+        slPrice = Number((currentPrice * (1 - pct / 100)).toFixed(6));
+      } else {
+        const slMatch = rawConcl.match(/(?:l[ií]mite de p[eé]rdida|SL|stop loss|stop)\s*(?:en|bajo|de|obligatorio bajo|estricto en)?\s*(?:USD\s*)?\$?([\d.,]+)/i) ||
+                        rawEscenarios.match(/(?:l[ií]mite de p[eé]rdida|SL|stop loss|stop)\s*(?:en|bajo|de)?\s*(?:USD\s*)?\$?([\d.,]+)/i) ||
+                        rawSupRes.match(/Soporte (?:3|2|1|mayor|estructural):\s*(?:USD\s*)?\$?([\d.,]+)/i);
+        if (slMatch) slPrice = parseSpanishPrice(slMatch[1], currentPrice);
+      }
+
+      // Extract Take Profits
+      let tp1Price = 0;
+      let tp2Price = 0;
+      let tpFinalPrice = 0;
+      const tpMatch = rawConcl.match(/(?:toma de ganancias|TP|objetivo)\s*(?:en|de)?\s*(?:USD\s*)?\$?([\d.,]+)(?:\s*(?:a|y|–|-)\s*(?:USD\s*)?\$?([\d.,]+))?/i) ||
+                      rawEscenarios.match(/(?:toma de ganancias|TP|objetivo)\s*(?:en|de)?\s*(?:USD\s*)?\$?([\d.,]+)(?:\s*(?:a|y|–|-)\s*(?:USD\s*)?\$?([\d.,]+))?/i) ||
+                      rawSupRes.match(/Resistencia (?:1|2|3|mayor):\s*(?:USD\s*)?\$?([\d.,]+)/i);
+      if (tpMatch) {
+        tp1Price = parseSpanishPrice(tpMatch[1], currentPrice);
+        if (tpMatch[2]) tp2Price = parseSpanishPrice(tpMatch[2], currentPrice);
+      }
+      const res2Match = rawSupRes.match(/Resistencia 2:\s*(?:USD\s*)?\$?([\d.,]+)/i);
+      if (res2Match && !tp2Price) tp2Price = parseSpanishPrice(res2Match[1], currentPrice);
+      const res3Match = rawSupRes.match(/Resistencia (?:3|mayor|principal):\s*(?:USD\s*)?\$?([\d.,]+)/i);
+      if (res3Match) tpFinalPrice = parseSpanishPrice(res3Match[1], currentPrice);
+
+      // Extract Entry levels (E1, E2, E3)
+      let e1Price = 0;
+      let e2Price = 0;
+      const entryRangeMatch = rawConcl.match(/(?:comprando en|entradas? entre|compras? en|rebote entre|rango(?: de)?)\s*(?:USD\s*)?\$?([\d.,]+)\s*(?:a|y|–|-)\s*(?:USD\s*)?\$?([\d.,]+)/i) ||
+                              rawEscenarios.match(/Neutral[^\$]*?Rango (?:USD\s*)?\$?([\d.,]+)\s*(?:–|-)\s*(?:USD\s*)?\$?([\d.,]+)/i);
+      if (entryRangeMatch) {
+        const pA = parseSpanishPrice(entryRangeMatch[1], currentPrice);
+        const pB = parseSpanishPrice(entryRangeMatch[2], currentPrice);
+        if (pA > 0 && pB > 0) {
+          e1Price = Math.max(pA, pB);
+          e2Price = Math.min(pA, pB);
+        }
+      } else {
+        const singleEntryMatch = rawConcl.match(/(?:compras? t[aá]cticas en|entrada cerca de|comprando reacciones en|comprando en|entrada en)\s*(?:USD\s*)?\$?([\d.,]+)/i) ||
+                                 rawSupRes.match(/Soporte 1:\s*(?:USD\s*)?\$?([\d.,]+)/i);
+        if (singleEntryMatch) {
+          e1Price = parseSpanishPrice(singleEntryMatch[1], currentPrice);
+          e2Price = slPrice > 0 && slPrice < e1Price ? Number(((e1Price + slPrice) / 2).toFixed(6)) : Number((e1Price * 0.985).toFixed(6));
+        }
+      }
+      if (!e1Price && currentPrice > 0) {
+        e1Price = currentPrice;
+        e2Price = slPrice > 0 ? Number(((e1Price + slPrice) / 2).toFixed(6)) : Number((e1Price * 0.98).toFixed(6));
+      }
+
+      // Safe technical price boundary fallbacks
+      if (!slPrice && e2Price > 0) slPrice = Number((e2Price * 0.97).toFixed(6));
+      if (!tp1Price && e1Price > 0) tp1Price = Number((e1Price * 1.04).toFixed(6));
+      if (!tp2Price && tp1Price > 0) tp2Price = Number((tp1Price * 1.03).toFixed(6));
+      if (!tpFinalPrice && tp2Price > 0) tpFinalPrice = Number((tp2Price * 1.03).toFixed(6));
+
+      // Build structured identifier
+      const cleanDate = rawFecha.replace(/[^0-9]/g, '').slice(0, 8) || '20260916';
+      const stratId = rawStratId || `${rawActivo || 'STRAT'}-${cleanDate}-RANGO`;
+      const stratName = `Trading de Rango y Soportes Clave (${rawActivo || par})`;
+
+      const e3Price = slPrice > 0 ? Number(((e2Price + slPrice) / 2).toFixed(6)) : Number((e2Price * 0.99).toFixed(6));
+      const avgPrice = Number((e1Price * 0.5 + e2Price * 0.3 + e3Price * 0.2).toFixed(6));
+
+      const reglasEntrada = `DCA Escalonado: E1 (50%) @ $${e1Price}, E2 (30%) @ $${e2Price}, E3 (20%) @ $${e3Price} (Promedio: $${avgPrice}). ${rawConcl.slice(0, 140)}`;
+      const reglasSalida = `TP1 (50%) @ $${tp1Price}; TP2 (30%) @ $${tp2Price}; TP Final (20%) @ $${tpFinalPrice || tp2Price}. Mover SL a Breakeven tras TP1.`;
+      const gestionRiesgo = `Stop-Loss Global @ $${slPrice}. ROE Máx 5X: -15.00%. Margen Aislado. Mover SL a Breakeven tras TP1.`;
+      const dateDisplay = rawFecha ? (rawHora ? `${rawFecha} (${rawHora})` : rawFecha) : new Date().toISOString().split('T')[0];
+
+      strategies.push({
+        noEstrategia: stratId,
+        fecha: dateDisplay,
+        nombreEstrategia: stratName,
+        par,
+        temporalidad: '1D / 4H / 1H',
+        tipoDeOrden: 'Limit (DCA Escalonado) + Stop-Market + Take-Profit',
+        indicadoresClave: `${rawSupRes} | ${rawEval}`.slice(0, 350),
+        reglasDeEntrada: reglasEntrada,
+        reglasDeSalidaTP: reglasSalida,
+        gestionDeRiesgoStopLoss: gestionRiesgo,
+        comentariosBacktesting: `${rawConcl} ${rawLink ? `Fuente: ${rawLink}` : ''}`.trim(),
+        estado: normalizeStrategyStatus(rawOrdenes || 'Activa'),
+        fechaActualizacion: currentTs,
+        fuenteActualizacion: defaultSource,
+      });
+    }
+  } else {
+    // Traditional format
+    const idIdx = findColIndex(['no', 'estrategia', 'id']);
+    const fechaIdx = findColIndex(['fecha', 'date']);
+    const nombreIdx = findColIndex(['nombre', 'name', 'titulo']);
+    const parIdx = findColIndex(['par', 'symbol', 'activo', 'paridad']);
+    const tempIdx = findColIndex(['temporalidad', 'timeframe', 'tiempo']);
+    const tipoOrdenIdx = findColIndex(['tipo de orden', 'tipo', 'order type']);
+    const indIdx = findColIndex(['indicadores', 'indicator']);
+    const entradaIdx = findColIndex(['entrada', 'entry', 'compra']);
+    const salidaIdx = findColIndex(['salida', 'tp', 'take profit', 'exit']);
+    const riesgoIdx = findColIndex(['riesgo', 'stop', 'sl', 'risk']);
+    const comIdx = findColIndex(['comentario', 'backtest', 'nota', 'comment']);
+    const estadoIdx = findColIndex(['estado', 'status', 'fase', 'lifecycle', 'proceso']);
+    const fechaActIdx = findColIndex(['fecha_actualizacion', 'actualizacion', 'updated']);
+    const fuenteIdx = findColIndex(['fuente', 'source', 'origen']);
+
+    for (let i = 1; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      if (!row || row.length === 0 || !row[0]) continue;
+
+      const parsedFechaAct = (fechaActIdx >= 0 && row[fechaActIdx]) ? row[fechaActIdx] : currentTs;
+      const parsedFuente = (fuenteIdx >= 0 && row[fuenteIdx])
+        ? (row[fuenteIdx] as StrategySourceType)
+        : defaultSource;
+
+      strategies.push({
+        noEstrategia: (idIdx >= 0 && row[idIdx]) ? row[idIdx] : `STRAT-${i}`,
+        fecha: (fechaIdx >= 0 && row[fechaIdx]) ? row[fechaIdx] : new Date().toISOString().split('T')[0],
+        nombreEstrategia: (nombreIdx >= 0 && row[nombreIdx]) ? row[nombreIdx] : `Estrategia #${i}`,
+        par: ((parIdx >= 0 && row[parIdx]) ? row[parIdx] : 'BTCUSDT').replace(/[^a-zA-Z0-9]/g, '').toUpperCase(),
+        temporalidad: (tempIdx >= 0 && row[tempIdx]) ? row[tempIdx] : '1D / 4H',
+        tipoDeOrden: (tipoOrdenIdx >= 0 && row[tipoOrdenIdx]) ? row[tipoOrdenIdx] : 'Límite / Stop Market / TP Límite',
+        indicadoresClave: (indIdx >= 0 && row[indIdx]) ? row[indIdx] : '',
+        reglasDeEntrada: (entradaIdx >= 0 && row[entradaIdx]) ? row[entradaIdx] : '',
+        reglasDeSalidaTP: (salidaIdx >= 0 && row[salidaIdx]) ? row[salidaIdx] : '',
+        gestionDeRiesgoStopLoss: (riesgoIdx >= 0 && row[riesgoIdx]) ? row[riesgoIdx] : '',
+        comentariosBacktesting: (comIdx >= 0 && row[comIdx]) ? row[comIdx] : '',
+        estado: normalizeStrategyStatus(estadoIdx >= 0 ? row[estadoIdx] : undefined),
+        fechaActualizacion: parsedFechaAct,
+        fuenteActualizacion: parsedFuente,
+      });
+    }
   }
 
   // Auto-resolve latest strategies per pair (earlier ones for the same pair become Obsoleto)
@@ -635,112 +836,111 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
   const entryText = strategy.reglasDeEntrada || '';
 
   // 1. DCA Explicit format: E1 (50%) @ $785.00, E2 (30%) @ $770.00, E3 (20%) @ $760.00
-  const dcaE1Match = entryText.match(/E1\s*(?:\((\d+)%\))?\s*(?:@|a|en|:)?\s*\$?([\d,.]+)/i);
+  const dcaE1Match = entryText.match(/E1\s*(?:\((\d+)%\))?\s*(?:@|a|en|:)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (dcaE1Match) {
     if (dcaE1Match[1]) entry1Pct = parseFloat(dcaE1Match[1]);
-    entry1Price = parseFloat(dcaE1Match[2].replace(/,/g, ''));
+    entry1Price = parseSpanishPrice(dcaE1Match[2]);
   }
 
-  const dcaE2Match = entryText.match(/E2\s*(?:\((\d+)%\))?\s*(?:@|a|en|:)?\s*\$?([\d,.]+)/i);
+  const dcaE2Match = entryText.match(/E2\s*(?:\((\d+)%\))?\s*(?:@|a|en|:)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (dcaE2Match) {
     if (dcaE2Match[1]) entry2Pct = parseFloat(dcaE2Match[1]);
-    entry2Price = parseFloat(dcaE2Match[2].replace(/,/g, ''));
+    entry2Price = parseSpanishPrice(dcaE2Match[2], entry1Price);
   }
 
-  const dcaE3Match = entryText.match(/E3\s*(?:\((\d+)%\))?\s*(?:@|a|en|:)?\s*\$?([\d,.]+)/i);
+  const dcaE3Match = entryText.match(/E3\s*(?:\((\d+)%\))?\s*(?:@|a|en|:)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (dcaE3Match) {
     if (dcaE3Match[1]) entry3Pct = parseFloat(dcaE3Match[1]);
-    entry3Price = parseFloat(dcaE3Match[2].replace(/,/g, ''));
+    entry3Price = parseSpanishPrice(dcaE3Match[2], entry1Price || entry2Price);
   }
 
   // Check explicit Promedio (e.g. "Promedio: $775.50" or "Precio promedio ponderado: $1.3324.")
-  const avgMatch = entryText.match(/(?:precio\s+)?promedio(?:\s+ponderado)?\s*:\s*\$?([\d,.]+)/i);
+  const avgMatch = entryText.match(/(?:precio\s+)?promedio(?:\s+ponderado)?\s*:\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (avgMatch) {
-    avgEntryPrice = parseFloat(avgMatch[1].replace(/,/g, ''));
+    avgEntryPrice = parseSpanishPrice(avgMatch[1], entry1Price);
   }
 
   // If standard format (e.g. "Entrada 1 a $789-$790")
   if (!entry1Price) {
-    const e1Range = entryText.match(/Entrada 1[^\n\r$]*\$?([\d,.]+)\s*-\s*\$?([\d,.]+)/i);
+    const e1Range = entryText.match(/Entrada 1[^\n\r$]*(?:USD\s*)?\$?([\d,.]+)\s*-\s*(?:USD\s*)?\$?([\d,.]+)/i);
     if (e1Range) {
-      const p1 = parseFloat(e1Range[1].replace(/,/g, ''));
-      const p2 = parseFloat(e1Range[2].replace(/,/g, ''));
+      const p1 = parseSpanishPrice(e1Range[1]);
+      const p2 = parseSpanishPrice(e1Range[2]);
       entry1Price = Number(((p1 + p2) / 2).toFixed(4));
     } else {
-      const e1Match = entryText.match(/Entrada 1[^\n\r]*?\$([\d,.]+)/i) || 
-                      entryText.match(/Entrada 1\s*(?:a|en|:)?\s*[^$\d]*\$?([\d,.]+)/i);
+      const e1Match = entryText.match(/Entrada 1[^\n\r]*?(?:USD\s*)?\$([\d,.]+)/i) || 
+                      entryText.match(/Entrada 1\s*(?:a|en|:)?\s*[^$\d]*(?:USD\s*)?\$?([\d,.]+)/i);
       if (e1Match) {
-        entry1Price = parseFloat(e1Match[1].replace(/,/g, ''));
+        entry1Price = parseSpanishPrice(e1Match[1]);
       }
     }
   }
 
   if (!entry2Price) {
-    const e2Range = entryText.match(/Entrada 2[^\n\r$]*\$?([\d,.]+)\s*-\s*\$?([\d,.]+)/i);
+    const e2Range = entryText.match(/Entrada 2[^\n\r$]*(?:USD\s*)?\$?([\d,.]+)\s*-\s*(?:USD\s*)?\$?([\d,.]+)/i);
     if (e2Range) {
-      const p1 = parseFloat(e2Range[1].replace(/,/g, ''));
-      const p2 = parseFloat(e2Range[2].replace(/,/g, ''));
+      const p1 = parseSpanishPrice(e2Range[1], entry1Price);
+      const p2 = parseSpanishPrice(e2Range[2], entry1Price);
       entry2Price = Number(((p1 + p2) / 2).toFixed(4));
     } else {
-      const e2Match = entryText.match(/Entrada 2[^\n\r]*?\$([\d,.]+)/i) || 
-                      entryText.match(/Entrada 2\s*[^$]*\$?([\d,.]+)/i);
+      const e2Match = entryText.match(/Entrada 2[^\n\r]*?(?:USD\s*)?\$([\d,.]+)/i) || 
+                      entryText.match(/Entrada 2\s*[^$]*(?:USD\s*)?\$?([\d,.]+)/i);
       if (e2Match) {
-        entry2Price = parseFloat(e2Match[1].replace(/,/g, ''));
+        entry2Price = parseSpanishPrice(e2Match[1], entry1Price);
       }
     }
   }
 
   // 2. Stop Loss (e.g. "SL Global @ $748.00" or "Stop-Loss Global @ $1.2980" or "Stop Loss estricto bajo SMA-15 a $759.00")
   const slText = strategy.gestionDeRiesgoStopLoss || '';
-  const slGlobalMatch = slText.match(/(?:SL|Stop[- ]?Loss)\s*(?:Global)?\s*(?:@|en|a|:)?\s*\$?([\d,.]+)/i);
+  const slGlobalMatch = slText.match(/(?:SL|Stop[- ]?Loss)\s*(?:Global)?\s*(?:@|en|a|:)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (slGlobalMatch) {
-    slPrice = parseFloat(slGlobalMatch[1].replace(/,/g, ''));
+    slPrice = parseSpanishPrice(slGlobalMatch[1], entry1Price || entry2Price);
   } else {
-    const specificSlMatch = slText.match(/Stop[- ]?Loss[^\n\r]*(?:en|a|@|:)\s*\$?([\d,.]+)/i);
+    const specificSlMatch = slText.match(/Stop[- ]?Loss[^\n\r]*(?:en|a|@|:)\s*(?:USD\s*)?\$?([\d,.]+)/i);
     if (specificSlMatch) {
-      slPrice = parseFloat(specificSlMatch[1].replace(/,/g, ''));
+      slPrice = parseSpanishPrice(specificSlMatch[1], entry1Price || entry2Price);
     } else {
-      const generalSlMatch = slText.match(/(?:Stop[- ]?Loss|SL)[^\n\r]*?\$([\d,.]+)/i);
+      const generalSlMatch = slText.match(/(?:Stop[- ]?Loss|SL)[^\n\r]*?(?:USD\s*)?\$([\d,.]+)/i);
       if (generalSlMatch) {
-        slPrice = parseFloat(generalSlMatch[1].replace(/,/g, ''));
+        slPrice = parseSpanishPrice(generalSlMatch[1], entry1Price || entry2Price);
       }
     }
   }
 
   // Fallback for SL: Extract any dollar or decimal number if slPrice is still 0
   if (!slPrice && slText) {
-    const slPlainMatch = slText.match(/\$?([\d,.]+)/);
+    const slPlainMatch = slText.match(/(?:USD\s*)?\$?([\d,.]+)/);
     if (slPlainMatch) {
-      const val = parseFloat(slPlainMatch[1].replace(/,/g, ''));
-      if (!isNaN(val) && val > 0) slPrice = val;
+      slPrice = parseSpanishPrice(slPlainMatch[1], entry1Price || entry2Price);
     }
   }
 
   // 3. Take Profits (e.g. "TP1 (50%) @ $838.00; TP2 (30%) @ $885.00; TP Final (20%) @ $950.00")
   const tpText = strategy.reglasDeSalidaTP || '';
 
-  const tp1Match = tpText.match(/TP\s*1\s*(?:\((\d+)%\))?\s*(?:@|:|a|en)?\s*\$?([\d,.]+)/i);
+  const tp1Match = tpText.match(/TP\s*1\s*(?:\((\d+)%\))?\s*(?:@|:|a|en)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (tp1Match) {
     if (tp1Match[1]) tp1Pct = parseFloat(tp1Match[1]);
-    tp1Price = parseFloat(tp1Match[2].replace(/,/g, ''));
+    tp1Price = parseSpanishPrice(tp1Match[2], entry1Price);
   }
 
-  const tp2Match = tpText.match(/TP\s*2\s*(?:\((\d+)%\))?\s*(?:@|:|a|en)?\s*\$?([\d,.]+)/i);
+  const tp2Match = tpText.match(/TP\s*2\s*(?:\((\d+)%\))?\s*(?:@|:|a|en)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (tp2Match) {
     if (tp2Match[1]) tp2Pct = parseFloat(tp2Match[1]);
-    tp2Price = parseFloat(tp2Match[2].replace(/,/g, ''));
+    tp2Price = parseSpanishPrice(tp2Match[2], entry1Price || tp1Price);
   }
 
-  const tpFinalMatch = tpText.match(/TP\s*(?:Final|3)\s*(?:\((\d+)%\))?\s*(?:@|:|a|en)?\s*\$?([\d,.]+)/i);
+  const tpFinalMatch = tpText.match(/TP\s*(?:Final|3)\s*(?:\((\d+)%\))?\s*(?:@|:|a|en)?\s*(?:USD\s*)?\$?([\d,.]+)/i);
   if (tpFinalMatch) {
     if (tpFinalMatch[1]) tpFinalPct = parseFloat(tpFinalMatch[1]);
-    tpFinalPrice = parseFloat(tpFinalMatch[2].replace(/,/g, ''));
+    tpFinalPrice = parseSpanishPrice(tpFinalMatch[2], entry1Price || tp2Price);
   }
 
   // Fallback for TPs: Extract all positive numbers in tpText if tp1Price is still 0
   if (!tp1Price && tpText) {
-    const allTpNums = Array.from(tpText.matchAll(/\$?([\d,.]+)/g))
-      .map((m) => parseFloat(m[1].replace(/,/g, '')))
+    const allTpNums = Array.from(tpText.matchAll(/(?:USD\s*)?\$?([\d,.]+)/g))
+      .map((m) => parseSpanishPrice(m[1], entry1Price))
       .filter((n) => !isNaN(n) && n > 0);
     if (allTpNums.length > 0) tp1Price = allTpNums[0];
     if (!tp2Price && allTpNums.length > 1) tp2Price = allTpNums[1];
@@ -749,8 +949,8 @@ export function parsePricesFromStrategy(strategy: GoogleSheetStrategyRow): Parse
 
   // Fallback for Entries/DCA: Extract all positive numbers in entryText if entry1Price is still 0
   if (!entry1Price && entryText) {
-    const allEntryNums = Array.from(entryText.matchAll(/\$?([\d,.]+)/g))
-      .map((m) => parseFloat(m[1].replace(/,/g, '')))
+    const allEntryNums = Array.from(entryText.matchAll(/(?:USD\s*)?\$?([\d,.]+)/g))
+      .map((m) => parseSpanishPrice(m[1]))
       .filter((n) => !isNaN(n) && n > 0);
     if (allEntryNums.length > 0) entry1Price = allEntryNums[0];
     if (!entry2Price && allEntryNums.length > 1) entry2Price = allEntryNums[1];
