@@ -50,6 +50,7 @@ import { PositionQualityBadge } from './PositionQualityBadge';
 import { StrategyPriceLine } from './StrategyPriceLine';
 import { AdvancedConfluenceCell } from './AdvancedConfluenceCell';
 import { TrailingStopConfigModal } from './TrailingStopConfigModal';
+import { ActivePositionsSummaryTable } from './ActivePositionsSummaryTable';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -362,7 +363,18 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   }, [rankedPositions, searchTerm, posFilter]);
 
   return (
-    <div id="open-positions-table-container" className="trading-card border-accent-warning w-full flex flex-col overflow-hidden shadow-lg mb-4">
+    <div className="w-full flex flex-col gap-3">
+      {/* 1. TABLA RESUMEN EJECUTIVA DE POSICIONES ACTIVAS (DE UN VISTAZO) */}
+      <ActivePositionsSummaryTable
+        positions={positions}
+        openOrders={openOrders}
+        onSelectPosition={onSelectPosition}
+        onOpenEditTPSL={openEditModal}
+        onOpenTrailingStop={(pos) => setTrailingPos(pos)}
+        onOpenOrderModal={handleOpenOrder}
+      />
+
+      <div id="open-positions-table-container" className="trading-card border-accent-warning w-full flex flex-col overflow-hidden shadow-lg mb-4">
       {/* Table Header Controls */}
       <div className="flex items-center justify-between px-3.5 py-2.5 bg-neutral-950/90 border-b border-neutral-800">
         <div className="flex items-center gap-2">
@@ -1299,6 +1311,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
           }}
         />
       )}
+    </div>
     </div>
   );
 };
