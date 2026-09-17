@@ -499,14 +499,14 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
         </div>
       </div>
 
-      {/* LÍNEAS GRÁFICAS DE PRECIOS JUNTAS (1H/Actual ➔ 2h ➔ 3h ➔ 4h ➔ Diario) */}
+      {/* LÍNEAS GRÁFICAS DE PRECIOS JUNTAS (1H/Actual, 2h, 3h, 4h y Diario en una SOLA pista gráfica) */}
       {show4HourMovement && fourHourData && is4hExpanded && (fourHourData.candles.length > 0 || fourHourData.dailyCandle) && (
         <div className="mt-3 pt-2.5 border-t border-neutral-800/80">
           {/* Header del desglose horario y diario */}
           <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-2 px-1">
             <span className="flex items-center gap-1.5 font-bold text-neutral-300">
               <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span>Líneas Gráficas de Precios (1H / Actual ➔ 2h ➔ 3h ➔ 4h ➔ Diario)</span>
+              <span>Líneas Gráficas de Precios Juntas (1H / Actual, 2h, 3h, 4h y Diario en una sola escala)</span>
             </span>
             <span className="text-[9px] text-neutral-400 flex items-center gap-2">
               <span className="flex items-center gap-1">
@@ -521,212 +521,322 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
             </span>
           </div>
 
-          {/* Panel Unificado: Todas las líneas gráficas de precios juntas sin tarjetas separadas */}
-          <div className="rounded-xl bg-neutral-950/90 border border-neutral-800/90 p-2.5 sm:p-3 shadow-inner">
-            <div className="flex flex-col divide-y divide-neutral-800/60">
-              {(() => {
-                const barsToRender: Array<{
-                  key: string;
-                  candle: (typeof fourHourData.candles)[0];
-                  badgeLabel: string;
-                  badgeClass: string;
-                  subHour: string;
-                  isLive: boolean;
-                  isDaily: boolean;
-                }> = [];
+          {(() => {
+            const barsToRender: Array<{
+              key: string;
+              candle: (typeof fourHourData.candles)[0];
+              badgeLabel: string;
+              badgeClass: string;
+              subHour: string;
+              isLive: boolean;
+              isDaily: boolean;
+            }> = [];
 
-                if (fourHourData.candles.length > 0) {
-                  // 1. 1h / Actual (la hora más reciente en curso)
-                  const c1 = fourHourData.candles[fourHourData.candles.length - 1];
-                  barsToRender.push({
-                    key: 'bar-1h',
-                    candle: c1,
-                    badgeLabel: '1h / Actual',
-                    badgeClass: 'bg-cyan-950 text-cyan-300 border border-cyan-700 font-black',
-                    subHour: c1.shortHour,
-                    isLive: true,
-                    isDaily: false,
-                  });
+            if (fourHourData.candles.length > 0) {
+              // 1. 1h / Actual (la hora más reciente en curso)
+              const c1 = fourHourData.candles[fourHourData.candles.length - 1];
+              barsToRender.push({
+                key: 'bar-1h',
+                candle: c1,
+                badgeLabel: '1h / Actual',
+                badgeClass: 'bg-cyan-950 text-cyan-300 border border-cyan-700 font-black',
+                subHour: c1.shortHour,
+                isLive: true,
+                isDaily: false,
+              });
 
-                  // 2. 2h (hace 2 horas)
-                  if (fourHourData.candles.length >= 2) {
-                    const c2 = fourHourData.candles[fourHourData.candles.length - 2];
-                    barsToRender.push({
-                      key: 'bar-2h',
-                      candle: c2,
-                      badgeLabel: '2h',
-                      badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
-                      subHour: c2.shortHour,
-                      isLive: false,
-                      isDaily: false,
-                    });
-                  }
+              // 2. 2h (hace 2 horas)
+              if (fourHourData.candles.length >= 2) {
+                const c2 = fourHourData.candles[fourHourData.candles.length - 2];
+                barsToRender.push({
+                  key: 'bar-2h',
+                  candle: c2,
+                  badgeLabel: '2h',
+                  badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
+                  subHour: c2.shortHour,
+                  isLive: false,
+                  isDaily: false,
+                });
+              }
 
-                  // 3. 3h (hace 3 horas)
-                  if (fourHourData.candles.length >= 3) {
-                    const c3 = fourHourData.candles[fourHourData.candles.length - 3];
-                    barsToRender.push({
-                      key: 'bar-3h',
-                      candle: c3,
-                      badgeLabel: '3h',
-                      badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
-                      subHour: c3.shortHour,
-                      isLive: false,
-                      isDaily: false,
-                    });
-                  }
+              // 3. 3h (hace 3 horas)
+              if (fourHourData.candles.length >= 3) {
+                const c3 = fourHourData.candles[fourHourData.candles.length - 3];
+                barsToRender.push({
+                  key: 'bar-3h',
+                  candle: c3,
+                  badgeLabel: '3h',
+                  badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
+                  subHour: c3.shortHour,
+                  isLive: false,
+                  isDaily: false,
+                });
+              }
 
-                  // 4. 4h (hace 4 horas)
-                  if (fourHourData.candles.length >= 4) {
-                    const c4 = fourHourData.candles[fourHourData.candles.length - 4];
-                    barsToRender.push({
-                      key: 'bar-4h',
-                      candle: c4,
-                      badgeLabel: '4h',
-                      badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
-                      subHour: c4.shortHour,
-                      isLive: false,
-                      isDaily: false,
-                    });
-                  }
-                }
+              // 4. 4h (hace 4 horas)
+              if (fourHourData.candles.length >= 4) {
+                const c4 = fourHourData.candles[fourHourData.candles.length - 4];
+                barsToRender.push({
+                  key: 'bar-4h',
+                  candle: c4,
+                  badgeLabel: '4h',
+                  badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
+                  subHour: c4.shortHour,
+                  isLive: false,
+                  isDaily: false,
+                });
+              }
+            }
 
-                // 5. Diario (vela de hoy completa)
-                if (fourHourData.dailyCandle) {
-                  barsToRender.push({
-                    key: 'bar-daily',
-                    candle: fourHourData.dailyCandle,
-                    badgeLabel: 'Diario',
-                    badgeClass: 'bg-indigo-950 text-indigo-300 border border-indigo-600/80 shadow-xs font-black',
-                    subHour: fourHourData.dailyCandle.shortHour || 'Hoy',
-                    isLive: false,
-                    isDaily: true,
-                  });
-                }
+            // 5. Diario (vela de hoy completa)
+            if (fourHourData.dailyCandle) {
+              barsToRender.push({
+                key: 'bar-daily',
+                candle: fourHourData.dailyCandle,
+                badgeLabel: 'Diario',
+                badgeClass: 'bg-indigo-950 text-indigo-300 border border-indigo-600/80 shadow-xs font-black',
+                subHour: fourHourData.dailyCandle.shortHour || 'Hoy',
+                isLive: false,
+                isDaily: true,
+              });
+            }
 
-                return barsToRender.map((item) => {
-                  const { candle, badgeLabel, badgeClass, subHour, isLive, isDaily, key } = item;
-                  const openPos = getTrackPos(candle.open);
-                  const closePos = getTrackPos(candle.close);
-                  const lowPos = getTrackPos(candle.low);
-                  const highPos = getTrackPos(candle.high);
-                  const isBull = candle.isBullish;
-                  const barLeft = Math.min(openPos, closePos);
-                  const barWidth = Math.max(1.8, Math.abs(closePos - openPos));
-                  const wickLeft = Math.min(lowPos, highPos);
-                  const wickWidth = Math.max(1, Math.abs(highPos - lowPos));
+            return (
+              <div className="rounded-xl bg-neutral-950/95 border border-neutral-800/90 p-3 shadow-inner">
+                {/* 1. ÚNICA PISTA GRÁFICA COMPARTIDA CON TODAS LAS LÍNEAS DE PRECIO JUNTAS Y ENLACES ENTRE HORAS */}
+                <div className="relative w-full h-40 bg-neutral-900/90 rounded-lg border border-neutral-800/90 overflow-hidden select-none">
+                  {/* Rejilla de fondo */}
+                  <div className="absolute inset-0 bg-[linear-gradient(to_right,#26262615_1px,transparent_1px)] bg-[size:40px_100%] pointer-events-none" />
 
-                  return (
+                  {/* SVG OVERLAY: LÍNEAS ANIMADAS QUE UNEN EL FIN (Cierre) DE CADA HORA CON EL INICIO (Apertura) DE LA SIGUIENTE */}
+                  <svg
+                    className="absolute inset-0 w-full h-full pointer-events-none z-15"
+                    preserveAspectRatio="none"
+                  >
+                    <defs>
+                      <linearGradient id="flowGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.8" />
+                        <stop offset="100%" stopColor="#fbbf24" stopOpacity="0.8" />
+                      </linearGradient>
+                      <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="2" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
+                    </defs>
+
+                    {barsToRender.map((currItem, idx) => {
+                      if (idx >= barsToRender.length - 1) return null;
+                      const nextItem = barsToRender[idx + 1];
+
+                      // Conectar el punto de inicio de la fila actual con el punto de fin de la hora anterior
+                      // En el orden cronológico: 4h terminó en c4.close -> 3h empezó en c3.open
+                      // barsToRender está ordenado: [0]: 1H/Actual, [1]: 2h, [2]: 3h, [3]: 4h, [4]: Diario
+                      // La unión temporal entre filas consecutivas une:
+                      // Y1: centro de la fila idx
+                      // X1: término (close) o inicio de esa hora
+                      // Y2: centro de la fila idx + 1
+                      // X2: inicio (open) de la hora siguiente
+                      const totalBars = barsToRender.length;
+                      const rowHeightPct = 100 / totalBars;
+                      const y1Pct = idx * rowHeightPct + rowHeightPct / 2;
+                      const y2Pct = (idx + 1) * rowHeightPct + rowHeightPct / 2;
+
+                      // La fila idx (más reciente) empezó en currItem.candle.open y la anterior (idx + 1) terminó en nextItem.candle.close
+                      const x1Pct = getTrackPos(currItem.candle.open);
+                      const x2Pct = getTrackPos(nextItem.candle.close);
+
+                      // Curva bezier suave en S conectando ambas horas
+                      const midY = (y1Pct + y2Pct) / 2;
+                      const pathD = `M ${x2Pct}% ${y2Pct}% C ${x2Pct}% ${midY}%, ${x1Pct}% ${midY}%, ${x1Pct}% ${y1Pct}%`;
+
+                      return (
+                        <g key={`connector-${currItem.key}-${nextItem.key}`}>
+                          {/* Sombra difusa de la conexión */}
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke="rgba(56, 189, 248, 0.25)"
+                            strokeWidth="4"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                          {/* Línea animada discontinua con flujo activo */}
+                          <path
+                            d={pathD}
+                            fill="none"
+                            stroke="url(#flowGlow)"
+                            strokeWidth="2"
+                            className="anim-connector-dash"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        </g>
+                      );
+                    })}
+                  </svg>
+
+                  {/* Guía vertical del precio Live que cruza toda la altura */}
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 z-30 pointer-events-none shadow-[0_0_8px_rgba(34,211,238,0.7)]"
+                    style={{ left: `${livePosPct}%` }}
+                  >
+                    <span className="absolute top-0.5 -translate-x-1/2 bg-cyan-950 text-cyan-300 text-[8px] font-black px-1 rounded border border-cyan-700 shadow-xs whitespace-nowrap">
+                      LIVE: {fmtPrice(livePrice)}
+                    </span>
+                  </div>
+
+                  {/* Guía vertical de precio de entrada real si existe */}
+                  {entryP > 0 && (
                     <div
-                      key={key}
-                      className={`py-2 first:pt-0.5 last:pb-0.5 flex flex-col gap-1 transition-colors ${
-                        isLive ? 'bg-cyan-950/15 -mx-1 px-1 rounded' : isDaily ? 'bg-indigo-950/15 -mx-1 px-1 rounded' : ''
-                      }`}
+                      className="absolute top-0 bottom-0 w-px bg-sky-400/60 z-20 pointer-events-none border-r border-dashed border-sky-400"
+                      style={{ left: `${getTrackPos(entryP)}%` }}
                     >
-                      {/* Fila informativa compacta: etiqueta, hora, donde empezó y donde terminó */}
-                      <div className="flex items-center justify-between text-[9px] px-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="absolute bottom-0.5 -translate-x-1/2 bg-sky-950 text-sky-300 text-[8px] font-bold px-1 rounded border border-sky-800 shadow-xs whitespace-nowrap">
+                        ENTRADA: {fmtPrice(entryP)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Todas las líneas gráficas dibujadas juntas una tras otra verticalmente en la misma pista */}
+                  {barsToRender.map((item, index) => {
+                    const { candle, badgeLabel, badgeClass, subHour, isBull, isLive, isDaily, key } = {
+                      ...item,
+                      isBull: item.candle.isBullish,
+                    };
+                    const openPos = getTrackPos(candle.open);
+                    const closePos = getTrackPos(candle.close);
+                    const lowPos = getTrackPos(candle.low);
+                    const highPos = getTrackPos(candle.high);
+                    const barLeft = Math.min(openPos, closePos);
+                    const barWidth = Math.max(2.2, Math.abs(closePos - openPos));
+                    const wickLeft = Math.min(lowPos, highPos);
+                    const wickWidth = Math.max(1, Math.abs(highPos - lowPos));
+
+                    // Posicionamiento vertical dentro de la misma pista (distribución equitativa)
+                    const totalBars = barsToRender.length;
+                    const rowHeightPercent = 100 / totalBars;
+                    const topPos = index * rowHeightPercent;
+
+                    return (
+                      <div
+                        key={key}
+                        className={`absolute w-full flex items-center transition-colors group ${
+                          isLive ? 'bg-cyan-500/10' : isDaily ? 'bg-indigo-500/10' : ''
+                        }`}
+                        style={{
+                          top: `${topPos}%`,
+                          height: `${rowHeightPercent}%`,
+                        }}
+                      >
+                        {/* Línea horizontal tenue que divide cada nivel */}
+                        {index > 0 && (
+                          <div className="absolute top-0 left-0 right-0 h-px bg-neutral-800/70 pointer-events-none" />
+                        )}
+
+                        {/* Etiqueta fija en el extremo izquierdo de la pista */}
+                        <div className="absolute left-2 z-25 flex items-center gap-1.5 pointer-events-none">
                           <span
-                            className={`px-1.5 py-0.2 rounded font-extrabold text-[8px] uppercase tracking-wider ${badgeClass}`}
+                            className={`px-1.5 py-0.2 rounded font-black text-[8px] uppercase tracking-wider ${badgeClass}`}
                           >
                             {badgeLabel}
                           </span>
-                          <span className="text-neutral-500 font-mono text-[8px]">({subHour})</span>
-
-                          <span className="text-neutral-400 font-mono flex items-center gap-1">
-                            <span>Empezó:</span>
-                            <strong className="text-amber-300 font-bold">{fmtPrice(candle.open)}</strong>
-                            <span className="text-neutral-600 font-bold">➔</span>
-                            <span>Terminó:</span>
-                            <strong
-                              className={`font-bold ${isBull ? 'text-emerald-300' : 'text-rose-300'}`}
-                            >
-                              {fmtPrice(candle.close)}
-                            </strong>
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
+                          <span className="text-[8px] font-mono text-neutral-400">({subHour})</span>
                           <span
-                            className={`px-1.5 py-0.2 rounded font-black text-[9px] ${
-                              isBull
-                                ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/60'
-                                : 'bg-rose-950/90 text-rose-400 border border-rose-800/60'
+                            className={`text-[8px] font-black px-1 rounded flex items-center gap-0.5 ${
+                              isBull ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-800/60' : 'text-rose-400 bg-rose-950/80 border border-rose-800/60'
                             }`}
                           >
                             {isBull ? '▲ +' : '▼ '}
                             {candle.changePct.toFixed(2)}%
                           </span>
                         </div>
-                      </div>
 
-                      {/* Pista horizontal con escala compartida para la línea gráfica */}
-                      <div className="relative w-full h-4.5 bg-neutral-900/80 rounded border border-neutral-800/80 flex items-center overflow-hidden">
-                        {/* Guía vertical del precio Live */}
+                        {/* Mecha de rango (Mínimo a Máximo) en la escala común */}
                         <div
-                          className="absolute top-0 bottom-0 w-px bg-cyan-400/50 z-20 pointer-events-none"
-                          style={{ left: `${livePosPct}%` }}
-                          title={`Live actual: ${fmtPrice(livePrice)}`}
-                        />
-
-                        {/* Guía vertical de precio de entrada real si existe */}
-                        {entryP > 0 && (
-                          <div
-                            className="absolute top-0 bottom-0 w-px bg-sky-400/40 z-10 pointer-events-none border-r border-dashed border-sky-400/60"
-                            style={{ left: `${getTrackPos(entryP)}%` }}
-                            title={`Precio de Entrada: ${fmtPrice(entryP)}`}
-                          />
-                        )}
-
-                        {/* Mecha de rango total (Mínimo a Máximo) */}
-                        <div
-                          className="absolute h-0.5 bg-neutral-600/70 rounded-full pointer-events-none"
+                          className="absolute h-0.5 bg-neutral-500/80 rounded-full pointer-events-none"
                           style={{ left: `${wickLeft}%`, width: `${wickWidth}%` }}
                           title={`Rango ${badgeLabel}: ${fmtPrice(candle.low)} ↔ ${fmtPrice(candle.high)}`}
                         />
 
-                        {/* Mini-Barra horaria/diaria de Apertura a Cierre */}
+                        {/* Barra gráfica de Apertura a Cierre con movimiento continuo (anim-flow) según la dirección */}
                         <div
-                          className={`absolute h-3 rounded flex items-center justify-center transition-all shadow-sm ${
+                          className={`absolute h-3.5 rounded flex items-center justify-between px-1 transition-all shadow-md z-20 overflow-hidden ${
                             isBull
-                              ? 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 border border-emerald-300/80 shadow-[0_0_8px_rgba(52,211,153,0.35)]'
-                              : 'bg-gradient-to-r from-rose-600 via-rose-500 to-rose-400 border border-rose-300/80 shadow-[0_0_8px_rgba(244,63,94,0.35)]'
+                              ? 'bg-gradient-to-r from-emerald-700 via-emerald-400 to-emerald-700 border border-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.5)] anim-flow-bull'
+                              : 'bg-gradient-to-r from-rose-700 via-rose-400 to-rose-700 border border-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.5)] anim-flow-bear'
                           }`}
                           style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
-                          title={`${badgeLabel} (${subHour}): Empezó en ${fmtPrice(candle.open)} ➔ Terminó en ${fmtPrice(candle.close)} (${fmtPct(candle.changePct)})`}
+                          title={`${badgeLabel} (${subHour}): Empezó ${fmtPrice(candle.open)} ➔ Terminó ${fmtPrice(candle.close)} (${fmtPct(candle.changePct)})`}
                         >
-                          {/* Flecha de dirección de la mini-barra */}
-                          <span className="text-[8px] font-black text-black select-none pointer-events-none opacity-90 leading-none">
-                            {isBull ? '▶' : '◀'}
-                          </span>
+                          {/* Flechas animadas de dirección del flujo de precio */}
+                          <div className={`w-full flex items-center ${isBull ? 'justify-end' : 'justify-start'} gap-1 opacity-90 text-[8px] font-black text-black pointer-events-none`}>
+                            <span className="animate-pulse">{isBull ? '▶▶' : '◀◀'}</span>
+                          </div>
                         </div>
 
-                        {/* Marcador de INICIO (Donde empezó) */}
+                        {/* Marcador de INICIO (Donde empezó - Ámbar) */}
                         <div
-                          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-amber-400 border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none"
-                          style={{ left: `${openPos}%` }}
-                          title={`Empezó en ${fmtPrice(candle.open)}`}
+                          className="absolute -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-amber-400 border-2 border-neutral-900 shadow-[0_0_8px_rgba(251,191,36,0.8)] z-25 flex items-center justify-center pointer-events-none"
+                          style={{ left: `${openPos}%`, top: '50%' }}
+                          title={`${badgeLabel}: Empezó (Open) en ${fmtPrice(candle.open)}`}
                         >
                           <div className="w-1 h-1 rounded-full bg-amber-950" />
                         </div>
 
-                        {/* Marcador de FIN (Donde terminó) */}
+                        {/* Marcador de FIN (Donde terminó - Verde/Rojo con pulso) */}
                         <div
-                          className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none ${
-                            isBull ? 'bg-emerald-400' : 'bg-rose-400'
+                          className={`absolute -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border-2 border-neutral-900 shadow-md z-25 flex items-center justify-center pointer-events-none ${
+                            isBull ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse' : 'bg-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.9)] animate-pulse'
                           }`}
-                          style={{ left: `${closePos}%` }}
-                          title={`Terminó en ${fmtPrice(candle.close)}`}
+                          style={{ left: `${closePos}%`, top: '50%' }}
+                          title={`${badgeLabel}: Terminó (Close) en ${fmtPrice(candle.close)}`}
                         >
                           <div className="w-1 h-1 rounded-full bg-black" />
                         </div>
                       </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
+
+                {/* 2. TABLA COMPACTA DE VALORES (EMPEZÓ ➔ TERMINÓ) ALINEADA DIRECTAMENTE ABAJO */}
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[9px] font-mono">
+                  {barsToRender.map((item) => {
+                    const isBull = item.candle.isBullish;
+                    return (
+                      <div
+                        key={`stat-${item.key}`}
+                        className={`px-2 py-1 rounded-md border flex flex-col gap-0.5 ${
+                          item.isLive
+                            ? 'bg-cyan-950/40 border-cyan-800/80 text-cyan-200'
+                            : item.isDaily
+                            ? 'bg-indigo-950/40 border-indigo-800/80 text-indigo-200'
+                            : 'bg-neutral-900/60 border-neutral-800/80 text-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-bold">
+                          <span>{item.badgeLabel}</span>
+                          <span className={isBull ? 'text-emerald-400' : 'text-rose-400'}>
+                            {isBull ? '▲ +' : '▼ '}
+                            {item.candle.changePct.toFixed(2)}%
+                          </span>
+                        </div>
+                        <div className="text-[8px] text-neutral-400 flex items-center justify-between">
+                          <span>
+                            O: <strong className="text-amber-300">{fmtPrice(item.candle.open)}</strong>
+                          </span>
+                          <span>➔</span>
+                          <span>
+                            C:{' '}
+                            <strong className={isBull ? 'text-emerald-300' : 'text-rose-300'}>
+                              {fmtPrice(item.candle.close)}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

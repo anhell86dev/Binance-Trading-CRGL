@@ -948,6 +948,44 @@ canvas {
     background-color: #0f172a !important;
 }
 
+/* ==========================================================================
+   ANIMACIONES DE MOVIMIENTO Y TRAYECTORIA DE PRECIO (1H / 2H / 3H / 4H)
+   ========================================================================== */
+@keyframes priceFlowRight {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
+}
 
+@keyframes priceFlowLeft {
+  0% {
+    background-position: 200% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
 
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
 
+.anim-flow-bull {
+  background-size: 200% 100%;
+  animation: priceFlowRight 1.6s linear infinite;
+}
+
+.anim-flow-bear {
+  background-size: 200% 100%;
+  animation: priceFlowLeft 1.6s linear infinite;
+}
+
+.anim-connector-dash {
+  stroke-dasharray: 4 3;
+  animation: dashFlow 1.2s linear infinite;
+}
