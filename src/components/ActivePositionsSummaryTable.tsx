@@ -7,17 +7,13 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Edit2,
-  ExternalLink,
-  Flame,
+  Clock,
   Layers,
   Lock,
   RefreshCw,
   Shield,
   ShieldAlert,
   ShieldCheck,
-  Sliders,
-  Sparkles,
   TrendingDown,
   TrendingUp,
   X,
@@ -31,7 +27,7 @@ import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import { TrailingStopConfigModal } from './TrailingStopConfigModal';
 import { trailingStopService } from '../services/trailingStopService';
-import { advancedTechnicalConfluenceService, AdvancedConfluenceData } from '../services/advancedTechnicalConfluenceService';
+import { advancedTechnicalConfluenceService } from '../services/advancedTechnicalConfluenceService';
 import { AdvancedConfluenceCell } from './AdvancedConfluenceCell';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 
@@ -46,7 +42,8 @@ interface ActivePositionsSummaryTableProps {
 
 /**
  * MiniPriceGauge: Línea de precios ultra-gráfica, extendida a todo lo ancho y de alta densidad
- * Integra: Tamaño, Nocional, Entrada, Live, PnL Flotante, ROE y Corredor Continuo SL -> E -> Live -> TPs
+ * Integra: Tamaño, Nocional, Entrada promedio, PnL Flotante, ROE, y etiqueta Live flotante sobre el punto
+ * Muestra todas las Entradas (E1, E2, E3) y todos los Take Profits (TP1, TP2, TP3)
  */
 const MiniPriceGauge: React.FC<{
   isLong: boolean;
@@ -93,8 +90,11 @@ const MiniPriceGauge: React.FC<{
   tp3,
   tp3Pct,
   e1,
+  e1Pct,
   e2,
+  e2Pct,
   e3,
+  e3Pct,
   distToTpPct,
   distToSlPct,
 }) => {
@@ -103,22 +103,24 @@ const MiniPriceGauge: React.FC<{
 
   const isWinner = unRealizedProfit >= 0;
 
-  // Calculamos los límites del corredor visual (0% a la izquierda = Zona de Riesgo/SL, 100% a la derecha = Zona de Beneficio/TPs)
-  let lowBound = 0;
-  let highBound = 0;
+  // Colección de todos los puntos de precio relevantes para calcular los límites visuales
+  const allPrices: number[] = [entryPrice, currentPrice];
+  if (effectiveSl) allPrices.push(effectiveSl);
+  if (e1 && e1 > 0) allPrices.push(e1);
+  if (e2 && e2 > 0) allPrices.push(e2);
+  if (e3 && e3 > 0) allPrices.push(e3);
+  if (tp1 && tp1 > 0) allPrices.push(tp1);
+  if (tp2 && tp2 > 0) allPrices.push(tp2);
+  if (tp3 && tp3 > 0) allPrices.push(tp3);
+  if (tpPrice && tpPrice > 0) allPrices.push(tpPrice);
 
-  if (isLong) {
-    lowBound = effectiveSl ? Math.min(effectiveSl, entryPrice * 0.96) : entryPrice * 0.97;
-    highBound = effectiveTp ? Math.max(effectiveTp, entryPrice * 1.04) : entryPrice * 1.05;
-    if (currentPrice < lowBound) lowBound = currentPrice * 0.99;
-    if (currentPrice > highBound) highBound = currentPrice * 1.01;
-  } else {
-    // Para short: precio más alto = SL (izquierda), precio más bajo = TP (derecha)
-    highBound = effectiveSl ? Math.max(effectiveSl, entryPrice * 1.04) : entryPrice * 1.03;
-    lowBound = effectiveTp ? Math.min(effectiveTp, entryPrice * 0.96) : entryPrice * 0.95;
-    if (currentPrice > highBound) highBound = currentPrice * 1.01;
-    if (currentPrice < lowBound) lowBound = currentPrice * 0.99;
-  }
+  const minPrice = Math.min(...allPrices);
+  const maxPrice = Math.max(...allPrices);
+  const priceRange = maxPrice - minPrice;
+  const padding = priceRange > 0 ? priceRange * 0.08 : entryPrice * 0.02;
+
+  let lowBound = minPrice - padding;
+  let highBound = maxPrice + padding;
 
   const getPercent = (p: number) => {
     if (highBound <= lowBound) return 50;
@@ -129,9 +131,14 @@ const MiniPriceGauge: React.FC<{
     }
   };
 
-  const slPct = effectiveSl ? getPercent(effectiveSl) : 5;
+  const slPct = effectiveSl ? getPercent(effectiveSl) : 4;
   const entryPct = getPercent(entryPrice);
   const currentPct = getPercent(currentPrice);
+
+  const e1PctVal = e1 && e1 > 0 ? getPercent(e1) : null;
+  const e2PctVal = e2 && e2 > 0 ? getPercent(e2) : null;
+  const e3PctVal = e3 && e3 > 0 ? getPercent(e3) : null;
+
   const tp1PctVal = tp1 && tp1 > 0 ? getPercent(tp1) : null;
   const tp2PctVal = tp2 && tp2 > 0 ? getPercent(tp2) : null;
   const tp3PctVal = tp3 && tp3 > 0 ? getPercent(tp3) : null;
@@ -139,7 +146,7 @@ const MiniPriceGauge: React.FC<{
 
   return (
     <div className="flex flex-col gap-1 w-full p-2 bg-neutral-950/80 border border-neutral-800/90 rounded-lg shadow-inner">
-      {/* 1. Header Integrado Alargado: Tamaño & Nocional | Entrada -> Live | PnL Flotante & ROE */}
+      {/* 1. Header Integrado Alargado: Tamaño & Nocional | Entrada Promedio | PnL Flotante & ROE */}
       <div className="flex items-center justify-between gap-2 text-xs font-mono border-b border-neutral-800/60 pb-1">
         {/* Tamaño y Nocional */}
         <div className="flex items-center gap-2 leading-tight">
@@ -153,20 +160,10 @@ const MiniPriceGauge: React.FC<{
           </div>
         </div>
 
-        {/* Entrada ➔ Live */}
-        <div className="flex items-center gap-2 leading-tight">
-          <div className="text-[10px] text-neutral-400">
-            E: <strong className="text-sky-300 font-semibold">${formatPriceUtil(entryPrice)}</strong>
-          </div>
-          <span className="text-neutral-500">➔</span>
-          <div className={`text-xs font-black flex items-center gap-1 ${
-            isWinner ? 'text-emerald-400' : 'text-rose-400'
-          }`}>
-            <span>Live: ${formatPriceUtil(currentPrice)}</span>
-            <span className="text-[10px] font-bold">
-              ({priceDiffPct >= 0 ? '+' : ''}{priceDiffPct.toFixed(2)}%)
-            </span>
-          </div>
+        {/* Entrada Promedio */}
+        <div className="flex items-center gap-1 text-[11px] text-neutral-300 font-mono">
+          <span className="text-neutral-400">E Prom:</span>
+          <strong className="text-sky-300 font-bold">${formatPriceUtil(entryPrice)}</strong>
         </div>
 
         {/* PnL Flotante & ROE */}
@@ -187,119 +184,160 @@ const MiniPriceGauge: React.FC<{
         </div>
       </div>
 
-      {/* 2. Mini Línea Gráfica de Precios Alargada (Todo el ancho horizontal) */}
-      <div className="relative w-full h-4 bg-neutral-950 rounded-md border border-neutral-800 flex items-center px-2 select-none shadow-inner overflow-hidden my-0.5">
-        {/* Fondo de zona de riesgo (Rojo) */}
-        <div
-          className="absolute top-0 bottom-0 left-0 bg-rose-950/40 border-r border-rose-500/20"
-          style={{ width: `${entryPct}%` }}
-        />
-        {/* Fondo de zona de ganancia (Verde) */}
-        <div
-          className="absolute top-0 bottom-0 right-0 bg-emerald-950/40 border-l border-emerald-500/20"
-          style={{ width: `${100 - entryPct}%` }}
-        />
+      {/* 2. Mini Línea Gráfica de Precios con Etiqueta Live Flotante Encima del Punto */}
+      <div className="relative w-full pt-6 pb-0.5">
+        {/* Contenedor de la barra física */}
+        <div className="relative w-full h-4 bg-neutral-950 rounded-md border border-neutral-800 flex items-center px-2 select-none shadow-inner overflow-visible">
+          {/* Fondo de zona de riesgo (Rojo) */}
+          <div
+            className="absolute top-0 bottom-0 left-0 bg-rose-950/40 border-r border-rose-500/20 rounded-l-md"
+            style={{ width: `${entryPct}%` }}
+          />
+          {/* Fondo de zona de ganancia (Verde) */}
+          <div
+            className="absolute top-0 bottom-0 right-0 bg-emerald-950/40 border-l border-emerald-500/20 rounded-r-md"
+            style={{ width: `${100 - entryPct}%` }}
+          />
 
-        {/* Guía central */}
-        <div className="absolute left-2 right-2 h-1 bg-neutral-800/90 rounded-full" />
+          {/* Guía central */}
+          <div className="absolute left-2 right-2 h-1 bg-neutral-800/90 rounded-full" />
 
-        {/* Barra de progreso de precio actual */}
-        <div
-          className={`absolute h-1.5 rounded-full transition-all duration-300 ${
-            isWinner
-              ? 'bg-gradient-to-r from-sky-400 via-emerald-400 to-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
-              : 'bg-gradient-to-r from-rose-500 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.6)]'
-          }`}
-          style={{
-            left: `${Math.min(entryPct, currentPct)}%`,
-            width: `${Math.max(2, Math.abs(currentPct - entryPct))}%`,
-          }}
-        />
-
-        {/* Marcador SL */}
-        {effectiveSl ? (
+          {/* Barra de progreso de precio actual */}
           <div
-            className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
-            style={{ left: `${slPct}%`, transform: 'translateX(-50%)' }}
-            title={`Stop Loss: $${formatPriceUtil(effectiveSl)}`}
-          >
-            <div className="w-2.5 h-2.5 rounded-full bg-rose-500 border border-rose-200 shadow-sm" />
-          </div>
-        ) : (
-          <div
-            className="absolute left-1.5 flex items-center z-10"
-            title="¡Sin Stop Loss Configurado!"
-          >
-            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping opacity-80" />
-          </div>
-        )}
-
-        {/* Marcador Entrada (E) */}
-        <div
-          className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
-          style={{ left: `${entryPct}%`, transform: 'translateX(-50%)' }}
-          title={`Precio de Entrada: $${formatPriceUtil(entryPrice)}`}
-        >
-          <div className="w-2.5 h-2.5 rotate-45 bg-sky-400 border border-sky-100 shadow-sm" />
-        </div>
-
-        {/* Marcadores TP */}
-        {tp1PctVal !== null && (
-          <div
-            className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
-            style={{ left: `${tp1PctVal}%`, transform: 'translateX(-50%)' }}
-            title={`TP1: $${formatPriceUtil(tp1!)}`}
-          >
-            <div className="w-2 h-2 rounded-full bg-emerald-400 border border-emerald-200 shadow-xs" />
-          </div>
-        )}
-        {tp2PctVal !== null && (
-          <div
-            className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
-            style={{ left: `${tp2PctVal}%`, transform: 'translateX(-50%)' }}
-            title={`TP2: $${formatPriceUtil(tp2!)}`}
-          >
-            <div className="w-2 h-2 rounded-full bg-emerald-400 border border-emerald-200 shadow-xs" />
-          </div>
-        )}
-        {tp3PctVal !== null && (
-          <div
-            className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
-            style={{ left: `${tp3PctVal}%`, transform: 'translateX(-50%)' }}
-            title={`TP3 / Final: $${formatPriceUtil(tp3!)}`}
-          >
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 border border-white shadow-sm" />
-          </div>
-        )}
-        {tpOrderPctVal !== null && (
-          <div
-            className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
-            style={{ left: `${tpOrderPctVal}%`, transform: 'translateX(-50%)' }}
-            title={`TP Orden: $${formatPriceUtil(tpPrice!)}`}
-          >
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white shadow-sm" />
-          </div>
-        )}
-
-        {/* Marcador Precio en Vivo (LIVE SPOT PIN) */}
-        <div
-          className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-20 transition-all duration-300"
-          style={{ left: `${currentPct}%`, transform: 'translateX(-50%)' }}
-        >
-          <div
-            className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-[0_0_8px_rgba(255,255,255,0.9)] ${
+            className={`absolute h-1.5 rounded-full transition-all duration-300 ${
               isWinner
-                ? 'bg-emerald-400 text-neutral-950 ring-2 ring-emerald-300 animate-pulse'
-                : 'bg-rose-500 text-white ring-2 ring-rose-300 animate-pulse'
+                ? 'bg-gradient-to-r from-sky-400 via-emerald-400 to-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.6)]'
+                : 'bg-gradient-to-r from-rose-500 to-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.6)]'
             }`}
+            style={{
+              left: `${Math.min(entryPct, currentPct)}%`,
+              width: `${Math.max(2, Math.abs(currentPct - entryPct))}%`,
+            }}
+          />
+
+          {/* Marcador SL */}
+          {effectiveSl ? (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${slPct}%`, transform: 'translateX(-50%)' }}
+              title={`Stop Loss: $${formatPriceUtil(effectiveSl)}`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full bg-rose-500 border border-rose-200 shadow-sm" />
+            </div>
+          ) : (
+            <div
+              className="absolute left-1.5 flex items-center z-10"
+              title="¡Sin Stop Loss Configurado!"
+            >
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping opacity-80" />
+            </div>
+          )}
+
+          {/* Marcadores de Todas las Entradas (E1, E2, E3) */}
+          {e1PctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${e1PctVal}%`, transform: 'translateX(-50%)' }}
+              title={`Entrada 1 (E1): $${formatPriceUtil(e1!)}${e1Pct ? ` (${e1Pct}%)` : ''}`}
+            >
+              <div className="w-2.5 h-2.5 rotate-45 bg-sky-400 border border-sky-100 shadow-sm" />
+            </div>
+          )}
+          {e2PctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${e2PctVal}%`, transform: 'translateX(-50%)' }}
+              title={`Entrada 2 (E2): $${formatPriceUtil(e2!)}${e2Pct ? ` (${e2Pct}%)` : ''}`}
+            >
+              <div className="w-2 h-2 rotate-45 bg-cyan-400 border border-cyan-100 shadow-xs" />
+            </div>
+          )}
+          {e3PctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${e3PctVal}%`, transform: 'translateX(-50%)' }}
+              title={`Entrada 3 (E3): $${formatPriceUtil(e3!)}${e3Pct ? ` (${e3Pct}%)` : ''}`}
+            >
+              <div className="w-2 h-2 rotate-45 bg-indigo-400 border border-indigo-100 shadow-xs" />
+            </div>
+          )}
+
+          {/* Marcadores de Todos los Take Profits (TP1, TP2, TP3) */}
+          {tp1PctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${tp1PctVal}%`, transform: 'translateX(-50%)' }}
+              title={`Take Profit 1 (TP1): $${formatPriceUtil(tp1!)}${tp1Pct ? ` (${tp1Pct}%)` : ''}`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-200 shadow-xs" />
+            </div>
+          )}
+          {tp2PctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${tp2PctVal}%`, transform: 'translateX(-50%)' }}
+              title={`Take Profit 2 (TP2): $${formatPriceUtil(tp2!)}${tp2Pct ? ` (${tp2Pct}%)` : ''}`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-emerald-100 shadow-xs" />
+            </div>
+          )}
+          {tp3PctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${tp3PctVal}%`, transform: 'translateX(-50%)' }}
+              title={`Take Profit 3 (TP3 / Final): $${formatPriceUtil(tp3!)}${tp3Pct ? ` (${tp3Pct}%)` : ''}`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-300 border border-white shadow-sm" />
+            </div>
+          )}
+          {tpOrderPctVal !== null && (
+            <div
+              className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-10"
+              style={{ left: `${tpOrderPctVal}%`, transform: 'translateX(-50%)' }}
+              title={`TP Orden: $${formatPriceUtil(tpPrice!)}`}
+            >
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-white shadow-sm" />
+            </div>
+          )}
+
+          {/* Marcador Precio en Vivo: Etiqueta Flotante Directamente SOBRE el Punto */}
+          <div
+            className="absolute -top-6 flex flex-col items-center justify-center z-30 transition-all duration-300 pointer-events-none"
+            style={{ left: `${currentPct}%`, transform: 'translateX(-50%)' }}
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-neutral-950" />
+            <div
+              className={`px-1.5 py-0.2 rounded shadow-lg text-[9.5px] font-mono font-black whitespace-nowrap border flex items-center gap-1 ${
+                isWinner
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]'
+                  : 'bg-rose-950 text-rose-300 border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.7)]'
+              }`}
+            >
+              <span>Live: ${formatPriceUtil(currentPrice)}</span>
+              <span className="text-[8.5px] font-bold">({priceDiffPct >= 0 ? '+' : ''}{priceDiffPct.toFixed(2)}%)</span>
+            </div>
+            <div className={`w-1.5 h-1.5 rotate-45 -mt-0.5 ${isWinner ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+          </div>
+
+          {/* Punto de Representación del Precio en Vivo */}
+          <div
+            className="absolute top-0 bottom-0 flex flex-col items-center justify-center z-20 transition-all duration-300"
+            style={{ left: `${currentPct}%`, transform: 'translateX(-50%)' }}
+          >
+            <div
+              className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-[0_0_8px_rgba(255,255,255,0.9)] ${
+                isWinner
+                  ? 'bg-emerald-400 text-neutral-950 ring-2 ring-emerald-300 animate-pulse'
+                  : 'bg-rose-500 text-white ring-2 ring-rose-300 animate-pulse'
+              }`}
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-neutral-950" />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 3. Desglose Numérico de Niveles Clave (SL, E, Live, TP) */}
-      <div className="flex items-center justify-between gap-2 text-[10px] font-mono flex-wrap pt-0.5">
+      {/* 3. Desglose Numérico Completo: SL + Todas las E (E1, E2, E3) + Todos los TP (TP1, TP2, TP3) */}
+      <div className="flex items-center justify-between gap-1.5 text-[9.5px] font-mono flex-wrap pt-0.5 border-t border-neutral-800/40">
         {/* SL */}
         {effectiveSl ? (
           <div
@@ -307,47 +345,90 @@ const MiniPriceGauge: React.FC<{
             title={distToSlPct !== null ? `Distancia al SL: ${distToSlPct.toFixed(1)}%` : undefined}
           >
             <span className="text-[8px] text-rose-400 uppercase">SL:</span>
-            <span className="text-[10px] text-rose-200 font-extrabold">${formatPriceUtil(effectiveSl)}</span>
+            <span className="text-[9.5px] text-rose-200 font-extrabold">${formatPriceUtil(effectiveSl)}</span>
           </div>
         ) : (
-          <div className="flex items-center gap-1 bg-rose-950 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/80 text-[9px] font-bold animate-pulse">
-            <ShieldAlert className="w-3 h-3 text-rose-400" />
+          <div className="flex items-center gap-1 bg-rose-950 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/80 text-[8.5px] font-bold animate-pulse">
+            <ShieldAlert className="w-2.5 h-2.5 text-rose-400" />
             <span>SIN SL</span>
           </div>
         )}
 
-        {/* Entrada */}
-        <div className="flex items-center gap-1 bg-neutral-900 text-sky-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
-          <span className="text-[8px] text-sky-400 uppercase">E:</span>
-          <span className="text-[10px] text-sky-200 font-extrabold">${formatPriceUtil(entryPrice)}</span>
-          {e2 && e2 > 0 ? <span className="text-[8px] text-neutral-400">+{formatPriceUtil(e2)}</span> : null}
+        {/* Todas las Entradas (E1, E2, E3) */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {e1 && e1 > 0 && (
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-sky-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
+              <span className="text-[8px] text-sky-400">E1:</span>
+              <span className="text-[9.5px] text-sky-200">${formatPriceUtil(e1)}</span>
+              {e1Pct ? <span className="text-[7.5px] text-neutral-400">({e1Pct}%)</span> : null}
+            </div>
+          )}
+          {e2 && e2 > 0 && (
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-cyan-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
+              <span className="text-[8px] text-cyan-400">E2:</span>
+              <span className="text-[9.5px] text-cyan-200">${formatPriceUtil(e2)}</span>
+              {e2Pct ? <span className="text-[7.5px] text-neutral-400">({e2Pct}%)</span> : null}
+            </div>
+          )}
+          {e3 && e3 > 0 && (
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-indigo-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
+              <span className="text-[8px] text-indigo-400">E3:</span>
+              <span className="text-[9.5px] text-indigo-200">${formatPriceUtil(e3)}</span>
+              {e3Pct ? <span className="text-[7.5px] text-neutral-400">({e3Pct}%)</span> : null}
+            </div>
+          )}
+          {!e1 && !e2 && !e3 && (
+            <div className="flex items-center gap-0.5 bg-neutral-900 text-sky-300 px-1.5 py-0.2 rounded border border-neutral-800 font-bold">
+              <span className="text-[8px] text-sky-400">E:</span>
+              <span className="text-[9.5px] text-sky-200">${formatPriceUtil(entryPrice)}</span>
+            </div>
+          )}
         </div>
 
-        {/* Live */}
-        <div className={`flex items-center gap-1 px-1.5 py-0.2 rounded border font-extrabold ${
-          isWinner
-            ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50'
-            : 'bg-rose-950/90 text-rose-300 border-rose-500/50'
-        }`}>
-          <span className="text-[8px] text-neutral-300 uppercase">Live:</span>
-          <span className="text-[10px] font-black">${formatPriceUtil(currentPrice)}</span>
+        {/* Todos los Take Profits (TP1, TP2, TP3) */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {tp1 && tp1 > 0 && (
+            <div
+              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
+              title={`TP1: $${formatPriceUtil(tp1)}`}
+            >
+              <span className="text-[8px] text-emerald-400">TP1:</span>
+              <span className="text-[9.5px] text-emerald-200">${formatPriceUtil(tp1)}</span>
+              {tp1Pct ? <span className="text-[7.5px] text-emerald-400/80">({tp1Pct}%)</span> : null}
+            </div>
+          )}
+          {tp2 && tp2 > 0 && (
+            <div
+              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
+              title={`TP2: $${formatPriceUtil(tp2)}`}
+            >
+              <span className="text-[8px] text-emerald-400">TP2:</span>
+              <span className="text-[9.5px] text-emerald-200">${formatPriceUtil(tp2)}</span>
+              {tp2Pct ? <span className="text-[7.5px] text-emerald-400/80">({tp2Pct}%)</span> : null}
+            </div>
+          )}
+          {tp3 && tp3 > 0 && (
+            <div
+              className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
+              title={`TP3 / Final: $${formatPriceUtil(tp3)}`}
+            >
+              <span className="text-[8px] text-emerald-300 font-extrabold">TP3:</span>
+              <span className="text-[9.5px] text-white font-extrabold">${formatPriceUtil(tp3)}</span>
+              {tp3Pct ? <span className="text-[7.5px] text-emerald-400/80">({tp3Pct}%)</span> : null}
+            </div>
+          )}
+          {!tp1 && !tp2 && !tp3 && tpPrice && tpPrice > 0 && (
+            <div className="flex items-center gap-0.5 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold">
+              <span className="text-[8px] text-emerald-400">TP:</span>
+              <span className="text-[9.5px] text-emerald-200">${formatPriceUtil(tpPrice)}</span>
+            </div>
+          )}
+          {!tp1 && !tp2 && !tp3 && (!tpPrice || tpPrice <= 0) && (
+            <div className="text-[8.5px] text-neutral-500 bg-neutral-900 px-1.5 py-0.2 rounded border border-neutral-800">
+              Sin TP
+            </div>
+          )}
         </div>
-
-        {/* Take Profits */}
-        {effectiveTp ? (
-          <div
-            className="flex items-center gap-1 bg-emerald-950/80 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40 font-bold"
-            title={distToTpPct !== null ? `Distancia al TP: ${distToTpPct >= 0 ? '+' : ''}${distToTpPct.toFixed(1)}%` : undefined}
-          >
-            <span className="text-[8px] text-emerald-400 uppercase">TP:</span>
-            <span className="text-[10px] text-emerald-200 font-extrabold">${formatPriceUtil(tp1 && tp1 > 0 ? tp1 : effectiveTp)}</span>
-            {tp2 && tp2 > 0 ? <span className="text-[8px] text-emerald-400/80">/{formatPriceUtil(tp2)}</span> : null}
-          </div>
-        ) : (
-          <div className="text-[9px] text-neutral-500 bg-neutral-900 px-1.5 py-0.2 rounded border border-neutral-800">
-            Sin TP
-          </div>
-        )}
       </div>
     </div>
   );
@@ -673,7 +754,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
               PnL Total: {totals.totalPnl >= 0 ? '+' : '-'}${Math.abs(totals.totalPnl).toFixed(2)} USDT
             </span>
             <span className="text-[11px] font-bold px-1.5 py-0.2 rounded bg-black/40">
-              {totals.totalRoe >= 0 ? '+' : '-'}{Math.abs(totals.totalRoe).toFixed(2)}% ROE
+              {totals.totalRoe >= 0 ? '+' : ''}{totals.totalRoe.toFixed(2)}% ROE
             </span>
           </div>
 
@@ -727,10 +808,10 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
               <tr className="bg-neutral-950/90 text-neutral-400 text-[11px] font-bold border-b border-neutral-800 uppercase tracking-wider font-mono">
                 <th className="py-1.5 px-2 text-center" style={{ width: '32px' }}>#</th>
                 <th className="py-1.5 px-2" style={{ width: '125px' }}>Par / Dir</th>
-                <th className="py-1.5 px-2 text-start w-full" style={{ minWidth: '380px' }}>Progreso &amp; Niveles (E / Live / TP / SL / PnL)</th>
+                <th className="py-1.5 px-2 text-start w-full" style={{ minWidth: '420px' }}>Progreso &amp; Niveles (E / Live / TP / SL / PnL)</th>
                 <th className="py-1.5 px-2 text-center" style={{ width: '115px' }}>ATR (14)</th>
                 <th className="py-1.5 px-2 text-center" style={{ width: '160px' }}>SL Dinámico</th>
-                <th className="py-1.5 px-2 text-start" style={{ width: '190px' }}>Confluencias</th>
+                <th className="py-1.5 px-2 text-start" style={{ width: '165px' }}>Confluencia</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/80 bg-neutral-900/60 font-sans">
@@ -872,7 +953,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                       </div>
                     </td>
 
-                    {/* Confluencias (4 Capas & Semáforo) */}
+                    {/* Confluencia (Solo Luz del Semáforo y Resultado) */}
                     <td className="py-1.5 px-2">
                       <AdvancedConfluenceCell
                         symbol={r.cleanSym}
@@ -921,7 +1002,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                   )}
                 </td>
                 <td className="py-2 px-2 text-start text-neutral-400 text-[11px]">
-                  Monitoreo Permanente 15s ({totals.count} pos)
+                  Monitoreo 15s ({totals.count} pos)
                 </td>
               </tr>
             </tfoot>
