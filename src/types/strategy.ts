@@ -3,6 +3,8 @@ export type StrategyTradeStatus = 'Activa' | 'Obsoleto' | 'Live' | 'Live+' | 'Fa
 export type StrategySourceType =
   | 'API'
   | 'Archivo Google Docs'
+  | 'GitHub Raw CSV'
+  | 'GitHub Repository'
   | 'Datos Pegados CSV'
   | 'Edición Manual'
   | 'Catálogo Base';

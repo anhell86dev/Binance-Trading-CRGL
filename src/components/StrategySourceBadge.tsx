@@ -6,6 +6,8 @@ import {
   Edit3,
   Layers,
   Clock,
+  GitBranch,
+  Globe,
 } from 'lucide-react';
 import { StrategySourceType } from '../types/strategy';
 
@@ -33,8 +35,15 @@ export const StrategySourceBadge: React.FC<StrategySourceBadgeProps> = ({
       case 'Archivo Google Docs':
         return {
           bg: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-          label: 'Archivo Google Docs',
+          label: 'Google Sheets / Docs',
           Icon: FileSpreadsheet,
+        };
+      case 'GitHub Raw CSV':
+      case 'GitHub Repository':
+        return {
+          bg: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+          label: 'GitHub Raw CSV',
+          Icon: GitBranch,
         };
       case 'Datos Pegados CSV':
         return {

@@ -526,54 +526,109 @@ export function convertToGoogleSheetCsvUrl(
   url: string,
   options?: { sheetTabName?: string; gid?: string }
 ): string {
-  const trimmed = url.trim();
-  if (!trimmed) return '';
-
-  // Extract sheet ID from standard Google Sheets URL format
-  const sheetId = extractSpreadsheetId(trimmed);
-  if (!sheetId) {
-    // If it's already a direct published CSV link or other format, return as-is
-    return trimmed;
-  }
-
-  // If a specific sheet tab name is requested (e.g. 'Ordenes' or 'Estrategias')
-  if (options?.sheetTabName && options.sheetTabName.trim().length > 0) {
-    const cleanTab = options.sheetTabName.trim();
-    // If the tab is given as a numeric gid
-    if (/^\d+$/.test(cleanTab)) {
-      return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${cleanTab}`;
-    }
-    // Tab name via gviz/tq endpoint
-    return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cleanTab)}`;
-  }
-
-  // If a specific gid is provided
-  if (options?.gid && options.gid.trim().length > 0) {
-    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${options.gid.trim()}`;
-  }
-
-  // Check if original URL contains an explicit gid
-  const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
-  if (gidMatch) {
-    return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gidMatch[1]}`;
-  }
-
-  // Default export of the active/primary sheet (WITHOUT hardcoded &gid=0 to avoid 404 when gid 0 was deleted)
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+  const result = convertToUniversalCsvUrl(url, options);
+  return result.url;
 }
 
 /**
- * Robust fetch helper that fetches a Google Sheet CSV either through local proxy or direct
+ * Universal URL converter supporting Google Sheets, GitHub Raw, GitHub Blob, and Gists.
+ */
+export function convertToUniversalCsvUrl(
+  url: string,
+  options?: { sheetTabName?: string; gid?: string }
+): { url: string; isGitHub: boolean; isGoogle: boolean; sheetId?: string } {
+  const trimmed = url.trim();
+  if (!trimmed) return { url: '', isGitHub: false, isGoogle: false };
+
+  // 1. GitHub Raw URL detection
+  if (trimmed.includes('raw.githubusercontent.com')) {
+    return { url: trimmed, isGitHub: true, isGoogle: false };
+  }
+
+  // 2. GitHub Blob/File URL (e.g. https://github.com/user/repo/blob/main/estrategias.csv)
+  const ghBlobMatch = trimmed.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/i);
+  if (ghBlobMatch) {
+    const [, user, repo, branch, filePath] = ghBlobMatch;
+    return {
+      url: `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filePath}`,
+      isGitHub: true,
+      isGoogle: false,
+    };
+  }
+
+  // 3. GitHub Gist URL
+  const gistMatch = trimmed.match(/^https?:\/\/gist\.github\.com\/([^/]+)\/([^/]+)/i);
+  if (gistMatch && !trimmed.includes('/raw')) {
+    return {
+      url: `https://gist.githubusercontent.com/${gistMatch[1]}/${gistMatch[2]}/raw`,
+      isGitHub: true,
+      isGoogle: false,
+    };
+  }
+  if (trimmed.includes('gist.githubusercontent.com')) {
+    return { url: trimmed, isGitHub: true, isGoogle: false };
+  }
+
+  // 4. Google Sheets URL
+  const sheetId = extractSpreadsheetId(trimmed);
+  if (sheetId) {
+    let finalUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+    if (options?.sheetTabName && options.sheetTabName.trim().length > 0) {
+      const cleanTab = options.sheetTabName.trim();
+      if (/^\d+$/.test(cleanTab)) {
+        finalUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${cleanTab}`;
+      } else {
+        finalUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(cleanTab)}`;
+      }
+    } else if (options?.gid && options.gid.trim().length > 0) {
+      finalUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${options.gid.trim()}`;
+    } else {
+      const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+      if (gidMatch) {
+        finalUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gidMatch[1]}`;
+      }
+    }
+    return { url: finalUrl, isGitHub: false, isGoogle: true, sheetId };
+  }
+
+  return { url: trimmed, isGitHub: false, isGoogle: false };
+}
+
+/**
+ * Robust fetch helper that fetches CSV data from Google Sheets, GitHub Raw, or local proxy
  */
 export async function fetchGoogleSheetCsv(
   url: string,
   options?: { sheetTabName?: string; gid?: string; timeoutMs?: number }
 ): Promise<string> {
-  const directUrl = convertToGoogleSheetCsvUrl(url, options);
+  const converted = convertToUniversalCsvUrl(url, options);
+  const directUrl = converted.url;
   if (!directUrl) return '';
 
   const cacheBustUrl = `${directUrl}${directUrl.includes('?') ? '&' : '?'}_t=${Date.now()}`;
   const timeoutMs = options?.timeoutMs || 9000;
+
+  // If it is a GitHub URL, direct fetch is fully CORS enabled by GitHub
+  if (converted.isGitHub) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(cacheBustUrl, {
+        signal: controller.signal,
+        headers: { Accept: 'text/csv, text/plain, */*' },
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 10 && !text.includes('<!DOCTYPE html>') && !text.includes('<html')) {
+          return text;
+        }
+      }
+    } catch (_ghErr) {
+      console.warn('Direct GitHub fetch failed, attempting fallback...');
+    }
+  }
 
   // 1. First attempt: via local proxy endpoint to bypass any browser CORS restrictions
   try {
@@ -616,7 +671,67 @@ export async function fetchGoogleSheetCsv(
     // Network / CORS error
   }
 
+  // 3. Third attempt: Google Visualization gviz endpoint (Supports cross-origin in many web contexts)
+  if (converted.isGoogle && converted.sheetId) {
+    try {
+      const gvizUrl = `https://docs.google.com/spreadsheets/d/${converted.sheetId}/gviz/tq?tqx=out:csv`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(gvizUrl, {
+        signal: controller.signal,
+        headers: { Accept: 'text/csv, text/plain, */*' },
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const text = await res.text();
+        if (text && text.length > 10 && !text.includes('<!DOCTYPE html>') && !text.includes('<html')) {
+          return text;
+        }
+      }
+    } catch (_gvizErr) {
+      // Failed gviz
+    }
+  }
+
+  // 4. Fourth attempt: Public CORS proxy as ultimate web fallback for GitHub Pages / static hosting
+  try {
+    const corsProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(corsProxyUrl, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const text = await res.text();
+      if (text && text.length > 10 && !text.includes('<!DOCTYPE html>') && !text.includes('<html')) {
+        return text;
+      }
+    }
+  } catch (_allOriginsErr) {
+    // Fallback failed
+  }
+
   return '';
+}
+
+/**
+ * Generates a clean Markdown table format suitable for GitHub README, Issues, and Wiki
+ */
+export function strategiesToMarkdownTable(strategies: GoogleSheetStrategyRow[]): string {
+  let md = `## 📊 Catálogo de Estrategias & Plan de Trabajo\n\n`;
+  md += `| No. Estrategia | Fecha | Par | Orden | Indicadores Clave | Entrada (DCA) | Salida (TP) | Stop Loss | Estado |\n`;
+  md += `|---|---|---|---|---|---|---|---|---|\n`;
+
+  strategies.forEach((s) => {
+    const clean = (val?: string) => (val || '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+    md += `| **${clean(s.noEstrategia)}** | ${clean(s.fecha)} | \`${clean(s.par)}\` | ${clean(s.tipoDeOrden)} | ${clean(s.indicadoresClave)} | ${clean(s.reglasDeEntrada)} | ${clean(s.reglasDeSalidaTP)} | ${clean(s.gestionDeRiesgoStopLoss)} | **${clean(s.estado || 'Activa')}** |\n`;
+  });
+
+  md += `\n*Generado automáticamente por Binance Futures Tactical Terminal*\n`;
+  return md;
 }
 
 /**

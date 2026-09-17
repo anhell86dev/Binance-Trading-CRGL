@@ -1,11 +1,13 @@
-import { GoogleSheetStrategyRow, StrategyTradeStatus, StrategyMilestoneHit } from '../types/strategy';
+import { GoogleSheetStrategyRow, StrategyTradeStatus, StrategyMilestoneHit, StrategySourceType } from '../types/strategy';
 import {
   SAMPLE_GOOGLE_SHEET_CSV,
   parseCsvToStrategies,
   resolveLatestStrategiesPerPair,
   convertToGoogleSheetCsvUrl,
+  convertToUniversalCsvUrl,
   fetchGoogleSheetCsv,
   strategiesToCsv,
+  strategiesToMarkdownTable,
 } from '../utils/sheetParser';
 import { binanceWs } from './binanceWs';
 import { googleSheetsApiService } from './googleSheetsApiService';
@@ -13,16 +15,19 @@ import { googleSheetsApiService } from './googleSheetsApiService';
 const STORAGE_KEY = 'binance_futures_strategies_v6';
 const LAST_SYNC_KEY = 'binance_strategies_last_sync_v6';
 const SHEET_URL_KEY = 'binance_strategies_custom_sheet_url_v6';
+const GITHUB_URL_KEY = 'binance_strategies_custom_github_url_v6';
 const WEBHOOK_URL_KEY = 'binance_strategies_webhook_url_v6';
 
 export const OFFICIAL_GOOGLE_SHEET_NAME = 'Estrategias Automatizadas Binance';
 export const OFFICIAL_GOOGLE_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1xu-DaHU8kH0SiEEIG3mW2MHDfk7HXc43S6CttIzmi6s/edit?usp=sharing';
+export const OFFICIAL_GITHUB_REPO_URL = 'https://raw.githubusercontent.com/crgarcia86/binance-futures-tactical-terminal/main/strategies.csv';
 
 class StrategyService {
   private strategies: GoogleSheetStrategyRow[] = [];
   private activeStrategyIndex: number = 0;
   private lastSyncTime: string = new Date().toLocaleTimeString();
   private customSheetUrl: string = '';
+  private customGitHubUrl: string = '';
   private webhookUrl: string = '';
   private isSyncing: boolean = false;
   private syncError: string | null = null;
@@ -40,6 +45,7 @@ class StrategyService {
   private loadStrategies() {
     try {
       this.customSheetUrl = localStorage.getItem(SHEET_URL_KEY) || '';
+      this.customGitHubUrl = localStorage.getItem(GITHUB_URL_KEY) || '';
       this.webhookUrl = localStorage.getItem(WEBHOOK_URL_KEY) || '';
       const storedSync = localStorage.getItem(LAST_SYNC_KEY);
       if (storedSync) {
@@ -58,7 +64,7 @@ class StrategyService {
       console.warn('Error reading stored strategies:', e);
     }
 
-    // Default to official tactical strategies (10 strategies updated from Google Docs)
+    // Default to official tactical strategies (10 strategies updated from Google Docs / Base)
     const initial = parseCsvToStrategies(SAMPLE_GOOGLE_SHEET_CSV, 'Catálogo Base');
     this.strategies = initial;
     this.saveToStorage();
@@ -70,6 +76,9 @@ class StrategyService {
       localStorage.setItem(LAST_SYNC_KEY, this.lastSyncTime);
       if (this.customSheetUrl) {
         localStorage.setItem(SHEET_URL_KEY, this.customSheetUrl);
+      }
+      if (this.customGitHubUrl) {
+        localStorage.setItem(GITHUB_URL_KEY, this.customGitHubUrl);
       }
       if (this.webhookUrl) {
         localStorage.setItem(WEBHOOK_URL_KEY, this.webhookUrl);
@@ -98,7 +107,7 @@ class StrategyService {
   }
 
   /**
-   * Extracts and syncs strategies strictly from the configured Google Sheets file (Google Sheets API v4 + fallback)
+   * Extracts and syncs strategies from Google Sheets or GitHub Raw endpoint
    */
   public async syncFromGoogleSheets(urlToFetch?: string, silent: boolean = false): Promise<boolean> {
     if (this.isSyncing) return false;
@@ -106,11 +115,12 @@ class StrategyService {
     this.syncError = null;
     if (!silent) this.notify();
 
-    const targetUrl = urlToFetch || this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
+    const targetUrl = urlToFetch || this.customGitHubUrl || this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
+    const isGitHub = targetUrl.includes('github.com') || targetUrl.includes('githubusercontent.com');
 
     try {
-      // 0. Primary Path: Direct Google Sheets API v4 if authenticated
-      if (googleSheetsApiService.isAuthenticated()) {
+      // 0. Primary Path: Direct Google Sheets API v4 if authenticated and it's a Google Sheet
+      if (!isGitHub && googleSheetsApiService.isAuthenticated()) {
         try {
           const apiParsed = await googleSheetsApiService.syncStrategiesViaApi(targetUrl);
           if (apiParsed.length > 0) {
@@ -127,19 +137,21 @@ class StrategyService {
         }
       }
 
-      // 1. Primary Path: Direct Google Sheets export
+      // 1. Primary Path: Universal CSV export (Google Sheets / GitHub Raw)
       let csvContent = await fetchGoogleSheetCsv(targetUrl);
 
-      // 2. Fallback to tab 'Estrategias' if main sheet returned empty or invalid
-      if (!csvContent || csvContent.length < 30) {
+      // 2. Fallback to tab 'Estrategias' if main sheet returned empty or invalid (for Google Sheets)
+      if (!isGitHub && (!csvContent || csvContent.length < 30)) {
         csvContent = await fetchGoogleSheetCsv(targetUrl, { sheetTabName: 'Estrategias' });
       }
 
       if (csvContent && csvContent.length > 30) {
-        const parsed = parseCsvToStrategies(csvContent, 'Archivo Google Docs');
+        const sourceType: StrategySourceType = isGitHub ? 'GitHub Raw CSV' : 'Archivo Google Docs';
+        const sourceLabel = isGitHub ? 'GitHub Raw' : 'Google Sheets';
+        const parsed = parseCsvToStrategies(csvContent, sourceType);
         if (parsed.length > 0) {
           this.strategies = parsed;
-          this.lastSyncTime = `${new Date().toLocaleTimeString()} (Archivo Google Docs)`;
+          this.lastSyncTime = `${new Date().toLocaleTimeString()} (${sourceLabel})`;
           this.syncError = null;
           this.saveToStorage();
           this.isSyncing = false;
@@ -149,17 +161,30 @@ class StrategyService {
       }
 
       // If remote returned nothing or invalid structure, preserve existing strategies and record warning
-      this.syncError = 'No se encontraron filas válidas en la hoja de Google Sheets. Se mantienen los datos sincronizados previos.';
+      this.syncError = isGitHub
+        ? 'No se pudieron leer filas válidas desde GitHub. Se mantienen las estrategias previas.'
+        : 'No se encontraron filas válidas en Google Sheets. Se mantienen los datos sincronizados previos.';
       this.isSyncing = false;
       this.notify();
       return false;
     } catch (err: any) {
-      console.error('Error syncing Google Sheets:', err);
-      this.syncError = err.message || 'Error al conectar con Google Sheets';
+      console.error('Error syncing strategies:', err);
+      this.syncError = err.message || (isGitHub ? 'Error al conectar con GitHub' : 'Error al conectar con Google Sheets');
       this.isSyncing = false;
       this.notify();
       return false;
     }
+  }
+
+  /**
+   * Dedicated synchronization from a GitHub Repository / Raw URL
+   */
+  public async syncFromGitHub(url?: string): Promise<boolean> {
+    const ghUrl = (url || this.customGitHubUrl || OFFICIAL_GITHUB_REPO_URL).trim();
+    if (ghUrl) {
+      this.setCustomGitHubUrl(ghUrl);
+    }
+    return this.syncFromGoogleSheets(ghUrl);
   }
 
   public getEffectiveSheetUrl(): string {
@@ -178,6 +203,19 @@ class StrategyService {
 
   public getCustomSheetUrl(): string {
     return this.customSheetUrl;
+  }
+
+  public setCustomGitHubUrl(url: string) {
+    this.customGitHubUrl = url.trim();
+    if (this.customGitHubUrl) {
+      localStorage.setItem(GITHUB_URL_KEY, this.customGitHubUrl);
+    } else {
+      localStorage.removeItem(GITHUB_URL_KEY);
+    }
+  }
+
+  public getCustomGitHubUrl(): string {
+    return this.customGitHubUrl;
   }
 
   public getIsSyncing(): boolean {
@@ -454,6 +492,30 @@ class StrategyService {
    */
   public exportCsv(): string {
     return strategiesToCsv(this.strategies);
+  }
+
+  /**
+   * Serializes current strategies to GitHub Markdown Table format
+   */
+  public exportMarkdownTable(): string {
+    return strategiesToMarkdownTable(this.strategies);
+  }
+
+  /**
+   * Copies the strategies formatted as Markdown for GitHub README / Wiki to clipboard
+   */
+  public async copyMarkdownTableToClipboard(): Promise<boolean> {
+    try {
+      const md = this.exportMarkdownTable();
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(md);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.warn('Markdown clipboard copy failed:', e);
+      return false;
+    }
   }
 
   /**

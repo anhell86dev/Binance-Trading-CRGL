@@ -67,6 +67,8 @@ import { ConfluenceFactorSelector } from './ConfluenceFactorSelector';
 import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
 import { StrategyDetailModal } from './StrategyDetailModal';
 import { StrategySourceBadge } from './StrategySourceBadge';
+import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
+import { FileSpreadsheet, Copy, Check, GitBranch } from 'lucide-react';
 
 interface TopOperacionesViewProps {
   onOpenOrderModal?: () => void;
@@ -152,6 +154,8 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   // Modal
   const [selectedStrategyForModal, setSelectedStrategyForModal] =
     useState<GoogleSheetStrategyRow | null>(null);
+  const [isDocsManagerOpen, setIsDocsManagerOpen] = useState(false);
+  const [copiedMarkdownSuccess, setCopiedMarkdownSuccess] = useState(false);
   const [isAlertDismissed, setIsAlertDismissed] = useState(false);
   const [currentTimeStr, setCurrentTimeStr] = useState(() =>
     new Date().toLocaleTimeString('es-ES', { hour12: false })
@@ -773,6 +777,14 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
     }
   };
 
+  const handleCopyMarkdownPlan = async () => {
+    const ok = await strategyService.copyMarkdownTableToClipboard();
+    if (ok) {
+      setCopiedMarkdownSuccess(true);
+      setTimeout(() => setCopiedMarkdownSuccess(false), 2500);
+    }
+  };
+
   return (
     <div id="top-operaciones-view" className="content-wrapper p-3 w-full text-neutral-100 pb-12" data-bs-theme="dark">
       {/* 1. HEADER Y MÉTRICAS CLAVE (INFO BOXES) */}
@@ -788,7 +800,34 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             Operaciones tácticas listas para ejecución ordenadas por R:B y proximidad a Entrada 1
           </span>
         </div>
-        <div className="d-flex gap-2 align-items-center">
+        <div className="d-flex gap-2 align-items-center flex-wrap">
+          <button
+            type="button"
+            onClick={handleCopyMarkdownPlan}
+            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+            title="Copiar tabla en formato Markdown para GitHub README / Wiki / Issues"
+          >
+            {copiedMarkdownSuccess ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-success" />
+                <span className="text-success small">¡Plan Copiado!</span>
+              </>
+            ) : (
+              <>
+                <GitBranch className="w-3.5 h-3.5 text-primary" />
+                <span className="small">Copiar Markdown (GitHub)</span>
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsDocsManagerOpen(true)}
+            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+            title="Abrir Gestor de Estrategias, Google Sheets y Repositorio GitHub"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-warning" />
+            <span className="small">Gestor Google / GitHub</span>
+          </button>
           <button
             type="button"
             onClick={handleToggleSoundAlerts}
@@ -1795,6 +1834,14 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             }
             setSelectedStrategyForModal(null);
           }}
+        />
+      )}
+
+      {/* Modal Gestor Google Docs / Sheets & GitHub */}
+      {isDocsManagerOpen && (
+        <GoogleDocsManagerModal
+          isOpen={isDocsManagerOpen}
+          onClose={() => setIsDocsManagerOpen(false)}
         />
       )}
     </div>

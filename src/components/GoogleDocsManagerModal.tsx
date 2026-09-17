@@ -20,8 +20,10 @@ import {
   Layers,
   KeyRound,
   Shield,
+  GitBranch,
+  Globe,
 } from 'lucide-react';
-import { strategyService, OFFICIAL_GOOGLE_SHEET_URL } from '../services/strategyService';
+import { strategyService, OFFICIAL_GOOGLE_SHEET_URL, OFFICIAL_GITHUB_REPO_URL } from '../services/strategyService';
 import { ordersSheetService } from '../services/ordersSheetService';
 import { googleSheetsApiService } from '../services/googleSheetsApiService';
 import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
@@ -34,11 +36,13 @@ interface GoogleDocsManagerModalProps {
 }
 
 export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'CATALOG' | 'ORDERS' | 'WRITE' | 'READ'>('CATALOG');
+  const [activeTab, setActiveTab] = useState<'CATALOG' | 'ORDERS' | 'GITHUB' | 'WRITE' | 'READ'>('CATALOG');
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() => strategyService.getStrategies());
   const [customSheetUrl, setCustomSheetUrl] = useState<string>(() => strategyService.getCustomSheetUrl());
+  const [customGitHubUrl, setCustomGitHubUrl] = useState<string>(() => strategyService.getCustomGitHubUrl() || OFFICIAL_GITHUB_REPO_URL);
   const [webhookUrl, setWebhookUrl] = useState<string>(() => strategyService.getWebhookUrl());
   const [copiedSuccess, setCopiedSuccess] = useState(false);
+  const [copiedMarkdownSuccess, setCopiedMarkdownSuccess] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [csvInput, setCsvInput] = useState('');
   const [editingRow, setEditingRow] = useState<GoogleSheetStrategyRow | null>(null);
@@ -249,6 +253,33 @@ export const GoogleDocsManagerModal: React.FC<GoogleDocsManagerModalProps> = ({ 
     showNotification('success', 'Sincronización completada desde Google Sheets (Estrategias y Órdenes).');
   };
 
+  const handleSyncFromGitHub = async () => {
+    if (!customGitHubUrl.trim()) {
+      showNotification('error', 'Por favor ingresa una URL de GitHub o Raw CSV válida.');
+      return;
+    }
+    setIsSyncing(true);
+    strategyService.setCustomGitHubUrl(customGitHubUrl);
+    const ok = await strategyService.syncFromGitHub(customGitHubUrl);
+    setIsSyncing(false);
+    if (ok) {
+      showNotification('success', '¡Estrategias sincronizadas con éxito desde GitHub!');
+    } else {
+      showNotification('error', strategyService.getSyncError() || 'No se pudieron recuperar las estrategias desde GitHub.');
+    }
+  };
+
+  const handleCopyMarkdown = async () => {
+    const ok = await strategyService.copyMarkdownTableToClipboard();
+    if (ok) {
+      setCopiedMarkdownSuccess(true);
+      showNotification('success', '¡Tabla Markdown copiada! Lista para pegar en tu README.md, GitHub Wiki o Plan de Trabajo.');
+      setTimeout(() => setCopiedMarkdownSuccess(false), 2500);
+    } else {
+      showNotification('error', 'No se pudo copiar la tabla Markdown.');
+    }
+  };
+
   const handleSaveOrdersConfig = async () => {
     ordersSheetService.setSheetTabName(ordersTabName);
     ordersSheetService.setSheetGid(ordersGid);
@@ -376,6 +407,18 @@ function doPost(e) {
           >
             <Layers className="w-3.5 h-3.5" />
             <span>Hoja de Órdenes ({sheetOrders.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('GITHUB')}
+            className={`px-3 py-2 text-xs font-semibold rounded-t-lg transition-all border-b-2 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === 'GITHUB'
+                ? 'text-blue-400 border-blue-500 bg-neutral-900'
+                : 'text-neutral-400 border-transparent hover:text-neutral-200'
+            }`}
+          >
+            <GitBranch className="w-3.5 h-3.5" />
+            <span>GitHub Repo &amp; Markdown</span>
           </button>
 
           <button
@@ -754,6 +797,133 @@ function doPost(e) {
                     </table>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: GITHUB / REPOSITORY & MARKDOWN */}
+          {activeTab === 'GITHUB' && (
+            <div className="space-y-5">
+              {/* GitHub Sync */}
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
+                    <GitBranch className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      1. Sincronización desde Repositorio GitHub (Raw CSV o Archivo)
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Conecta la URL de tu repositorio, branch, archivo CSV o Gist en GitHub. La aplicación lo descargará y sincronizará en tiempo real.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <label className="text-xs text-neutral-300 font-medium block">
+                    URL del Archivo CSV en GitHub (Raw, Blob o Repo):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://raw.githubusercontent.com/usuario/repo/main/strategies.csv"
+                      value={customGitHubUrl}
+                      onChange={(e) => setCustomGitHubUrl(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 font-mono"
+                    />
+                    <button
+                      onClick={handleSyncFromGitHub}
+                      disabled={isSyncing}
+                      className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-50 shadow-lg shadow-blue-950/40"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                      <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar GitHub'}</span>
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] text-neutral-400">
+                    <span>Compatible con: raw.githubusercontent.com, github.com/.../blob/..., y Gists.</span>
+                    <a
+                      href={OFFICIAL_GITHUB_REPO_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                      <span>Ver Repositorio Ejemplo</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Export Markdown Table */}
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      2. Exportar Tabla en Formato Markdown para GitHub
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Genera la tabla con las 12 columnas canónicas normalizadas en sintaxis Markdown de GitHub, lista para pegar en tu README.md o Wiki.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <button
+                    onClick={handleCopyMarkdown}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors shadow-lg shadow-emerald-950/40"
+                  >
+                    {copiedMarkdownSuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedMarkdownSuccess ? '¡Markdown Copiado!' : 'Copiar Tabla Markdown (GitHub)'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleDownloadCsv}
+                    className="px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 text-xs font-semibold flex items-center gap-2 transition-colors"
+                  >
+                    <Download className="w-4 h-4 text-amber-400" />
+                    <span>Descargar strategies.csv</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* GitHub Setup Guide */}
+              <div className="bg-neutral-950/60 p-4 rounded-xl border border-neutral-800 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-purple-500/10 text-purple-400">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white">
+                      3. Cómo alojar tus Estrategias y Plan de Trabajo en GitHub
+                    </h4>
+                    <p className="text-xs text-neutral-400">
+                      Sigue estos simples pasos para mantener tus estrategias versionadas en tu cuenta de GitHub:
+                    </p>
+                  </div>
+                </div>
+
+                <ol className="list-decimal list-inside space-y-2 text-xs text-neutral-300 pl-2">
+                  <li>
+                    Descarga el archivo <span className="text-amber-400 font-mono">strategies.csv</span> usando el botón de arriba.
+                  </li>
+                  <li>
+                    Sube el archivo a tu repositorio de GitHub (ej. <span className="text-blue-400 font-mono">github.com/tu-usuario/trading-strategies</span>).
+                  </li>
+                  <li>
+                    Abre el archivo en GitHub y haz clic en el botón <strong className="text-white">"Raw"</strong> para obtener el enlace directo.
+                  </li>
+                  <li>
+                    Pega ese enlace en la casilla de sincronización de arriba y haz clic en <strong className="text-white">"Sincronizar GitHub"</strong>.
+                  </li>
+                  <li>
+                    ¡Listo! Cada vez que hagas un <span className="font-mono text-emerald-400">git push</span> con nuevas estrategias, se reflejarán en tu aplicación.
+                  </li>
+                </ol>
               </div>
             </div>
           )}
