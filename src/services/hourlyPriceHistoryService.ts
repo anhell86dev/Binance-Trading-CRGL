@@ -60,7 +60,7 @@ function formatHour(timestamp: number): string {
 /**
  * Generate synthetic realistic 4h movement if network/API is offline
  */
-function createSynthetic4HMovement(symbol: string, basePrice: number): FourHourPriceMovement {
+export function createSynthetic4HMovement(symbol: string, basePrice: number): FourHourPriceMovement {
   const now = Date.now();
   const oneHour = 3600000;
   const p = basePrice > 0 ? basePrice : 100;
