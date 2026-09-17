@@ -899,16 +899,6 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                     })}
                   </svg>
 
-                  {/* Guía vertical del precio Live que cruza toda la altura */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-cyan-400 z-30 pointer-events-none shadow-[0_0_8px_rgba(34,211,238,0.7)]"
-                    style={{ left: `${livePosPct}%` }}
-                  >
-                    <span className="absolute top-0.5 -translate-x-1/2 bg-cyan-950 text-cyan-300 text-[8px] font-black px-1 rounded border border-cyan-700 shadow-xs whitespace-nowrap">
-                      LIVE: {fmtPrice(livePrice)}
-                    </span>
-                  </div>
-
                   {/* Guía vertical de precio de entrada real si existe */}
                   {entryP > 0 && (
                     <div
