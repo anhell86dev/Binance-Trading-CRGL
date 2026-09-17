@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  Activity,
   ArrowDownRight,
   ArrowUpRight,
   CheckCircle2,
@@ -27,6 +28,8 @@ import { strategyService } from '../services/strategyService';
 import { parsePricesFromStrategy } from '../utils/sheetParser';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import { EmergencyCloseButton } from './EmergencyCloseButton';
+import { TrailingStopConfigModal } from './TrailingStopConfigModal';
+import { trailingStopService } from '../services/trailingStopService';
 import { GoogleSheetStrategyRow } from '../types/strategy';
 
 interface ActivePositionsSummaryTableProps {
@@ -52,8 +55,10 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
   const [balance, setBalance] = useState(() => binanceWs.getBalance());
   const [isSyncing, setIsSyncing] = useState<boolean>(() => binanceWs.getIsSyncingData());
   const [, setPriceTick] = useState(0);
+  const [, setTsTick] = useState(0);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [beFeedback, setBeFeedback] = useState<Record<string, string>>({});
+  const [selectedTrailingPos, setSelectedTrailingPos] = useState<PositionRisk | null>(null);
 
   useEffect(() => {
     const unsubWs = binanceWs.subscribe(() => {
@@ -71,10 +76,15 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
       setStrategies(strategyService.getStrategies());
     });
 
+    const unsubTs = trailingStopService.subscribe(() => {
+      setTsTick((prev) => prev + 1);
+    });
+
     return () => {
       unsubWs();
       unsubPrice();
       unsubStrat();
+      unsubTs();
     };
   }, [propPositions, propOpenOrders]);
 
@@ -116,6 +126,23 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
         return stratSym === cleanSym;
       });
 
+      // Parse strategy price levels if linked
+      const stratPrices = linkedStrategy ? parsePricesFromStrategy(linkedStrategy) : null;
+      const e1 = stratPrices?.entry1Price || pos.entryPrice;
+      const e1Pct = stratPrices?.entry1Pct;
+      const e2 = stratPrices?.entry2Price || 0;
+      const e2Pct = stratPrices?.entry2Pct;
+      const e3 = stratPrices?.entry3Price || 0;
+      const e3Pct = stratPrices?.entry3Pct;
+
+      const tp1 = stratPrices?.tp1Price || 0;
+      const tp1Pct = stratPrices?.tp1Pct;
+      const tp2 = stratPrices?.tp2Price || 0;
+      const tp2Pct = stratPrices?.tp2Pct;
+      const tp3 = stratPrices?.tpFinalPrice || 0;
+      const tp3Pct = stratPrices?.tpFinalPct;
+      const stratSl = stratPrices?.slPrice || 0;
+
       // Find effective TP and SL from position or open orders
       const matchingOrders = openOrders.filter(
         (o) => o.symbol === pos.symbol && o.status !== 'CANCELED' && o.status !== 'EXPIRED' && o.status !== 'FILLED'
@@ -139,8 +166,8 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
         return trig > 0 && (isLong ? trig < pos.entryPrice : trig > pos.entryPrice);
       });
 
-      const tpPrice = pos.takeProfit || (tpOrder ? (tpOrder.stopPrice > 0 ? tpOrder.stopPrice : tpOrder.price) : undefined);
-      const slPrice = pos.stopLoss || (slOrder ? (slOrder.stopPrice > 0 ? slOrder.stopPrice : slOrder.price) : undefined);
+      const tpPrice = pos.takeProfit || (tpOrder ? (tpOrder.stopPrice > 0 ? tpOrder.stopPrice : tpOrder.price) : (tp1 > 0 ? tp1 : undefined));
+      const slPrice = pos.stopLoss || (slOrder ? (slOrder.stopPrice > 0 ? slOrder.stopPrice : slOrder.price) : (stratSl > 0 ? stratSl : undefined));
 
       // Distance to TP and SL
       const distToTpPct = tpPrice && currentPrice > 0
@@ -155,6 +182,9 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
           : ((slPrice - currentPrice) / currentPrice) * 100
         : null;
 
+      // Active trailing stop status
+      const activeTrailingStop = trailingStopService.getTrailingStopForSymbol(cleanSym);
+
       return {
         index: index + 1,
         position: pos,
@@ -168,12 +198,27 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
         roePct,
         priceDiffPct,
         linkedStrategy,
+        stratPrices,
+        e1,
+        e1Pct,
+        e2,
+        e2Pct,
+        e3,
+        e3Pct,
+        tp1,
+        tp1Pct,
+        tp2,
+        tp2Pct,
+        tp3,
+        tp3Pct,
+        stratSl,
         tpPrice,
         slPrice,
         distToTpPct,
         distToSlPct,
         hasSL: Boolean(slPrice && slPrice > 0),
-        hasTP: Boolean(tpPrice && tpPrice > 0),
+        hasTP: Boolean((tpPrice && tpPrice > 0) || tp1 > 0 || tp2 > 0 || tp3 > 0),
+        activeTrailingStop,
       };
     });
   }, [positions, openOrders, strategies]);
@@ -358,13 +403,12 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
               <tr className="bg-neutral-950/90 text-neutral-400 text-[11px] font-semibold border-b border-neutral-800 uppercase tracking-wider font-mono">
                 <th className="py-2 px-3 text-center" style={{ width: '40px' }}>#</th>
                 <th className="py-2 px-3" style={{ minWidth: '130px' }}>Par / Dirección</th>
-                <th className="py-2 px-3 text-start" style={{ minWidth: '110px' }}>Estrategia</th>
                 <th className="py-2 px-3 text-right" style={{ minWidth: '110px' }}>Tamaño / Nocional</th>
                 <th className="py-2 px-3 text-right" style={{ minWidth: '130px' }}>Entrada ➔ Live</th>
                 <th className="py-2 px-3 text-right" style={{ minWidth: '130px' }}>PnL Flotante (ROE)</th>
-                <th className="py-2 px-3 text-center" style={{ minWidth: '130px' }}>Protección TP / SL</th>
+                <th className="py-2 px-3 text-start" style={{ minWidth: '270px' }}>Protección & Niveles (E / TP / SL)</th>
                 <th className="py-2 px-3 text-right" style={{ minWidth: '95px' }}>Margen Aislado</th>
-                <th className="py-2 px-3 text-center" style={{ width: '135px' }}>Acciones Rápidas</th>
+                <th className="py-2 px-3 text-center" style={{ minWidth: '190px' }}>Acciones Rápidas</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/80 bg-neutral-900/60 font-sans">
@@ -379,7 +423,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                       !r.hasSL ? 'bg-rose-950/10' : ''
                     }`}
                   >
-                    {/* # Íncice */}
+                    {/* # Índice */}
                     <td className="py-2 px-3 text-center font-mono text-neutral-500 font-bold text-[11px]">
                       {r.index}
                     </td>
@@ -401,24 +445,6 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                           {r.isLong ? 'LONG' : 'SHORT'} {pos.leverage}X
                         </span>
                       </div>
-                    </td>
-
-                    {/* Estrategia Vinculada */}
-                    <td className="py-2 px-3 text-start">
-                      {r.linkedStrategy ? (
-                        <div className="flex items-center gap-1 text-[11px]">
-                          <span className="font-mono font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
-                            #{r.linkedStrategy.noEstrategia}
-                          </span>
-                          <span className="text-neutral-300 truncate max-w-[90px]" title={r.linkedStrategy.nombreEstrategia}>
-                            {r.linkedStrategy.nombreEstrategia}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-neutral-500 italic font-mono">
-                          Manual / Discrecional
-                        </span>
-                      )}
                     </td>
 
                     {/* Tamaño & Nocional */}
@@ -460,39 +486,113 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                       </div>
                     </td>
 
-                    {/* Protección TP / SL */}
-                    <td className="py-2 px-3 text-center font-mono text-[11px]">
-                      <div className="flex items-center justify-center gap-2">
-                        {/* TP */}
-                        {r.hasTP ? (
-                          <div className="flex items-center gap-0.5 text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30" title={`TP: $${formatPriceUtil(r.tpPrice!)}`}>
-                            <span className="text-[9px] font-bold">TP:</span>
-                            <span className="font-semibold">${formatPriceUtil(r.tpPrice!)}</span>
-                            {r.distToTpPct !== null && (
-                              <span className="text-[9px] text-emerald-300/80">({r.distToTpPct >= 0 ? '+' : ''}{r.distToTpPct.toFixed(1)}%)</span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-neutral-500 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
-                            Sin TP
+                    {/* Protección & Niveles (E / TP / SL) */}
+                    <td className="py-2 px-3 font-mono text-[11px]">
+                      <div className="flex flex-col gap-1.5 min-w-[260px]">
+                        {/* Fila Entradas (E) */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9px] font-bold text-sky-400 bg-sky-950/80 border border-sky-500/40 px-1.5 py-0.2 rounded shrink-0">
+                            E
                           </span>
-                        )}
+                          {/* E1 */}
+                          {r.e1 > 0 ? (
+                            <span className="text-[10px] text-neutral-200 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
+                              <strong className="text-sky-300">E1:</strong> ${formatPriceUtil(r.e1)}
+                              {r.e1Pct ? <span className="text-neutral-400 text-[9px]"> ({r.e1Pct}%)</span> : null}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-neutral-200 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
+                              <strong className="text-sky-300">E:</strong> ${formatPriceUtil(pos.entryPrice)}
+                            </span>
+                          )}
+                          {/* E2 */}
+                          {r.e2 > 0 && (
+                            <span className="text-[10px] text-neutral-200 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
+                              <strong className="text-sky-300">E2:</strong> ${formatPriceUtil(r.e2)}
+                              {r.e2Pct ? <span className="text-neutral-400 text-[9px]"> ({r.e2Pct}%)</span> : null}
+                            </span>
+                          )}
+                          {/* E3 */}
+                          {r.e3 > 0 && (
+                            <span className="text-[10px] text-neutral-200 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
+                              <strong className="text-sky-300">E3:</strong> ${formatPriceUtil(r.e3)}
+                              {r.e3Pct ? <span className="text-neutral-400 text-[9px]"> ({r.e3Pct}%)</span> : null}
+                            </span>
+                          )}
+                        </div>
 
-                        {/* SL */}
-                        {r.hasSL ? (
-                          <div className="flex items-center gap-0.5 text-rose-400 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30" title={`SL: $${formatPriceUtil(r.slPrice!)}`}>
-                            <span className="text-[9px] font-bold">SL:</span>
-                            <span className="font-semibold">${formatPriceUtil(r.slPrice!)}</span>
-                            {r.distToSlPct !== null && (
-                              <span className="text-[9px] text-rose-300/80">({r.distToSlPct.toFixed(1)}%)</span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-0.5 text-rose-300 bg-rose-950/90 px-1.5 py-0.5 rounded border border-rose-500/60 font-bold text-[10px] animate-pulse">
-                            <ShieldAlert className="w-2.5 h-2.5 text-rose-400" />
-                            <span>¡SIN SL!</span>
-                          </div>
-                        )}
+                        {/* Fila Take Profits (TP) */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-1.5 py-0.2 rounded shrink-0">
+                            TP
+                          </span>
+                          {r.hasTP ? (
+                            <>
+                              {r.tp1 > 0 && (
+                                <span className="text-[10px] text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                  <strong>TP1:</strong> ${formatPriceUtil(r.tp1)}
+                                  {r.tp1Pct ? <span className="text-emerald-400/80 text-[9px]"> ({r.tp1Pct}%)</span> : null}
+                                </span>
+                              )}
+                              {r.tp2 > 0 && (
+                                <span className="text-[10px] text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                  <strong>TP2:</strong> ${formatPriceUtil(r.tp2)}
+                                  {r.tp2Pct ? <span className="text-emerald-400/80 text-[9px]"> ({r.tp2Pct}%)</span> : null}
+                                </span>
+                              )}
+                              {r.tp3 > 0 && (
+                                <span className="text-[10px] text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                  <strong>TP3:</strong> ${formatPriceUtil(r.tp3)}
+                                  {r.tp3Pct ? <span className="text-emerald-400/80 text-[9px]"> ({r.tp3Pct}%)</span> : null}
+                                </span>
+                              )}
+                              {/* Si hay orden TP en Binance y no coincide con TP1/2/3 */}
+                              {!r.tp1 && r.tpPrice && (
+                                <span className="text-[10px] text-emerald-300 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                  <strong>TP:</strong> ${formatPriceUtil(r.tpPrice)}
+                                  {r.distToTpPct !== null && (
+                                    <span className="text-emerald-400/80 text-[9px]"> ({r.distToTpPct >= 0 ? '+' : ''}{r.distToTpPct.toFixed(1)}%)</span>
+                                  )}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-neutral-500 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800">
+                              Sin TP configurado
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Fila Stop Loss (SL) */}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9px] font-bold text-rose-400 bg-rose-950/80 border border-rose-500/40 px-1.5 py-0.2 rounded shrink-0">
+                            SL
+                          </span>
+                          {r.hasSL ? (
+                            <div className="flex items-center gap-1 text-[10px] text-rose-300 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30">
+                              <strong>SL:</strong>
+                              <span>${formatPriceUtil(r.slPrice!)}</span>
+                              {r.distToSlPct !== null && (
+                                <span className="text-rose-400/80 text-[9px]">({r.distToSlPct.toFixed(1)}%)</span>
+                              )}
+                              {r.stratSl > 0 && r.stratSl !== r.slPrice && (
+                                <span className="text-[9px] text-neutral-400 ml-0.5">
+                                  (Plan: ${formatPriceUtil(r.stratSl)})
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-[10px] text-rose-300 bg-rose-950/90 px-1.5 py-0.5 rounded border border-rose-500/60 font-bold animate-pulse">
+                              <ShieldAlert className="w-2.5 h-2.5 text-rose-400" />
+                              <span>¡SIN SL ACTIVO!</span>
+                              {r.stratSl > 0 && (
+                                <span className="text-[9px] font-normal text-rose-300/80">
+                                  (Sugerido: ${formatPriceUtil(r.stratSl)})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -510,8 +610,8 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
 
                     {/* Acciones Rápidas */}
                     <td className="py-2 px-3 text-center">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {/* Botón BE Rápido */}
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        {/* Botón Breakeven Rápido */}
                         <button
                           type="button"
                           onClick={() => handleQuickBreakeven(pos)}
@@ -520,6 +620,24 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                           title="Fijar Stop Loss a Precio de Entrada (Breakeven)"
                         >
                           {beFeedback[pos.symbol] || 'BE'}
+                        </button>
+
+                        {/* Botón Trailing Stop Dinámico */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (onOpenTrailingStop) onOpenTrailingStop(pos);
+                            setSelectedTrailingPos(pos);
+                          }}
+                          className={`px-2 py-1 rounded flex items-center gap-1 text-[10px] font-mono font-bold transition-all shadow-xs cursor-pointer active:scale-95 border ${
+                            r.activeTrailingStop
+                              ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500/70 shadow-[0_0_8px_rgba(6,182,212,0.3)] animate-pulse'
+                              : 'bg-neutral-800 hover:bg-neutral-700 text-cyan-400 hover:text-cyan-300 border-neutral-700 hover:border-cyan-500/50'
+                          }`}
+                          title="Configurar Trailing Stop Dinámico por ATR (Callback Rate y Activación inteligente)"
+                        >
+                          <Zap className="w-3 h-3 text-cyan-400 fill-cyan-400/30" />
+                          <span>{r.activeTrailingStop ? `TS ${r.activeTrailingStop.callbackRate}%` : 'TS Dinámico'}</span>
                         </button>
 
                         {/* Botón Editar TP/SL */}
@@ -531,18 +649,6 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                             title="Editar Parámetros TP / SL"
                           >
                             <Edit2 className="w-3 h-3 text-amber-400" />
-                          </button>
-                        )}
-
-                        {/* Botón Trailing Stop */}
-                        {onOpenTrailingStop && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenTrailingStop(pos)}
-                            className="p-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border border-neutral-700 transition-colors cursor-pointer"
-                            title="Configurar Trailing Stop Dinámico por ATR"
-                          >
-                            <Sliders className="w-3 h-3 text-cyan-400" />
                           </button>
                         )}
 
@@ -575,7 +681,7 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
             {/* Footer con Totales Consolidados */}
             <tfoot>
               <tr className="bg-neutral-950 font-mono font-bold text-xs border-t-2 border-neutral-800 text-neutral-300">
-                <td colSpan={3} className="py-2.5 px-3 text-start">
+                <td colSpan={2} className="py-2.5 px-3 text-start">
                   <div className="flex items-center gap-2">
                     <span className="text-white uppercase tracking-wider">Totales Consolidados:</span>
                     <span className="text-[11px] text-amber-400 font-normal">
@@ -599,16 +705,16 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
                     {totals.totalRoe >= 0 ? '+' : ''}{totals.totalRoe.toFixed(2)}% ROE Total
                   </div>
                 </td>
-                <td className="py-2.5 px-3 text-center text-neutral-400 text-[11px]">
+                <td className="py-2.5 px-3 text-start text-neutral-400 text-[11px]">
                   {totals.missingSlCount === 0 ? (
-                    <span className="text-emerald-400 flex items-center justify-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>100% Protegidas con SL</span>
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>100% Protegidas con Stop Loss</span>
                     </span>
                   ) : (
-                    <span className="text-rose-400 font-bold flex items-center justify-center gap-1">
-                      <ShieldAlert className="w-3.5 h-3.5" />
-                      <span>{totals.missingSlCount} sin Stop Loss</span>
+                    <span className="text-rose-400 font-bold flex items-center gap-1">
+                      <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                      <span>{totals.missingSlCount} sin Stop Loss activo</span>
                     </span>
                   )}
                 </td>
@@ -623,6 +729,16 @@ export const ActivePositionsSummaryTable: React.FC<ActivePositionsSummaryTablePr
           </table>
         </div>
       )}
+
+      {/* Trailing Stop Config Modal */}
+      {selectedTrailingPos && (
+        <TrailingStopConfigModal
+          position={selectedTrailingPos}
+          onClose={() => setSelectedTrailingPos(null)}
+          onSuccess={() => setSelectedTrailingPos(null)}
+        />
+      )}
     </div>
   );
 };
+
