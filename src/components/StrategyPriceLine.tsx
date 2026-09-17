@@ -1,13 +1,29 @@
-import React from 'react';
-import { Activity, AlertTriangle, Target, Skull, ShieldAlert, MapPin } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  Activity,
+  AlertTriangle,
+  Target,
+  Skull,
+  ShieldAlert,
+  MapPin,
+  Clock,
+  TrendingUp,
+  TrendingDown,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
+import {
+  fetch4HourPriceMovement,
+  FourHourPriceMovement,
+} from '../services/hourlyPriceHistoryService';
 
 export interface StrategyPriceLineProps {
   livePrice: number;
   entry1Price: number;
   entry2Price?: number;
   entry3Price?: number;
-  actualEntryPrice?: number; // Precio de Entrada real ejecutado en la posición
+  actualEntryPrice?: number; // Real executed entry price of the position
   slPrice: number;
   tp1Price: number;
   tp2Price?: number;
@@ -20,6 +36,7 @@ export interface StrategyPriceLineProps {
   decimalPlaces?: number;
   isLong?: boolean;
   symbol?: string;
+  show4HourMovement?: boolean;
 }
 
 export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
@@ -40,7 +57,45 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   decimalPlaces,
   isLong = true,
   symbol,
+  show4HourMovement = true,
 }) => {
+  // 4-Hour Movement State
+  const [fourHourData, setFourHourData] = useState<FourHourPriceMovement | null>(null);
+  const [isLoading4h, setIsLoading4h] = useState(false);
+  const [is4hExpanded, setIs4hExpanded] = useState(true);
+
+  // Fetch 4-Hour 1h interval data
+  useEffect(() => {
+    let isMounted = true;
+    const targetSymbol = symbol || '';
+
+    if (!targetSymbol && (!livePrice || livePrice <= 0)) {
+      return;
+    }
+
+    const loadMovement = async () => {
+      try {
+        setIsLoading4h(true);
+        const data = await fetch4HourPriceMovement(targetSymbol || 'BTCUSDT', livePrice);
+        if (isMounted) {
+          setFourHourData(data);
+          setIsLoading4h(false);
+        }
+      } catch {
+        if (isMounted) setIsLoading4h(false);
+      }
+    };
+
+    loadMovement();
+
+    // Poll every 35 seconds to keep 4h movement in sync with live price
+    const interval = setInterval(loadMovement, 35000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [symbol, livePrice]);
+
   const calcPct = (levelPrice?: number) => {
     if (!livePrice || livePrice <= 0 || !levelPrice || levelPrice <= 0) return null;
     return ((levelPrice - livePrice) / livePrice) * 100;
@@ -120,7 +175,17 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
     rawLevels.push({ key: 'TP3', label: 'TP3', price: tp3, type: 'TP' });
   }
 
-  const allPrices = [...rawLevels.map((l) => l.price), livePrice].filter((p) => p > 0);
+  // Include 4h candles (open, close, high, low) in the horizontal track scale
+  const candlePrices = fourHourData?.candles?.length
+    ? fourHourData.candles.flatMap((c) => [c.open, c.close, c.high, c.low])
+    : [];
+
+  const allPrices = [
+    ...rawLevels.map((l) => l.price),
+    livePrice,
+    ...candlePrices,
+  ].filter((p) => p > 0);
+
   const minP = Math.min(...allPrices);
   const maxP = Math.max(...allPrices);
   const range = maxP - minP || 1;
@@ -149,8 +214,6 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   const pos2 = bound2 > 0 ? getTrackPos(bound2) : 0;
   const dangerLeft = bound1 > 0 && bound2 > 0 ? Math.min(pos1, pos2) : 0;
   const dangerWidth = bound1 > 0 && bound2 > 0 ? Math.max(1, Math.abs(pos1 - pos2)) : 0;
-
-  const entryDistPct = entryP > 0 ? calcPct(entryP) : null;
 
   return (
     <div
@@ -192,6 +255,36 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
               )}
             </span>
           )}
+
+          {/* Badge Resumen 4H con botón para colapsar/expandir */}
+          {fourHourData && (
+            <button
+              onClick={() => setIs4hExpanded(!is4hExpanded)}
+              className={`ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md border font-mono text-[10px] font-bold cursor-pointer transition-all hover:scale-105 ${
+                fourHourData.isBullish
+                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/60 shadow-xs'
+                  : 'bg-rose-950/80 text-rose-300 border-rose-600/60 shadow-xs'
+              }`}
+              title="Clic para mostrar/ocultar las 4 mini-barras horarias anteriores"
+            >
+              <Clock className="w-3 h-3 shrink-0" />
+              <span>4h:</span>
+              <span className="font-black">
+                {fourHourData.netChangePct >= 0 ? '+' : ''}
+                {fourHourData.netChangePct.toFixed(2)}%
+              </span>
+              {fourHourData.isBullish ? (
+                <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" />
+              ) : (
+                <TrendingDown className="w-3 h-3 text-rose-400 shrink-0" />
+              )}
+              {is4hExpanded ? (
+                <ChevronUp className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+              ) : (
+                <ChevronDown className="w-2.5 h-2.5 ml-0.5 opacity-70" />
+              )}
+            </button>
+          )}
         </span>
 
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -232,7 +325,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
         </div>
       </div>
 
-      {/* CONTINUOUS HORIZONTAL PRICE TRACK BAR */}
+      {/* CONTINUOUS HORIZONTAL PRICE TRACK BAR (NIVELES PRINCIPALES) */}
       <div className="relative w-full pt-8 pb-9 px-2 my-1">
         {/* Track Line Background */}
         <div className="h-3 w-full bg-neutral-900 rounded-full border border-neutral-800 relative overflow-hidden flex items-center">
@@ -275,7 +368,8 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
           } else if (isTP) {
             nodeColor = 'bg-emerald-400 border-emerald-300 text-emerald-400';
           } else if (isActualEntry) {
-            nodeColor = 'bg-sky-400 border-white text-sky-200 ring-2 ring-sky-400/80 shadow-[0_0_12px_rgba(56,189,248,0.9)]';
+            nodeColor =
+              'bg-sky-400 border-white text-sky-200 ring-2 ring-sky-400/80 shadow-[0_0_12px_rgba(56,189,248,0.9)]';
           }
 
           return (
@@ -372,6 +466,162 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 4 MINI-BARRAS HORARIAS DE LAS ÚLTIMAS 4 HORAS (CON 1 HORA DE SEPARACIÓN) DIRECTAMENTE EN LA BARRA */}
+      {show4HourMovement && fourHourData && is4hExpanded && fourHourData.candles.length > 0 && (
+        <div className="mt-3 pt-2.5 border-t border-neutral-800/80">
+          {/* Header del desglose horario */}
+          <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-2 px-1">
+            <span className="flex items-center gap-1.5 font-bold text-neutral-300">
+              <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span>Movimiento Horario Últimas 4h (1h por mini-barra: Inicio ➔ Fin)</span>
+            </span>
+            <span className="text-[9px] text-neutral-400 flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                <span className="text-amber-300 font-bold">Empezó (O)</span>
+              </span>
+              <span className="text-neutral-600">|</span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                <span className="text-emerald-300 font-bold">Terminó (C)</span>
+              </span>
+            </span>
+          </div>
+
+          {/* Listado de las 4 Mini-Barras (una por cada hora anterior) */}
+          <div className="flex flex-col gap-1.5">
+            {fourHourData.candles.map((candle, idx) => {
+              const openPos = getTrackPos(candle.open);
+              const closePos = getTrackPos(candle.close);
+              const lowPos = getTrackPos(candle.low);
+              const highPos = getTrackPos(candle.high);
+              const isBull = candle.isBullish;
+              const barLeft = Math.min(openPos, closePos);
+              const barWidth = Math.max(1.8, Math.abs(closePos - openPos));
+              const wickLeft = Math.min(lowPos, highPos);
+              const wickWidth = Math.max(1, Math.abs(highPos - lowPos));
+              const isLatest = idx === fourHourData.candles.length - 1;
+
+              return (
+                <div
+                  key={`hourly-bar-${candle.openTime}-${idx}`}
+                  className={`rounded-lg p-1.5 border transition-all ${
+                    isLatest
+                      ? 'bg-neutral-900/80 border-cyan-700/60 ring-1 ring-cyan-500/20'
+                      : 'bg-neutral-900/40 border-neutral-800/70 hover:border-neutral-700'
+                  }`}
+                >
+                  {/* Fila informativa: hora, donde empezó y donde terminó */}
+                  <div className="flex items-center justify-between text-[9px] mb-1 px-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span
+                        className={`px-1.5 py-0.2 rounded font-extrabold text-[8px] uppercase tracking-wider ${
+                          isLatest
+                            ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
+                            : 'bg-neutral-800 text-neutral-300'
+                        }`}
+                      >
+                        {isLatest ? '1h / Actual' : `Hace ${4 - idx}h`}
+                      </span>
+                      <span className="text-neutral-400 font-mono text-[8px]">({candle.shortHour})</span>
+
+                      <span className="text-neutral-400 font-mono">
+                        Empezó:{' '}
+                        <strong className="text-amber-300 font-black">{fmtPrice(candle.open)}</strong>
+                      </span>
+                      <span className="text-neutral-600 font-bold">➔</span>
+                      <span className="text-neutral-400 font-mono">
+                        Terminó:{' '}
+                        <strong
+                          className={`font-black ${isBull ? 'text-emerald-300' : 'text-rose-300'}`}
+                        >
+                          {fmtPrice(candle.close)}
+                        </strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`px-1.5 py-0.2 rounded font-black text-[9px] ${
+                          isBull
+                            ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/60'
+                            : 'bg-rose-950/90 text-rose-400 border border-rose-800/60'
+                        }`}
+                      >
+                        {isBull ? '▲ +' : '▼ '}
+                        {candle.changePct.toFixed(2)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Pista horizontal con escala compartida para la mini-barra */}
+                  <div className="relative w-full h-5 bg-neutral-950/90 rounded border border-neutral-800/90 flex items-center overflow-hidden">
+                    {/* Guía vertical del precio Live */}
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-cyan-400/50 z-20 pointer-events-none"
+                      style={{ left: `${livePosPct}%` }}
+                      title={`Live actual: ${fmtPrice(livePrice)}`}
+                    />
+
+                    {/* Guía vertical de precio de entrada real si existe */}
+                    {entryP > 0 && (
+                      <div
+                        className="absolute top-0 bottom-0 w-px bg-sky-400/40 z-10 pointer-events-none border-r border-dashed border-sky-400/60"
+                        style={{ left: `${getTrackPos(entryP)}%` }}
+                        title={`Precio de Entrada: ${fmtPrice(entryP)}`}
+                      />
+                    )}
+
+                    {/* Mecha de rango total de la hora (Mínimo a Máximo) */}
+                    <div
+                      className="absolute h-0.5 bg-neutral-600/70 rounded-full pointer-events-none"
+                      style={{ left: `${wickLeft}%`, width: `${wickWidth}%` }}
+                      title={`Rango H: ${fmtPrice(candle.low)} ↔ ${fmtPrice(candle.high)}`}
+                    />
+
+                    {/* Mini-Barra horaria de Apertura a Cierre */}
+                    <div
+                      className={`absolute h-3 rounded flex items-center justify-center transition-all shadow-sm ${
+                        isBull
+                          ? 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 border border-emerald-300/80 shadow-[0_0_8px_rgba(52,211,153,0.35)]'
+                          : 'bg-gradient-to-r from-rose-600 via-rose-500 to-rose-400 border border-rose-300/80 shadow-[0_0_8px_rgba(244,63,94,0.35)]'
+                      }`}
+                      style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
+                      title={`${candle.label} (${candle.shortHour}): Empezó en ${fmtPrice(candle.open)} ➔ Terminó en ${fmtPrice(candle.close)} (${fmtPct(candle.changePct)})`}
+                    >
+                      {/* Flecha de dirección de la mini-barra */}
+                      <span className="text-[8px] font-black text-black select-none pointer-events-none opacity-90 leading-none">
+                        {isBull ? '▶' : '◀'}
+                      </span>
+                    </div>
+
+                    {/* Marcador de INICIO (Donde empezó) */}
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-amber-400 border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none"
+                      style={{ left: `${openPos}%` }}
+                      title={`Empezó en ${fmtPrice(candle.open)}`}
+                    >
+                      <div className="w-1 h-1 rounded-full bg-amber-950" />
+                    </div>
+
+                    {/* Marcador de FIN (Donde terminó) */}
+                    <div
+                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none ${
+                        isBull ? 'bg-emerald-400' : 'bg-rose-400'
+                      }`}
+                      style={{ left: `${closePos}%` }}
+                      title={`Terminó en ${fmtPrice(candle.close)}`}
+                    >
+                      <div className="w-1 h-1 rounded-full bg-black" />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

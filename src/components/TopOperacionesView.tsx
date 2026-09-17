@@ -1391,6 +1391,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                   noOperarReason={op.noOperarReason}
                   decimalPlaces={op.decimalPlaces}
                   isLong={op.isLong}
+                  symbol={op.strategy.par}
                 />
 
                 {/* Validated Confluence Factor Chips */}
@@ -1764,6 +1765,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
                         noOperarReason={op.noOperarReason}
                         decimalPlaces={op.decimalPlaces}
                         isLong={op.isLong}
+                        symbol={op.strategy.par}
                       />
                     </td>
                   </tr>
