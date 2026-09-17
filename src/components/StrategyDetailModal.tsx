@@ -358,6 +358,17 @@ export const StrategyDetailModal: React.FC<StrategyDetailModalProps> = ({
               <strong className="text-rose-400">Detalle de Riesgo: </strong>
               {strategy.gestionDeRiesgoStopLoss}
             </div>
+
+            {/* Invalidación por Correlación (BTC & Dominancia BTC.D) */}
+            <div className="bg-amber-950/25 border border-amber-500/40 p-2.5 rounded-lg flex flex-col gap-1 text-[11px] font-sans">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Invalidación por Correlación (BTC & Dominancia BTC.D)</span>
+              </div>
+              <p className="text-amber-200/90 leading-relaxed text-[10.5px]">
+                Si operas Altcoins, vigila siempre el gráfico de BTC y la Dominancia de Bitcoin (BTC.D). Si BTC se desploma, romperá los soportes técnicos de cualquier Altcoin sin importar tus indicadores.
+              </p>
+            </div>
           </div>
 
           {/* 4. SECCIÓN: REGLAS DE EJECUCIÓN & INDICADORES */}

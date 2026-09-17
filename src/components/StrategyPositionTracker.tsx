@@ -1602,6 +1602,21 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
               {linkedStrategy?.comentariosBacktesting || 'Consolidación técnica respaldada por disciplina de preservación de capital. Mover SL a Breakeven tras TP1. Cancelar DCA no ejecutado tras TP1. No sobreapalancar.'}
             </p>
           </div>
+
+          {/* Invalidación por Correlación (BTC & Dominancia BTC.D) */}
+          <div className="p-3 rounded-lg bg-amber-950/20 border border-amber-500/30 flex items-start gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-bold text-amber-300">
+                Invalidación por Correlación (BTC & Dominancia BTC.D)
+              </span>
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                Si operas Altcoins, vigila siempre el gráfico de BTC y la Dominancia de Bitcoin (BTC.D). Si BTC se desploma, romperá los soportes técnicos de cualquier Altcoin sin importar tus indicadores.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1611,7 +1626,7 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-white flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-amber-400" />
-              Auditoría del Protocolo de las 8 Disciplinas para este Trade
+              Auditoría del Protocolo de Disciplinas para este Trade
             </span>
             <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
               Margen Aislado ({position.leverage}X)
@@ -1656,6 +1671,10 @@ export const StrategyPositionTracker: React.FC<StrategyPositionTrackerProps> = R
                 // Cero FOMO
                 isCompliant = true;
                 note = 'Ejecución 100% Basada en Hoja Técnica';
+              } else if (d.number === 9) {
+                // Invalidación por Correlación (BTC & BTC.D)
+                isCompliant = true;
+                note = position.symbol.toUpperCase() === 'BTCUSDT' ? 'Activo Primario BTC' : 'Vigilancia BTC & BTC.D';
               }
 
               return (

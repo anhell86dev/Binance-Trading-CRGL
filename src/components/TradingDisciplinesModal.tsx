@@ -149,6 +149,20 @@ export const TRADING_DISCIPLINES: DisciplineRule[] = [
     goodPractice: 'Esperar pacientemente el retroceso a la zona de entrada o buscar el próximo par validado.',
     metrics: 'Ejecución: 100% Sistemática',
   },
+  {
+    id: 'disc-9',
+    number: 9,
+    title: 'Invalidación por Correlación (BTC & Dominancia BTC.D)',
+    tagline: 'Si Bitcoin estornuda, las Altcoins se resfrían sin importar los indicadores.',
+    category: 'EJECUCIÓN',
+    icon: TrendingUp,
+    rule: 'Invalidación por Correlación: Si operas Altcoins, vigila siempre el gráfico de BTC y la Dominancia de Bitcoin (BTC.D). Si BTC se desploma, romperá los soportes técnicos de cualquier Altcoin sin importar tus indicadores.',
+    foundation:
+      'Bitcoin representa el centro de gravedad de liquidez en el mercado cripto. Una caída abrupta de BTC rompe soportes técnicos y arrastra a todas las Altcoins debido a correlaciones cruzadas y liquidaciones en cascada.',
+    badPractice: 'Mantener o sobrecargar un Long en una Altcoin con SL ajustado ignorando que BTC acaba de romper soportes clave a la baja.',
+    goodPractice: 'Monitorear la acción de precio de BTC/USDT antes y durante cualquier trade en Altcoins, protegiendo con SL o salida inmediata si BTC colapsa.',
+    metrics: 'Vigilancia BTC / BTC.D: Activa',
+  },
 ];
 
 const CHECKLIST_STORAGE_KEY = 'binance_futures_disciplines_checklist_v1';
@@ -210,7 +224,7 @@ export const TradingDisciplinesView: React.FC<{ isCompact?: boolean }> = ({ isCo
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Las 8 Disciplinas del Trader Institucional
+                Protocolo de las {totalCount} Disciplinas del Trader Institucional
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
                 Binance Futures Pro

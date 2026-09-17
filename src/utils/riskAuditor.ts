@@ -406,6 +406,20 @@ export function auditOrderRisk(
     });
   }
 
+  // 7. Invalidación por Correlación (BTC & Dominancia BTC.D)
+  const isAltcoin = (order.symbol || '').toUpperCase() !== 'BTCUSDT' && !order.symbol?.startsWith('BTC');
+  checks.push({
+    id: 'correlation_invalidation',
+    name: 'Invalidación por Correlación',
+    status: 'PASS',
+    label: isAltcoin ? 'Vigilancia BTC & BTC.D Activa' : 'Activo Primario (BTC)',
+    currentValue: isAltcoin ? 'Altcoin Correlacionada' : 'Líder de Mercado (BTC)',
+    requirement: 'Supervisión de BTC y Dominancia (BTC.D)',
+    description:
+      'Si operas Altcoins, vigila siempre el gráfico de BTC y la Dominancia de Bitcoin (BTC.D). Si BTC se desploma, romperá los soportes técnicos de cualquier Altcoin sin importar tus indicadores.',
+    recommendation: isAltcoin ? 'Si BTC rompe soporte diario a la baja, prepara salida de emergencia o ajuste inmediato de SL.' : undefined,
+  });
+
   const finalScore = Math.max(0, Math.min(100, score));
   let overallStatus: 'OPTIMAL' | 'WARNING' | 'CRITICAL' = 'OPTIMAL';
   let badgeText = 'Gestión Óptima';

@@ -497,6 +497,28 @@ export const ActiveTradeInspectorWithMilestones: React.FC<ActiveTradeInspectorPr
         </div>
       )}
 
+      {/* INVALIDACIÓN POR CORRELACIÓN (BTC & DOMINANCIA BTC.D) */}
+      <div className="bg-neutral-950/90 border border-amber-500/30 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs shadow-xs">
+        <div className="flex items-start sm:items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-amber-300 text-xs">
+                Invalidación por Correlación (BTC & Dominancia BTC.D)
+              </span>
+              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                Regla de Oro Altcoins
+              </span>
+            </div>
+            <p className="text-[11px] text-neutral-300 mt-0.5 leading-relaxed">
+              Si operas Altcoins, vigila siempre el gráfico de BTC y la Dominancia de Bitcoin (BTC.D). Si BTC se desploma, romperá los soportes técnicos de cualquier Altcoin sin importar tus indicadores.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* 4. Feed de Alertas Recientes Generadas */}
       {alerts.length > 0 && (
         <div className="flex flex-col gap-2 pt-2 border-t border-neutral-800/80">

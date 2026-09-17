@@ -138,6 +138,13 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
   }, [linkedStrategy, stratPrices, currentLivePrice]);
 
   const e1Price = stratPrices?.entry1Price || entryPrice;
+  const btcPrice = useMemo(() => {
+    const p = livePriceService.getPrice('BTCUSDT');
+    if (p > 0) return p;
+    const wsTicker = binanceWs.getTicker();
+    if (wsTicker.symbol === 'BTCUSDT' && wsTicker.lastPrice > 0) return wsTicker.lastPrice;
+    return 0;
+  }, [strategyTick, livePrice]);
   const e2Price = stratPrices?.entry2Price || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
   const e3Price = stratPrices?.entry3Price || 0;
   const slPrice = stratPrices?.slPrice || tradeStatus.slPrice || (isLong ? entryPrice * 0.985 : entryPrice * 1.015);
@@ -512,7 +519,36 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             </div>
           </div>
 
-          {/* 3. HISTÓRICO DE VOLATILIDAD (SPARKLINE & BARRAS) */}
+          {/* 3. INVALIDACIÓN POR CORRELACIÓN (BTC & DOMINANCIA BTC.D) */}
+          <div className="bg-neutral-950/90 border border-amber-500/30 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs shadow-xs">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+                <ShieldAlert className="w-4 h-4" />
+              </div>
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-amber-300 text-xs">
+                    Invalidación por Correlación (BTC & Dominancia BTC.D)
+                  </span>
+                  {btcPrice > 0 && (
+                    <span className="text-[10px] font-mono px-2 py-0.2 rounded bg-neutral-900 text-neutral-300 border border-neutral-700">
+                      BTC/USDT Live: <strong className="text-amber-400">${btcPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
+                    </span>
+                  )}
+                  {position.symbol.toUpperCase() !== 'BTCUSDT' && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                      Altcoin Monitor
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-neutral-300 mt-0.5 leading-relaxed">
+                  Si operas Altcoins, vigila siempre el gráfico de BTC y la Dominancia de Bitcoin (BTC.D). Si BTC se desploma, romperá los soportes técnicos de cualquier Altcoin sin importar tus indicadores.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. HISTÓRICO DE VOLATILIDAD (SPARKLINE & BARRAS) */}
           <div className="pt-2 border-t border-neutral-800">
             <TacticalPairVolatilityCard
               symbol={position.symbol}
