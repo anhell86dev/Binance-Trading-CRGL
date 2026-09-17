@@ -422,6 +422,7 @@ export const PositionTacticalDetailRow: React.FC<PositionTacticalDetailRowProps>
             isInDangerZone={isInDangerZone}
             isLong={isLong}
             symbol={position.symbol}
+            leverage={position.leverage || 5}
           />
 
           {/* 2. MATRIZ MULTICAMINO DEL TRADE (NODOS INTERCONECTADOS) */}

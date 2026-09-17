@@ -44,6 +44,7 @@ export interface StrategyPriceLineProps {
   symbol?: string;
   show4HourMovement?: boolean;
   openOrders?: OpenOrder[];
+  leverage?: number;
 }
 
 export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
@@ -66,6 +67,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   symbol,
   show4HourMovement = true,
   openOrders = [],
+  leverage = 5,
 }) => {
   // 4-Hour Movement State - initialize immediately so there is never a blank wait
   const [fourHourData, setFourHourData] = useState<FourHourPriceMovement | null>(() => {
@@ -324,6 +326,20 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   const dangerLeft = bound1 > 0 && bound2 > 0 ? Math.min(pos1, pos2) : 0;
   const dangerWidth = bound1 > 0 && bound2 > 0 ? Math.max(1, Math.abs(pos1 - pos2)) : 0;
 
+  // Distance and Shadow between Entry and Live Price (Verde = Ganancia, Rojo = Pérdida)
+  const effectiveEntry = entryP > 0 ? entryP : (entry1Price > 0 ? entry1Price : 0);
+  const entryPosPct = effectiveEntry > 0 ? getTrackPos(effectiveEntry) : 0;
+  
+  const priceDiff = isLong ? (livePrice - effectiveEntry) : (effectiveEntry - livePrice);
+  const priceDiffPct = effectiveEntry > 0 && livePrice > 0 ? (priceDiff / effectiveEntry) * 100 : 0;
+  const isProfit = priceDiffPct >= 0;
+  const effectiveLeverage = leverage && leverage > 0 ? leverage : 5;
+  const roiPct = priceDiffPct * effectiveLeverage;
+
+  const shadowLeft = effectiveEntry > 0 && livePrice > 0 ? Math.min(entryPosPct, livePosPct) : 0;
+  const shadowWidth = effectiveEntry > 0 && livePrice > 0 ? Math.max(0.8, Math.abs(livePosPct - entryPosPct)) : 0;
+  const midPosPct = effectiveEntry > 0 && livePrice > 0 ? (entryPosPct + livePosPct) / 2 : 0;
+
   return (
     <div
       className={`w-full rounded-xl p-3 font-mono text-xs transition-all ${
@@ -539,7 +555,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
       {/* CONTINUOUS HORIZONTAL PRICE TRACK BAR (NIVELES PRINCIPALES) */}
       <div className="relative w-full pt-8 pb-9 px-2 my-1">
         {/* Track Line Background */}
-        <div className="h-3 w-full bg-neutral-900 rounded-full border border-neutral-800 relative overflow-hidden flex items-center">
+        <div className="h-3.5 w-full bg-neutral-900 rounded-full border border-neutral-800 relative overflow-hidden flex items-center">
           <div className="absolute inset-0 bg-gradient-to-r from-rose-950/80 via-amber-950/50 to-emerald-950/80 opacity-60" />
 
           {/* RED DANGER ZONE HIGHLIGHT OVERLAY (SL ↔ E3 / Lowest Entry) */}
@@ -548,6 +564,19 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
               className="absolute h-full bg-rose-600/70 border-y border-rose-400/90 shadow-[0_0_12px_rgba(244,63,94,0.8)] animate-pulse"
               style={{ left: `${dangerLeft}%`, width: `${dangerWidth}%` }}
               title="ZONA DE PELIGRO ROJA (SL ↔ E3/E1/Entrada)"
+            />
+          )}
+
+          {/* SHADOW / HIGHLIGHT ZONE: ENTRY ↔ LIVE PRICE (VERDE GANANCIA / ROJO PÉRDIDA) */}
+          {effectiveEntry > 0 && livePrice > 0 && shadowWidth > 0 && (
+            <div
+              className={`absolute h-full transition-all duration-300 z-1 ${
+                isProfit
+                  ? 'bg-emerald-500/50 border-y-2 border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.75)]'
+                  : 'bg-rose-500/50 border-y-2 border-rose-400 shadow-[0_0_16px_rgba(244,63,94,0.75)]'
+              }`}
+              style={{ left: `${shadowLeft}%`, width: `${shadowWidth}%` }}
+              title={`Trayecto Entrada ↔ Live: ${isProfit ? 'Ganancia' : 'Pérdida'} (${priceDiffPct >= 0 ? '+' : ''}${priceDiffPct.toFixed(2)}% | ROI: ${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%)`}
             />
           )}
         </div>
@@ -560,6 +589,27 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
           >
             <AlertTriangle className="w-2.5 h-2.5 text-rose-400 shrink-0" />
             <span>ZONA DE PELIGRO (SL ↔ {e3 > 0 ? 'E3' : e2 > 0 ? 'E2' : 'ENTRADA'})</span>
+          </div>
+        )}
+
+        {/* BADGE EN MEDIO DE LA DISTANCIA ENTRE ENTRADA Y PRECIO LIVE: % y ROI */}
+        {effectiveEntry > 0 && livePrice > 0 && (
+          <div
+            className={`absolute -top-3.5 -translate-x-1/2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-tight z-15 pointer-events-none whitespace-nowrap border shadow-md transition-all ${
+              isProfit
+                ? 'bg-emerald-950/95 text-emerald-300 border-emerald-500/90 shadow-[0_0_12px_rgba(16,185,129,0.6)]'
+                : 'bg-rose-950/95 text-rose-300 border-rose-500/90 shadow-[0_0_12px_rgba(244,63,94,0.6)]'
+            }`}
+            style={{ left: `${midPosPct}%` }}
+            title={`Distancia a Live: ${priceDiffPct >= 0 ? '+' : ''}${priceDiffPct.toFixed(2)}% | ROI Estimado (${effectiveLeverage}x): ${roiPct >= 0 ? '+' : ''}${roiPct.toFixed(2)}%`}
+          >
+            <span className={isProfit ? 'text-emerald-300' : 'text-rose-300'}>
+              {priceDiffPct >= 0 ? '▲ +' : '▼ '}{priceDiffPct.toFixed(2)}%
+            </span>
+            <span className="opacity-40 text-neutral-400 font-normal">|</span>
+            <span className="font-black text-white">
+              ROI: {roiPct >= 0 ? '+' : ''}{roiPct.toFixed(2)}%
+            </span>
           </div>
         )}
 
@@ -692,9 +742,15 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
             }`}
           />
 
-          {/* Bottom Live Reference Pin */}
-          <div className="absolute -bottom-6 bg-cyan-950 text-cyan-300 text-[9px] font-bold px-1 py-0.2 rounded border border-cyan-800 whitespace-nowrap">
-            0.00%
+          {/* Bottom Live Reference Pin (Precio Live) */}
+          <div
+            className={`absolute -bottom-6 text-[9px] font-black px-1.5 py-0.5 rounded border whitespace-nowrap shadow-xs ${
+              isInDangerZone
+                ? 'bg-rose-950 text-rose-200 border-rose-600 shadow-[0_0_8px_rgba(244,63,94,0.5)]'
+                : 'bg-cyan-950 text-cyan-300 border-cyan-700 shadow-[0_0_8px_rgba(34,211,238,0.4)]'
+            }`}
+          >
+            ${fmtPrice(livePrice)}
           </div>
         </div>
       </div>

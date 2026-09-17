@@ -2,7 +2,7 @@ import { parseCsvToStrategies, parseCsvToOrders, ordersToCsv, extractSpreadsheet
 import { strategyService } from './strategyService';
 import { binanceWs } from './binanceWs';
 import { OpenOrder } from '../types/binance';
-import { GoogleSheetStrategyRow } from '../types/strategy';
+import { GoogleSheetStrategyRow, StrategyMilestoneHit } from '../types/strategy';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -386,6 +386,129 @@ class GoogleSheetsApiService {
     } catch (err: any) {
       console.error('Error writing orders via Google API:', err);
       throw err;
+    }
+  }
+
+  /**
+   * DIRECT BIDIRECTIONAL WRITING: Overwrite/Save all strategies to Google Sheets
+   */
+  public async writeStrategiesViaApi(sheetUrlOrId: string, strategies: GoogleSheetStrategyRow[], tabName: string = 'Estrategias'): Promise<boolean> {
+    const sheetId = extractSpreadsheetId(sheetUrlOrId);
+    if (!sheetId) throw new Error('ID de Google Sheets inválido.');
+
+    const headers = [
+      'No. Estrategia',
+      'Fecha',
+      'Nombre de Estrategia',
+      'Par',
+      'Temporalidad',
+      'Tipo de Orden',
+      'Indicadores Clave',
+      'Reglas de Entrada (DCA)',
+      'Reglas de Salida (TP)',
+      'Gestión de Riesgo (Stop-Loss)',
+      'Comentarios y Backtesting',
+      'Estado',
+      'Fecha Actualizacion',
+      'Ultimo Hito Tocado',
+      'Fecha Ultimo Hito',
+    ];
+
+    const dataRows = strategies.map((s) => [
+      s.noEstrategia || '',
+      s.fecha || '',
+      s.nombreEstrategia || '',
+      s.par || '',
+      s.temporalidad || '',
+      s.tipoDeOrden || '',
+      s.indicadoresClave || '',
+      s.reglasDeEntrada || '',
+      s.reglasDeSalidaTP || '',
+      s.gestionDeRiesgoStopLoss || '',
+      s.comentariosBacktesting || '',
+      s.estado || 'Activa',
+      s.fechaActualizacion || new Date().toISOString(),
+      s.ultimoHitoTocado || '',
+      s.fechaUltimoHito || '',
+    ]);
+
+    const values = [headers, ...dataRows];
+
+    try {
+      await this.apiFetch(
+        `${sheetId}/values/${encodeURIComponent(tabName)}!A1?valueInputOption=USER_ENTERED`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ values }),
+        }
+      );
+      return true;
+    } catch (err: any) {
+      console.error('Error writing strategies via Google API:', err);
+      // Fallback: try first sheet without tab prefix if tab name fails
+      try {
+        await this.apiFetch(
+          `${sheetId}/values/A1?valueInputOption=USER_ENTERED`,
+          {
+            method: 'PUT',
+            body: JSON.stringify({ values }),
+          }
+        );
+        return true;
+      } catch (inner) {
+        throw err;
+      }
+    }
+  }
+
+  /**
+   * DIRECT RECORDING: Appends an audit row when a TP, E or SL milestone is touched by live price
+   */
+  public async recordMilestoneHitInGoogleSheet(
+    sheetUrlOrId: string,
+    hit: StrategyMilestoneHit,
+    tabName: string = 'Bitacora_Hitos'
+  ): Promise<boolean> {
+    const sheetId = extractSpreadsheetId(sheetUrlOrId);
+    if (!sheetId) return false;
+
+    const row = [
+      hit.strategyId || '-',
+      hit.date,
+      hit.time,
+      hit.symbol,
+      hit.strategyName || '-',
+      hit.milestone, // 'TP1', 'TP2', 'TP3', 'E1', 'E2', 'E3', 'SL'
+      String(hit.triggerPrice || hit.price || 0),
+      hit.statusAfter, // 'Live', 'Live+', 'Fallida', etc.
+      `Nivel ${hit.milestone} tocado a $${hit.triggerPrice}. Estado de la estrategia actualizado a ${hit.statusAfter}.`,
+      hit.isoTimestamp,
+    ];
+
+    try {
+      await this.apiFetch(
+        `${sheetId}/values/${encodeURIComponent(tabName)}!A1:append?valueInputOption=USER_ENTERED`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ values: [row] }),
+        }
+      );
+      return true;
+    } catch (err) {
+      // Fallback: try appending to tab 'Ordenes' or default sheet
+      try {
+        await this.apiFetch(
+          `${sheetId}/values/Ordenes!A1:append?valueInputOption=USER_ENTERED`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ values: [row] }),
+          }
+        );
+        return true;
+      } catch (fallbackErr) {
+        console.warn('Could not append milestone hit to Google Sheet:', err);
+        return false;
+      }
     }
   }
 }

@@ -7,6 +7,26 @@ export type StrategySourceType =
   | 'Edición Manual'
   | 'Catálogo Base';
 
+export type StrategyMilestoneType = 'E1' | 'E2' | 'E3' | 'TP1' | 'TP2' | 'TP3' | 'SL';
+
+export interface StrategyMilestoneHit {
+  id: string;
+  milestone: StrategyMilestoneType;
+  price: number;
+  triggerPrice: number;
+  date: string; // e.g. "17/09/2026"
+  time: string; // e.g. "02:35:12"
+  isoTimestamp: string;
+  timestamp: number;
+  statusBefore?: StrategyTradeStatus;
+  statusAfter: StrategyTradeStatus;
+  symbol: string;
+  strategyId: string;
+  strategyName: string;
+  isLong: boolean;
+  syncedToGoogleSheet?: boolean;
+}
+
 export interface TradeProcessStageInfo {
   stage: number; // 0 = Obsoleto, 1 = Activa, 2 = Live, 3 = Live+
   status: StrategyTradeStatus;
@@ -30,9 +50,13 @@ export interface GoogleSheetStrategyRow {
   reglasDeSalidaTP: string;
   gestionDeRiesgoStopLoss: string;
   comentariosBacktesting: string;
-  estado?: StrategyTradeStatus; // 'Activa' | 'Obsoleto' | 'Live' | 'Live+'
+  estado?: StrategyTradeStatus; // 'Activa' | 'Obsoleto' | 'Live' | 'Live+' | 'Fallida'
   fechaActualizacion?: string;  // e.g. "09/09/2026 17:10:45"
   fuenteActualizacion?: StrategySourceType; // 'API' | 'Archivo Google Docs' | 'Datos Pegados CSV' | 'Edición Manual' | 'Catálogo Base'
+  hitosTocados?: StrategyMilestoneHit[];
+  ultimoHitoTocado?: StrategyMilestoneType;
+  fechaUltimoHito?: string;     // e.g. "17/09/2026 02:35:12"
+  precioUltimoHito?: number;
 }
 
 export interface PlannedStrategyOrder {

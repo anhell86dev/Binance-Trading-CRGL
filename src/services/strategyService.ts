@@ -1,4 +1,4 @@
-import { GoogleSheetStrategyRow, StrategyTradeStatus } from '../types/strategy';
+import { GoogleSheetStrategyRow, StrategyTradeStatus, StrategyMilestoneHit } from '../types/strategy';
 import {
   SAMPLE_GOOGLE_SHEET_CSV,
   parseCsvToStrategies,
@@ -258,6 +258,83 @@ class StrategyService {
       this.saveToStorage();
       this.notify();
     }
+  }
+
+  /**
+   * Records a milestone touch event (E1, E2, E3, TP1, TP2, TP3, SL) on a strategy:
+   * 1. Records date and time of touch.
+   * 2. Transitions trade lifecycle state ('Live', 'Live+', 'Fallida').
+   * 3. Appends audit note to backtesting/history comments.
+   * 4. Persists locally and automatically pushes to connected Google Sheet and Webhook.
+   */
+  public async recordStrategyMilestoneHit(hit: StrategyMilestoneHit): Promise<boolean> {
+    const cleanSym = (hit.symbol || '').trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const stratId = (hit.strategyId || '').trim().toLowerCase();
+
+    let targetIdx = this.strategies.findIndex(
+      (s) => (stratId && s.noEstrategia.toLowerCase() === stratId) || (stratId && s.nombreEstrategia.toLowerCase() === stratId)
+    );
+
+    if (targetIdx === -1 && cleanSym) {
+      targetIdx = this.strategies.findIndex(
+        (s) => s.par.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym && s.estado !== 'Obsoleto' && s.estado !== 'Fallida'
+      );
+      if (targetIdx === -1) {
+        targetIdx = this.strategies.findIndex(
+          (s) => s.par.trim().replace(/[^a-zA-Z0-9]/g, '').toUpperCase() === cleanSym
+        );
+      }
+    }
+
+    if (targetIdx === -1) {
+      return false;
+    }
+
+    const currentStrat = this.strategies[targetIdx];
+    const timestampStr = `${hit.date} ${hit.time}`;
+    const hitNote = `[${timestampStr}] Hito ${hit.milestone} alcanzado a $${hit.triggerPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} (Estado: ${hit.statusAfter})`;
+
+    const existingHits = currentStrat.hitosTocados || [];
+    const updatedHits = [hit, ...existingHits.filter((h) => h.id !== hit.id)].slice(0, 30);
+
+    const prevComments = currentStrat.comentariosBacktesting || '';
+    const updatedComments = prevComments.includes(hitNote)
+      ? prevComments
+      : prevComments
+      ? `${hitNote} | ${prevComments}`
+      : hitNote;
+
+    const updatedStrat: GoogleSheetStrategyRow = {
+      ...currentStrat,
+      estado: hit.statusAfter,
+      fechaActualizacion: timestampStr,
+      fuenteActualizacion: 'API',
+      ultimoHitoTocado: hit.milestone,
+      fechaUltimoHito: timestampStr,
+      precioUltimoHito: hit.triggerPrice,
+      hitosTocados: updatedHits,
+      comentariosBacktesting: updatedComments,
+    };
+
+    this.strategies[targetIdx] = updatedStrat;
+    this.saveToStorage();
+    this.notify();
+
+    // 1. If Google Sheets API OAuth is authenticated, write to Google Sheet
+    const targetSheetUrl = this.customSheetUrl || OFFICIAL_GOOGLE_SHEET_URL;
+    if (googleSheetsApiService.isAuthenticated()) {
+      try {
+        await googleSheetsApiService.recordMilestoneHitInGoogleSheet(targetSheetUrl, hit);
+        await googleSheetsApiService.writeStrategiesViaApi(targetSheetUrl, this.strategies);
+      } catch (e) {
+        console.warn('Google Sheets API milestone writeback error:', e);
+      }
+    }
+
+    // 2. Sync to Webhook if configured
+    this.syncToWebhook();
+
+    return true;
   }
 
   /**

@@ -1184,6 +1184,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                           isLong={isLong}
                           symbol={pos.symbol}
                           openOrders={openOrders}
+                          leverage={pos.leverage || 5}
                         />
                       </td>
                     </tr>
