@@ -68,6 +68,7 @@ import { StrategyConfluenceDetailBadge } from './StrategyConfluenceDetailBadge';
 import { StrategyDetailModal } from './StrategyDetailModal';
 import { StrategySourceBadge } from './StrategySourceBadge';
 import { GoogleDocsManagerModal } from './GoogleDocsManagerModal';
+import { StrategySummaryTable } from './StrategySummaryTable';
 import { FileSpreadsheet, Copy, Check, GitBranch } from 'lucide-react';
 
 interface TopOperacionesViewProps {
@@ -149,7 +150,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   const [directionFilter, setDirectionFilter] = useState<'ALL' | 'LONG' | 'SHORT'>('ALL');
   const [confluenceFilter, setConfluenceFilter] = useState<'ALL' | 'CONFLUENT' | 'BULLISH' | 'BEARISH' | 'NEUTRAL'>('ALL');
   const [sortBy, setSortBy] = useState<'RB' | 'CONFLUENCE' | 'CONFLUENCE_RB' | 'PROXIMITY' | 'TP_POTENTIAL'>('CONFLUENCE_RB');
-  const [viewLayout, setViewLayout] = useState<'TABLE' | 'GRID'>('TABLE');
+  const [viewLayout, setViewLayout] = useState<'SUMMARY' | 'TABLE' | 'GRID'>('SUMMARY');
 
   // Modal
   const [selectedStrategyForModal, setSelectedStrategyForModal] =
@@ -1212,24 +1213,38 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             </button>
           </div>
 
-          {/* Toggle Vista Tabla vs Cuadrícula */}
-          <div className="flex items-center bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px]">
+          {/* Toggle Vista: Tabla Resumen vs Tabla Detallada vs Cuadrícula */}
+          <div className="flex items-center bg-neutral-950 p-1 rounded-lg border border-neutral-800 font-mono text-[11px] gap-1">
+            <button
+              id="view-mode-summary"
+              onClick={() => setViewLayout('SUMMARY')}
+              className={`px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1.5 ${
+                viewLayout === 'SUMMARY'
+                  ? 'bg-amber-400 text-neutral-950 font-bold shadow-xs'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+              title="Vista de Tabla Resumen de Estrategias"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tabla Resumen</span>
+            </button>
             <button
               id="view-mode-table"
               onClick={() => setViewLayout('TABLE')}
-              className={`p-1 rounded transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1.5 ${
                 viewLayout === 'TABLE'
                   ? 'bg-neutral-800 text-white font-bold'
                   : 'text-neutral-400 hover:text-white'
               }`}
-              title="Vista de Tabla Comparativa"
+              title="Vista de Tabla Detallada con Líneas de Precios"
             >
               <TableIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tabla Detallada</span>
             </button>
             <button
               id="view-mode-grid"
               onClick={() => setViewLayout('GRID')}
-              className={`p-1 rounded transition-all cursor-pointer ${
+              className={`px-2 py-1 rounded transition-all cursor-pointer flex items-center gap-1.5 ${
                 viewLayout === 'GRID'
                   ? 'bg-neutral-800 text-white font-bold'
                   : 'text-neutral-400 hover:text-white'
@@ -1237,6 +1252,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
               title="Vista de Tarjetas Bento Tácticas"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Tarjetas</span>
             </button>
           </div>
         </div>
@@ -1273,6 +1289,15 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
             </button>
           </div>
         </div>
+      ) : viewLayout === 'SUMMARY' ? (
+        /* VISTA TABLA RESUMEN DE ESTRATEGIAS */
+        <StrategySummaryTable
+          operations={filteredAndSortedOperations}
+          onAutofillOrder={handleAutofillOrder}
+          onOpenDetails={(strat) => setSelectedStrategyForModal(strat)}
+          onNavigateToGestionTrades={onNavigateToGestionTrades}
+          onNavigateToFutures={onNavigateToFutures}
+        />
       ) : viewLayout === 'GRID' ? (
         /* VISTA TARJETAS BENTO TÁCTICAS CON FLASH NOTIFICACIÓN */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
