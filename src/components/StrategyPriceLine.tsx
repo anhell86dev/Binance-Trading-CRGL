@@ -175,15 +175,20 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
     rawLevels.push({ key: 'TP3', label: 'TP3', price: tp3, type: 'TP' });
   }
 
-  // Include 4h candles (open, close, high, low) in the horizontal track scale
+  // Include 4h candles (open, close, high, low) and daily candle in the horizontal track scale
   const candlePrices = fourHourData?.candles?.length
     ? fourHourData.candles.flatMap((c) => [c.open, c.close, c.high, c.low])
+    : [];
+
+  const dailyPrices = fourHourData?.dailyCandle
+    ? [fourHourData.dailyCandle.open, fourHourData.dailyCandle.close, fourHourData.dailyCandle.high, fourHourData.dailyCandle.low]
     : [];
 
   const allPrices = [
     ...rawLevels.map((l) => l.price),
     livePrice,
     ...candlePrices,
+    ...dailyPrices,
   ].filter((p) => p > 0);
 
   const minP = Math.min(...allPrices);
@@ -256,7 +261,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
             </span>
           )}
 
-          {/* Badge Resumen 4H con botón para colapsar/expandir */}
+          {/* Badge Resumen 4H y Diario con botón para colapsar/expandir */}
           {fourHourData && (
             <button
               onClick={() => setIs4hExpanded(!is4hExpanded)}
@@ -265,7 +270,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                   ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/60 shadow-xs'
                   : 'bg-rose-950/80 text-rose-300 border-rose-600/60 shadow-xs'
               }`}
-              title="Clic para mostrar/ocultar las 4 mini-barras horarias anteriores"
+              title="Clic para mostrar/ocultar las mini-barras (1H, 2h, 3h, 4h y Diario)"
             >
               <Clock className="w-3 h-3 shrink-0" />
               <span>4h:</span>
@@ -277,6 +282,19 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                 <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" />
               ) : (
                 <TrendingDown className="w-3 h-3 text-rose-400 shrink-0" />
+              )}
+              {fourHourData.dailyCandle && (
+                <span
+                  className={`ml-1 px-1 rounded text-[9px] font-black ${
+                    fourHourData.dailyCandle.isBullish
+                      ? 'bg-emerald-900/90 text-emerald-200 border border-emerald-700/60'
+                      : 'bg-rose-900/90 text-rose-200 border border-rose-700/60'
+                  }`}
+                  title={`Variación diaria (24h/Hoy): ${fourHourData.dailyCandle.changePct >= 0 ? '+' : ''}${fourHourData.dailyCandle.changePct.toFixed(2)}%`}
+                >
+                  1D: {fourHourData.dailyCandle.changePct >= 0 ? '+' : ''}
+                  {fourHourData.dailyCandle.changePct.toFixed(1)}%
+                </span>
               )}
               {is4hExpanded ? (
                 <ChevronUp className="w-2.5 h-2.5 ml-0.5 opacity-70" />
@@ -467,14 +485,14 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
         </div>
       </div>
 
-      {/* 4 MINI-BARRAS HORARIAS DE LAS ÚLTIMAS 4 HORAS (CON 1 HORA DE SEPARACIÓN) DIRECTAMENTE EN LA BARRA */}
-      {show4HourMovement && fourHourData && is4hExpanded && fourHourData.candles.length > 0 && (
+      {/* MINI-BARRAS TEMPORALES (1H/Actual ➔ 2h ➔ 3h ➔ 4h ➔ Diario) DIRECTAMENTE EN LA BARRA */}
+      {show4HourMovement && fourHourData && is4hExpanded && (fourHourData.candles.length > 0 || fourHourData.dailyCandle) && (
         <div className="mt-3 pt-2.5 border-t border-neutral-800/80">
-          {/* Header del desglose horario */}
+          {/* Header del desglose horario y diario */}
           <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-2 px-1">
             <span className="flex items-center gap-1.5 font-bold text-neutral-300">
               <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span>Movimiento Horario Últimas 4h (1h por mini-barra: Inicio ➔ Fin)</span>
+              <span>Movimiento de Precios (1H / Actual ➔ 2h ➔ 3h ➔ 4h ➔ Diario: Inicio ➔ Fin)</span>
             </span>
             <span className="text-[9px] text-neutral-400 flex items-center gap-2">
               <span className="flex items-center gap-1">
@@ -489,136 +507,215 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
             </span>
           </div>
 
-          {/* Listado de las 4 Mini-Barras (una por cada hora anterior) */}
+          {/* Listado de las Mini-Barras en orden: 1h/Actual, 2h, 3h, 4h, y Diario */}
           <div className="flex flex-col gap-1.5">
-            {fourHourData.candles.map((candle, idx) => {
-              const openPos = getTrackPos(candle.open);
-              const closePos = getTrackPos(candle.close);
-              const lowPos = getTrackPos(candle.low);
-              const highPos = getTrackPos(candle.high);
-              const isBull = candle.isBullish;
-              const barLeft = Math.min(openPos, closePos);
-              const barWidth = Math.max(1.8, Math.abs(closePos - openPos));
-              const wickLeft = Math.min(lowPos, highPos);
-              const wickWidth = Math.max(1, Math.abs(highPos - lowPos));
-              const isLatest = idx === fourHourData.candles.length - 1;
+            {(() => {
+              const barsToRender: Array<{
+                key: string;
+                candle: (typeof fourHourData.candles)[0];
+                badgeLabel: string;
+                badgeClass: string;
+                subHour: string;
+                isLive: boolean;
+                isDaily: boolean;
+              }> = [];
 
-              return (
-                <div
-                  key={`hourly-bar-${candle.openTime}-${idx}`}
-                  className={`rounded-lg p-1.5 border transition-all ${
-                    isLatest
-                      ? 'bg-neutral-900/80 border-cyan-700/60 ring-1 ring-cyan-500/20'
-                      : 'bg-neutral-900/40 border-neutral-800/70 hover:border-neutral-700'
-                  }`}
-                >
-                  {/* Fila informativa: hora, donde empezó y donde terminó */}
-                  <div className="flex items-center justify-between text-[9px] mb-1 px-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span
-                        className={`px-1.5 py-0.2 rounded font-extrabold text-[8px] uppercase tracking-wider ${
-                          isLatest
-                            ? 'bg-cyan-950 text-cyan-300 border border-cyan-700'
-                            : 'bg-neutral-800 text-neutral-300'
-                        }`}
-                      >
-                        {isLatest ? '1h / Actual' : `Hace ${4 - idx}h`}
-                      </span>
-                      <span className="text-neutral-400 font-mono text-[8px]">({candle.shortHour})</span>
+              if (fourHourData.candles.length > 0) {
+                // 1. 1h / Actual (la hora más reciente en curso)
+                const c1 = fourHourData.candles[fourHourData.candles.length - 1];
+                barsToRender.push({
+                  key: 'bar-1h',
+                  candle: c1,
+                  badgeLabel: '1h / Actual',
+                  badgeClass: 'bg-cyan-950 text-cyan-300 border border-cyan-700',
+                  subHour: c1.shortHour,
+                  isLive: true,
+                  isDaily: false,
+                });
 
-                      <span className="text-neutral-400 font-mono">
-                        Empezó:{' '}
-                        <strong className="text-amber-300 font-black">{fmtPrice(candle.open)}</strong>
-                      </span>
-                      <span className="text-neutral-600 font-bold">➔</span>
-                      <span className="text-neutral-400 font-mono">
-                        Terminó:{' '}
-                        <strong
-                          className={`font-black ${isBull ? 'text-emerald-300' : 'text-rose-300'}`}
+                // 2. 2h (hace 2 horas)
+                if (fourHourData.candles.length >= 2) {
+                  const c2 = fourHourData.candles[fourHourData.candles.length - 2];
+                  barsToRender.push({
+                    key: 'bar-2h',
+                    candle: c2,
+                    badgeLabel: '2h',
+                    badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
+                    subHour: c2.shortHour,
+                    isLive: false,
+                    isDaily: false,
+                  });
+                }
+
+                // 3. 3h (hace 3 horas)
+                if (fourHourData.candles.length >= 3) {
+                  const c3 = fourHourData.candles[fourHourData.candles.length - 3];
+                  barsToRender.push({
+                    key: 'bar-3h',
+                    candle: c3,
+                    badgeLabel: '3h',
+                    badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
+                    subHour: c3.shortHour,
+                    isLive: false,
+                    isDaily: false,
+                  });
+                }
+
+                // 4. 4h (hace 4 horas)
+                if (fourHourData.candles.length >= 4) {
+                  const c4 = fourHourData.candles[fourHourData.candles.length - 4];
+                  barsToRender.push({
+                    key: 'bar-4h',
+                    candle: c4,
+                    badgeLabel: '4h',
+                    badgeClass: 'bg-neutral-800 text-neutral-300 border border-neutral-700',
+                    subHour: c4.shortHour,
+                    isLive: false,
+                    isDaily: false,
+                  });
+                }
+              }
+
+              // 5. Diario (vela de hoy completa)
+              if (fourHourData.dailyCandle) {
+                barsToRender.push({
+                  key: 'bar-daily',
+                  candle: fourHourData.dailyCandle,
+                  badgeLabel: 'Diario',
+                  badgeClass: 'bg-indigo-950 text-indigo-300 border border-indigo-600/80 shadow-xs font-black',
+                  subHour: fourHourData.dailyCandle.shortHour || 'Hoy',
+                  isLive: false,
+                  isDaily: true,
+                });
+              }
+
+              return barsToRender.map((item) => {
+                const { candle, badgeLabel, badgeClass, subHour, isLive, isDaily, key } = item;
+                const openPos = getTrackPos(candle.open);
+                const closePos = getTrackPos(candle.close);
+                const lowPos = getTrackPos(candle.low);
+                const highPos = getTrackPos(candle.high);
+                const isBull = candle.isBullish;
+                const barLeft = Math.min(openPos, closePos);
+                const barWidth = Math.max(1.8, Math.abs(closePos - openPos));
+                const wickLeft = Math.min(lowPos, highPos);
+                const wickWidth = Math.max(1, Math.abs(highPos - lowPos));
+
+                return (
+                  <div
+                    key={key}
+                    className={`rounded-lg p-1.5 border transition-all ${
+                      isLive
+                        ? 'bg-neutral-900/85 border-cyan-700/60 ring-1 ring-cyan-500/20'
+                        : isDaily
+                        ? 'bg-indigo-950/20 border-indigo-800/60 hover:border-indigo-600/80'
+                        : 'bg-neutral-900/40 border-neutral-800/70 hover:border-neutral-700'
+                    }`}
+                  >
+                    {/* Fila informativa: etiqueta, hora, donde empezó y donde terminó */}
+                    <div className="flex items-center justify-between text-[9px] mb-1 px-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span
+                          className={`px-1.5 py-0.2 rounded font-extrabold text-[8px] uppercase tracking-wider ${badgeClass}`}
                         >
-                          {fmtPrice(candle.close)}
-                        </strong>
-                      </span>
+                          {badgeLabel}
+                        </span>
+                        <span className="text-neutral-400 font-mono text-[8px]">({subHour})</span>
+
+                        <span className="text-neutral-400 font-mono">
+                          Empezó:{' '}
+                          <strong className="text-amber-300 font-black">{fmtPrice(candle.open)}</strong>
+                        </span>
+                        <span className="text-neutral-600 font-bold">➔</span>
+                        <span className="text-neutral-400 font-mono">
+                          Terminó:{' '}
+                          <strong
+                            className={`font-black ${isBull ? 'text-emerald-300' : 'text-rose-300'}`}
+                          >
+                            {fmtPrice(candle.close)}
+                          </strong>
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`px-1.5 py-0.2 rounded font-black text-[9px] ${
+                            isBull
+                              ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/60'
+                              : 'bg-rose-950/90 text-rose-400 border border-rose-800/60'
+                          }`}
+                        >
+                          {isBull ? '▲ +' : '▼ '}
+                          {candle.changePct.toFixed(2)}%
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`px-1.5 py-0.2 rounded font-black text-[9px] ${
-                          isBull
-                            ? 'bg-emerald-950/90 text-emerald-400 border border-emerald-800/60'
-                            : 'bg-rose-950/90 text-rose-400 border border-rose-800/60'
-                        }`}
-                      >
-                        {isBull ? '▲ +' : '▼ '}
-                        {candle.changePct.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Pista horizontal con escala compartida para la mini-barra */}
-                  <div className="relative w-full h-5 bg-neutral-950/90 rounded border border-neutral-800/90 flex items-center overflow-hidden">
-                    {/* Guía vertical del precio Live */}
-                    <div
-                      className="absolute top-0 bottom-0 w-px bg-cyan-400/50 z-20 pointer-events-none"
-                      style={{ left: `${livePosPct}%` }}
-                      title={`Live actual: ${fmtPrice(livePrice)}`}
-                    />
-
-                    {/* Guía vertical de precio de entrada real si existe */}
-                    {entryP > 0 && (
+                    {/* Pista horizontal con escala compartida para la mini-barra */}
+                    <div className="relative w-full h-5 bg-neutral-950/90 rounded border border-neutral-800/90 flex items-center overflow-hidden">
+                      {/* Guía vertical del precio Live */}
                       <div
-                        className="absolute top-0 bottom-0 w-px bg-sky-400/40 z-10 pointer-events-none border-r border-dashed border-sky-400/60"
-                        style={{ left: `${getTrackPos(entryP)}%` }}
-                        title={`Precio de Entrada: ${fmtPrice(entryP)}`}
+                        className="absolute top-0 bottom-0 w-px bg-cyan-400/50 z-20 pointer-events-none"
+                        style={{ left: `${livePosPct}%` }}
+                        title={`Live actual: ${fmtPrice(livePrice)}`}
                       />
-                    )}
 
-                    {/* Mecha de rango total de la hora (Mínimo a Máximo) */}
-                    <div
-                      className="absolute h-0.5 bg-neutral-600/70 rounded-full pointer-events-none"
-                      style={{ left: `${wickLeft}%`, width: `${wickWidth}%` }}
-                      title={`Rango H: ${fmtPrice(candle.low)} ↔ ${fmtPrice(candle.high)}`}
-                    />
+                      {/* Guía vertical de precio de entrada real si existe */}
+                      {entryP > 0 && (
+                        <div
+                          className="absolute top-0 bottom-0 w-px bg-sky-400/40 z-10 pointer-events-none border-r border-dashed border-sky-400/60"
+                          style={{ left: `${getTrackPos(entryP)}%` }}
+                          title={`Precio de Entrada: ${fmtPrice(entryP)}`}
+                        />
+                      )}
 
-                    {/* Mini-Barra horaria de Apertura a Cierre */}
-                    <div
-                      className={`absolute h-3 rounded flex items-center justify-center transition-all shadow-sm ${
-                        isBull
-                          ? 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 border border-emerald-300/80 shadow-[0_0_8px_rgba(52,211,153,0.35)]'
-                          : 'bg-gradient-to-r from-rose-600 via-rose-500 to-rose-400 border border-rose-300/80 shadow-[0_0_8px_rgba(244,63,94,0.35)]'
-                      }`}
-                      style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
-                      title={`${candle.label} (${candle.shortHour}): Empezó en ${fmtPrice(candle.open)} ➔ Terminó en ${fmtPrice(candle.close)} (${fmtPct(candle.changePct)})`}
-                    >
-                      {/* Flecha de dirección de la mini-barra */}
-                      <span className="text-[8px] font-black text-black select-none pointer-events-none opacity-90 leading-none">
-                        {isBull ? '▶' : '◀'}
-                      </span>
-                    </div>
+                      {/* Mecha de rango total (Mínimo a Máximo) */}
+                      <div
+                        className="absolute h-0.5 bg-neutral-600/70 rounded-full pointer-events-none"
+                        style={{ left: `${wickLeft}%`, width: `${wickWidth}%` }}
+                        title={`Rango ${badgeLabel}: ${fmtPrice(candle.low)} ↔ ${fmtPrice(candle.high)}`}
+                      />
 
-                    {/* Marcador de INICIO (Donde empezó) */}
-                    <div
-                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-amber-400 border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none"
-                      style={{ left: `${openPos}%` }}
-                      title={`Empezó en ${fmtPrice(candle.open)}`}
-                    >
-                      <div className="w-1 h-1 rounded-full bg-amber-950" />
-                    </div>
+                      {/* Mini-Barra horaria/diaria de Apertura a Cierre */}
+                      <div
+                        className={`absolute h-3 rounded flex items-center justify-center transition-all shadow-sm ${
+                          isBull
+                            ? 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-emerald-400 border border-emerald-300/80 shadow-[0_0_8px_rgba(52,211,153,0.35)]'
+                            : 'bg-gradient-to-r from-rose-600 via-rose-500 to-rose-400 border border-rose-300/80 shadow-[0_0_8px_rgba(244,63,94,0.35)]'
+                        }`}
+                        style={{ left: `${barLeft}%`, width: `${barWidth}%` }}
+                        title={`${badgeLabel} (${subHour}): Empezó en ${fmtPrice(candle.open)} ➔ Terminó en ${fmtPrice(candle.close)} (${fmtPct(candle.changePct)})`}
+                      >
+                        {/* Flecha de dirección de la mini-barra */}
+                        <span className="text-[8px] font-black text-black select-none pointer-events-none opacity-90 leading-none">
+                          {isBull ? '▶' : '◀'}
+                        </span>
+                      </div>
 
-                    {/* Marcador de FIN (Donde terminó) */}
-                    <div
-                      className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none ${
-                        isBull ? 'bg-emerald-400' : 'bg-rose-400'
-                      }`}
-                      style={{ left: `${closePos}%` }}
-                      title={`Terminó en ${fmtPrice(candle.close)}`}
-                    >
-                      <div className="w-1 h-1 rounded-full bg-black" />
+                      {/* Marcador de INICIO (Donde empezó) */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-amber-400 border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none"
+                        style={{ left: `${openPos}%` }}
+                        title={`Empezó en ${fmtPrice(candle.open)}`}
+                      >
+                        <div className="w-1 h-1 rounded-full bg-amber-950" />
+                      </div>
+
+                      {/* Marcador de FIN (Donde terminó) */}
+                      <div
+                        className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full border border-white shadow-xs z-30 flex items-center justify-center pointer-events-none ${
+                          isBull ? 'bg-emerald-400' : 'bg-rose-400'
+                        }`}
+                        style={{ left: `${closePos}%` }}
+                        title={`Terminó en ${fmtPrice(candle.close)}`}
+                      >
+                        <div className="w-1 h-1 rounded-full bg-black" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
         </div>
       )}
