@@ -26,8 +26,9 @@ import { notificationService } from '../services/notifications';
 import { NetworkMode } from '../types/binance';
 import { SecurityBadge } from './SecurityBadge';
 import { useTheme } from '../context/ThemeContext';
+import { MarketSessionClocks } from './MarketSessionClocks';
 
-export type NavTab = 'billetera' | 'mercados' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros';
+export type NavTab = 'billetera' | 'mercados' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros' | 'day-trading';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -230,7 +231,30 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Zap className={`w-3.5 h-3.5 ${activeTab === 'futuros' ? 'text-amber-400' : 'text-neutral-500'}`} />
           <span>Futuros</span>
         </button>
+
+        {/* Tab 6: Day Trading (5m / 15m) */}
+        <button
+          type="button"
+          id="nav-tab-day-trading"
+          onClick={() => onSelectTab('day-trading')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'day-trading'
+              ? 'bg-neutral-800 text-amber-300 font-bold shadow-xs'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <Activity className={`w-3.5 h-3.5 ${activeTab === 'day-trading' ? 'text-amber-400 animate-pulse' : 'text-neutral-500'}`} />
+          <span>Day Trading</span>
+          <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+            5m/15m
+          </span>
+        </button>
       </nav>
+
+      {/* 2.5 Live Market Session Clocks (NY & London/Asia) */}
+      <div className="hidden xl:flex items-center shrink-0">
+        <MarketSessionClocks />
+      </div>
 
       {/* 3. Right: Sello de Seguridad Transparente & Acciones Rápidas */}
       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">

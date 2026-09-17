@@ -12,6 +12,7 @@ import { WalletView } from './WalletView';
 import { TopOperacionesView } from './TopOperacionesView';
 import { GestionTradesView } from './GestionTradesView';
 import { MarketsView } from './MarketsView';
+import { DayTradingView } from './DayTradingView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 import { PnlSimulatorModal } from './PnlSimulatorModal';
 import { ConsolidatedNotificationsModal } from './ConsolidatedNotificationsModal';
@@ -120,6 +121,20 @@ export default function TerminalLayout() {
         <div className="w-full h-full p-2 sm:p-4 lg:p-6 overflow-y-auto">
           <TopOperacionesView
             onOpenOrderModal={() => setIsOrderModalOpen(true)}
+            onNavigateToFutures={() => setActiveTab('futuros')}
+            onNavigateToGestionTrades={() => setActiveTab('gestion-trades')}
+          />
+        </div>
+      )}
+
+      {/* 7. Pestaña: Day Trading (5m / 15m Confluencia Múltiple) */}
+      {activeTab === 'day-trading' && (
+        <div className="w-full h-full p-2 sm:p-4 lg:p-6 overflow-y-auto">
+          <DayTradingView
+            onOpenOrderModal={(sym) => {
+              if (sym) binanceWs.setSymbol(sym);
+              setIsOrderModalOpen(true);
+            }}
             onNavigateToFutures={() => setActiveTab('futuros')}
             onNavigateToGestionTrades={() => setActiveTab('gestion-trades')}
           />

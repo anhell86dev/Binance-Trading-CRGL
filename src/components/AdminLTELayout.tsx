@@ -42,6 +42,7 @@ import { NetworkMode } from '../types/binance';
 import { SecurityBadge } from './SecurityBadge';
 import { useTheme } from '../context/ThemeContext';
 import { NavTab } from './Navbar';
+import { MarketSessionClocks } from './MarketSessionClocks';
 
 interface MenuItem {
   id: string;
@@ -260,6 +261,16 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
           category: 'Prioridades',
           description: 'Ranking de operaciones con mejor ratio Riesgo:Beneficio',
         },
+        {
+          id: 'day-trading' as NavTab,
+          label: 'Day Trading (5m / 15m)',
+          shortLabel: 'Day Trading',
+          icon: Zap,
+          badge: 'CONFLUENCIA',
+          badgeColor: 'bg-amber-500 text-neutral-950 font-bold',
+          category: 'Intradía',
+          description: 'Confirmación múltiple: EMA 15m, MACD 5m, RSI 5m y Ruptura de Volumen',
+        },
       ],
     },
     {
@@ -377,6 +388,12 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
           title: 'Plan de Trabajo (Top R:B)',
           subtitle: 'Operaciones de alta confluencia ordenadas por mejor ratio Riesgo:Beneficio',
           breadcrumb: ['Inicio', 'Planificación', 'Top Operaciones'],
+        };
+      case 'day-trading':
+        return {
+          title: 'Day Trading (5m & 15m)',
+          subtitle: 'Sistema intradiario de confirmación múltiple: EMA 15m, MACD 5m, RSI 5m y Ruptura de Volumen',
+          breadcrumb: ['Inicio', 'Estrategias', 'Day Trading'],
         };
       default:
         return {
@@ -648,6 +665,13 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
               >
                 Estrategias
               </button>
+              <button
+                type="button"
+                onClick={() => onSelectTab('day-trading')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${activeTab === 'day-trading' ? 'bg-neutral-800 text-amber-400 font-bold' : 'text-neutral-300 hover:text-white hover:bg-neutral-800/60'}`}
+              >
+                Day Trading
+              </button>
             </nav>
 
             {/* Network Mode Badge with dropdown */}
@@ -703,6 +727,11 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Center / Sticky Market Session Clocks (NY & London/Asia) */}
+          <div className="flex items-center shrink-0">
+            <MarketSessionClocks />
           </div>
 
           {/* Right navbar controls */}
