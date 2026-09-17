@@ -357,18 +357,21 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
 
       {/* Tab 2: Órdenes Abiertas */}
       {tab === 'orders' && (() => {
-        const conditionalOrders = orders.filter(ord =>
-          ord.type === 'STOP_MARKET' ||
-          (ord.type as string) === 'STOP' ||
-          ord.type === 'TAKE_PROFIT_MARKET' ||
-          (ord.type as string) === 'TAKE_PROFIT' ||
-          ord.type === 'TRAILING_STOP_MARKET' ||
-          ord.clientOrderId?.includes('TP-') ||
-          ord.clientOrderId?.includes('SL-') ||
-          ord.clientOrderId?.includes('CLS-') ||
-          Boolean((ord as any).reduceOnly) ||
-          (ord.stopPrice && ord.stopPrice > 0)
-        );
+        const conditionalOrders = orders.filter(ord => {
+          const typeStr = String(ord.type || '').toUpperCase();
+          const clientOrderId = String(ord.clientOrderId || '').toUpperCase();
+          return (
+            typeStr.includes('STOP') ||
+            typeStr.includes('TAKE_PROFIT') ||
+            typeStr.includes('TRAILING') ||
+            clientOrderId.includes('TP-') ||
+            clientOrderId.includes('SL-') ||
+            clientOrderId.includes('CLS-') ||
+            Boolean((ord as any).reduceOnly) ||
+            Boolean(ord.isReduceOnly) ||
+            (ord.stopPrice && ord.stopPrice > 0)
+          );
+        });
         const limitOrders = orders.filter(ord => !conditionalOrders.includes(ord));
 
         const displayedOrders = orderFilter === 'limit'
@@ -488,18 +491,26 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
                   </thead>
                   <tbody className="divide-y divide-neutral-800/60">
                     {displayedOrders.map(ord => {
+                      const typeUpper = String(ord.type || '').toUpperCase();
+                      const clientOrderIdUpper = String(ord.clientOrderId || '').toUpperCase();
+
                       const isTP =
-                        ord.type === 'TAKE_PROFIT_MARKET' ||
-                        (ord.type as string) === 'TAKE_PROFIT' ||
-                        ord.clientOrderId?.includes('TP-');
+                        typeUpper.includes('TAKE_PROFIT') ||
+                        clientOrderIdUpper.includes('TP-') ||
+                        clientOrderIdUpper.includes('TAKE_PROFIT');
 
                       const isSL =
-                        ord.type === 'STOP_MARKET' ||
-                        (ord.type as string) === 'STOP' ||
-                        ord.clientOrderId?.includes('SL-');
+                        typeUpper.includes('STOP_LOSS') ||
+                        typeUpper.includes('STOP') ||
+                        clientOrderIdUpper.includes('SL-') ||
+                        clientOrderIdUpper.includes('STOP_LOSS') ||
+                        clientOrderIdUpper.includes('STOP');
 
-                      const isTrailing = ord.type === 'TRAILING_STOP_MARKET';
-                      const isLiquidation = ord.type === 'LIQUIDATION' || ord.clientOrderId?.startsWith('autoclose-') || ord.clientOrderId === 'adl_autoclose';
+                      const isTrailing = typeUpper.includes('TRAILING');
+                      const isLiquidation =
+                        typeUpper === 'LIQUIDATION' ||
+                        clientOrderIdUpper.startsWith('AUTOCLOSE-') ||
+                        clientOrderIdUpper === 'ADL_AUTOCLOSE';
                       const isConditional = isTP || isSL || isTrailing || (ord.stopPrice && ord.stopPrice > 0);
                       const isProtective = isConditional || Boolean(ord.isReduceOnly) || Boolean((ord as any).reduceOnly);
 

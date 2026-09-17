@@ -71,7 +71,14 @@ export function getPositionEffectiveTPSL(pos: PositionRisk, openOrders: OpenOrde
     const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
     if (!isCloseSide) return false;
     const typeStr = String(o.type || '').toUpperCase();
-    if (typeStr.includes('TAKE_PROFIT') || o.clientOrderId?.includes('TP-')) return true;
+    const clientOrderId = String(o.clientOrderId || '').toUpperCase();
+    if (
+      typeStr.includes('TAKE_PROFIT') ||
+      clientOrderId.includes('TP-') ||
+      clientOrderId.includes('TAKE_PROFIT')
+    ) {
+      return true;
+    }
     const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
     return trig > 0 && (isLong ? trig > pos.entryPrice : trig < pos.entryPrice);
   });
@@ -80,7 +87,16 @@ export function getPositionEffectiveTPSL(pos: PositionRisk, openOrders: OpenOrde
     const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
     if (!isCloseSide) return false;
     const typeStr = String(o.type || '').toUpperCase();
-    if (typeStr.includes('STOP') || o.clientOrderId?.includes('SL-')) return true;
+    const clientOrderId = String(o.clientOrderId || '').toUpperCase();
+    if (
+      typeStr.includes('STOP_LOSS') ||
+      typeStr.includes('STOP') ||
+      clientOrderId.includes('SL-') ||
+      clientOrderId.includes('STOP_LOSS') ||
+      clientOrderId.includes('STOP')
+    ) {
+      return true;
+    }
     const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
     return trig > 0 && (isLong ? trig < pos.entryPrice : trig > pos.entryPrice);
   });

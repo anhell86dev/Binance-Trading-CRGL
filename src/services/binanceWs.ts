@@ -49,6 +49,7 @@ import { alertsSheetService } from './alertsSheetService';
 import { ordersSheetService } from './ordersSheetService';
 import { normalizeBinanceSymbol } from '../data/binancePairs';
 import { binanceFetch } from '../utils/binanceInterceptor';
+import { classifyBinanceOrder } from '../utils/orderClassifier';
 
 export const BINANCE_ENDPOINTS = {
   production: {
@@ -152,6 +153,7 @@ class BinanceWsEngine {
   private linkedStrategiesBySymbol: Record<string, { strategyId?: string; strategyName?: string }> = {};
   private alerts: VolatilityAlert[] = [];
   private wsLogs: WsLogFrame[] = [];
+  private orderProximityAlertCooldowns: Map<string, number> = new Map();
 
   // Production Real-Balance & Account Data Sync state
   private lastBalanceSyncTime: number = 0;
@@ -2110,6 +2112,107 @@ class BinanceWsEngine {
         }
       });
     }
+
+    // 4. Proximity Alert Check: Compare Live Price vs stopPrice / price of open orders (SL, TP, Limit)
+    // Triggers notification if |livePrice - targetPrice| / targetPrice < 0.5% (0.005)
+    this.checkOrderProximityAlerts(newPrice);
+  }
+
+  /**
+   * Evaluates proximity of the live ticker price against all open orders (SL, TP, and Limit)
+   * If live price is within 0.5% of the activation price, sends a high-priority alert.
+   */
+  private checkOrderProximityAlerts(livePrice: number) {
+    if (!livePrice || livePrice <= 0 || !this.openOrders || this.openOrders.length === 0) return;
+
+    const now = Date.now();
+    const currentSymbol = this.ticker.symbol;
+    const PROXIMITY_THRESHOLD = 0.005; // 0.5%
+    const COOLDOWN_MS = 60000; // 60s cooldown per order to prevent spamming while price hovers near trigger
+
+    this.openOrders.forEach(order => {
+      // Only check orders matching the current ticker symbol
+      if (order.symbol && currentSymbol && order.symbol !== currentSymbol) {
+        return;
+      }
+
+      const classified = classifyBinanceOrder(order, livePrice);
+      const targetPrice = classified.effectivePrice;
+
+      if (!targetPrice || targetPrice <= 0) return;
+
+      const diffPct = Math.abs(livePrice - targetPrice) / targetPrice;
+
+      if (diffPct <= PROXIMITY_THRESHOLD) {
+        const orderKey = `${order.symbol || currentSymbol}_${order.orderId || order.clientOrderId || targetPrice}_${classified.category}`;
+        const lastAlertTime = this.orderProximityAlertCooldowns.get(orderKey) || 0;
+
+        if (now - lastAlertTime > COOLDOWN_MS) {
+          this.orderProximityAlertCooldowns.set(orderKey, now);
+
+          const distancePctStr = (diffPct * 100).toFixed(2);
+          const priceFmt = targetPrice.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: targetPrice < 1 ? 4 : 2,
+          });
+          const liveFmt = livePrice.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: livePrice < 1 ? 4 : 2,
+          });
+
+          if (classified.isStopLoss) {
+            notificationService.notify(
+              'SL_HIT',
+              `⚠️ Stop Loss Cercano (${distancePctStr}%)`,
+              `${order.symbol || currentSymbol}: El precio LIVE ($${liveFmt}) está a solo ${distancePctStr}% de activar tu Stop Loss ($${priceFmt})!`,
+              'urgent',
+              {
+                symbol: order.symbol || currentSymbol,
+                price: targetPrice,
+                side: order.side,
+              }
+            );
+          } else if (classified.isTakeProfit) {
+            notificationService.notify(
+              'TP_HIT',
+              `🎯 Take Profit Cercano (${distancePctStr}%)`,
+              `${order.symbol || currentSymbol}: ¡El precio LIVE ($${liveFmt}) está a solo ${distancePctStr}% de alcanzar tu Take Profit ($${priceFmt})!`,
+              'high',
+              {
+                symbol: order.symbol || currentSymbol,
+                price: targetPrice,
+                side: order.side,
+              }
+            );
+          } else if (classified.isLimit) {
+            notificationService.notify(
+              'VOLATILITY',
+              `🔔 Orden Limit Próxima (${distancePctStr}%)`,
+              `${order.symbol || currentSymbol}: Orden Limit de ${order.side} ($${priceFmt}) a un ${distancePctStr}% del precio actual ($${liveFmt}).`,
+              'high',
+              {
+                symbol: order.symbol || currentSymbol,
+                price: targetPrice,
+                side: order.side,
+              }
+            );
+          } else {
+            // Other conditional or stop orders
+            notificationService.notify(
+              'VOLATILITY',
+              `📌 Orden Próxima a Activación (${distancePctStr}%)`,
+              `${order.symbol || currentSymbol}: Orden ${order.type} ($${priceFmt}) a ${distancePctStr}% del precio LIVE ($${liveFmt}).`,
+              'normal',
+              {
+                symbol: order.symbol || currentSymbol,
+                price: targetPrice,
+                side: order.side,
+              }
+            );
+          }
+        }
+      }
+    });
   }
 
   private executeOrderFill(order: OpenOrder, fillPrice: number) {
@@ -2275,6 +2378,7 @@ class BinanceWsEngine {
 
   /**
    * Synchronizes positions with active Take Profit and Stop Loss conditional orders
+   * Recognizes STOP_LOSS, STOP_LOSS_LIMIT, STOP_MARKET, TAKE_PROFIT, TAKE_PROFIT_LIMIT, TAKE_PROFIT_MARKET
    */
   public syncPositionsWithConditionalOrders() {
     if (!this.positions || this.positions.length === 0) return;
@@ -2291,7 +2395,11 @@ class BinanceWsEngine {
         const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
         if (!isCloseSide) return false;
         const typeStr = String(o.type || '').toUpperCase();
-        const isTpType = typeStr.includes('TAKE_PROFIT') || (o.clientOrderId && o.clientOrderId.includes('TP-'));
+        const clientOrderId = String(o.clientOrderId || '').toUpperCase();
+        const isTpType =
+          typeStr.includes('TAKE_PROFIT') ||
+          clientOrderId.includes('TP-') ||
+          clientOrderId.includes('TAKE_PROFIT');
         if (isTpType) return true;
         const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
         if (trig > 0 && pos.entryPrice > 0) {
@@ -2305,7 +2413,13 @@ class BinanceWsEngine {
         const isCloseSide = isLong ? o.side === 'SELL' : o.side === 'BUY';
         if (!isCloseSide) return false;
         const typeStr = String(o.type || '').toUpperCase();
-        const isSlType = typeStr.includes('STOP') || (o.clientOrderId && o.clientOrderId.includes('SL-'));
+        const clientOrderId = String(o.clientOrderId || '').toUpperCase();
+        const isSlType =
+          typeStr.includes('STOP_LOSS') ||
+          typeStr.includes('STOP') ||
+          clientOrderId.includes('SL-') ||
+          clientOrderId.includes('STOP_LOSS') ||
+          clientOrderId.includes('STOP');
         if (isSlType) return true;
         const trig = o.stopPrice && o.stopPrice > 0 ? o.stopPrice : 0;
         if (trig > 0 && pos.entryPrice > 0) {
@@ -2523,6 +2637,7 @@ class BinanceWsEngine {
           symbol: o.symbol,
           status: o.status,
           price: o.price.toString(),
+          stopPrice: (o.stopPrice || 0).toString(),
           origQty: o.origQty.toString(),
           executedQty: o.executedQty.toString(),
           type: o.type,
@@ -2530,6 +2645,8 @@ class BinanceWsEngine {
           time: o.createdAt,
           updateTime: o.createdAt,
           timeInForce: o.timeInForce,
+          reduceOnly: Boolean(o.isReduceOnly),
+          closePosition: Boolean(o.isCloseAll),
         })),
       };
     }
@@ -3698,26 +3815,54 @@ class BinanceWsEngine {
   }
 
   /**
-   * REST fallback for fetching USDⓈ-M Futures open orders
+   * REST fallback for fetching open orders (Futures USDⓈ-M and Spot)
+   * Spot: GET /api/v3/openOrders
+   * Futures USD-M: GET /fapi/v1/openOrders
    */
   private async fetchRestOpenOrders(): Promise<any> {
-    const restUrl =
-      this.mode === 'testnet' ? BINANCE_ENDPOINTS.testnet.rest : BINANCE_ENDPOINTS.production.rest;
     const timestamp = getUtcTimestamp();
     const params: Record<string, any> = { recvWindow: 60000, timestamp };
     const queryString = buildCanonicalQueryString(params);
     const signature = await signHmacSha256(queryString, this.credentials.apiSecret);
-    const fullUrl = `${restUrl}/fapi/v1/openOrders?${queryString}&signature=${signature}`;
 
-    const res = await fetch(fullUrl, {
-      method: 'GET',
-      headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
-    });
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.msg || `HTTP ${res.status}`);
+    const restOrders: any[] = [];
+
+    // 1. Fetch USD-M Futures open orders: GET /fapi/v1/openOrders
+    try {
+      const restUrl =
+        this.mode === 'testnet' ? BINANCE_ENDPOINTS.testnet.rest : BINANCE_ENDPOINTS.production.rest;
+      const fullFuturesUrl = `${restUrl}/fapi/v1/openOrders?${queryString}&signature=${signature}`;
+      const res = await fetch(fullFuturesUrl, {
+        method: 'GET',
+        headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          restOrders.push(...data);
+        }
+      }
+    } catch {}
+
+    // 2. Fetch Spot open orders if production: GET /api/v3/openOrders
+    if (this.mode === 'production') {
+      try {
+        const spotBaseUrl = 'https://api.binance.com';
+        const fullSpotUrl = `${spotBaseUrl}/api/v3/openOrders?${queryString}&signature=${signature}`;
+        const resSpot = await fetch(fullSpotUrl, {
+          method: 'GET',
+          headers: { 'X-MBX-APIKEY': this.credentials.apiKey },
+        });
+        if (resSpot.ok) {
+          const spotData = await resSpot.json();
+          if (Array.isArray(spotData)) {
+            restOrders.push(...spotData);
+          }
+        }
+      } catch {}
     }
-    return await res.json();
+
+    return restOrders;
   }
 
   /**

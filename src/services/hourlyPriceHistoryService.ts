@@ -24,6 +24,8 @@ export interface HourlyCandle {
 export interface FourHourPriceMovement {
   symbol: string;
   candles: HourlyCandle[]; // Exactly 4 hourly intervals
+  candle5m?: HourlyCandle; // Current / recent 5-minute candle
+  candle15m?: HourlyCandle; // Current / recent 15-minute candle
   dailyCandle?: HourlyCandle; // Current daily candle (1D)
   min4h: number;
   max4h: number;
@@ -132,9 +134,46 @@ export function createSynthetic4HMovement(symbol: string, basePrice: number): Fo
     isDaily: true,
   };
 
+  // Synthetic 5M and 15M candles
+  const open5m = p * (1 - 0.0018);
+  const close5m = basePrice > 0 ? basePrice : p;
+  const candle5m: HourlyCandle = {
+    openTime: now - 5 * 60000,
+    closeTime: now,
+    open: open5m,
+    high: Math.max(open5m, close5m) * 1.001,
+    low: Math.min(open5m, close5m) * 0.999,
+    close: close5m,
+    volume: 2500,
+    changePct: open5m > 0 ? ((close5m - open5m) / open5m) * 100 : 0,
+    isBullish: close5m >= open5m,
+    label: '5M',
+    shortHour: formatHour(now - 5 * 60000),
+    isDaily: false,
+  };
+
+  const open15m = p * (1 - 0.0035);
+  const close15m = basePrice > 0 ? basePrice : p;
+  const candle15m: HourlyCandle = {
+    openTime: now - 15 * 60000,
+    closeTime: now,
+    open: open15m,
+    high: Math.max(open15m, close15m) * 1.002,
+    low: Math.min(open15m, close15m) * 0.998,
+    close: close15m,
+    volume: 7200,
+    changePct: open15m > 0 ? ((close15m - open15m) / open15m) * 100 : 0,
+    isBullish: close15m >= open15m,
+    label: '15M',
+    shortHour: formatHour(now - 15 * 60000),
+    isDaily: false,
+  };
+
   return {
     symbol,
     candles,
+    candle5m,
+    candle15m,
     dailyCandle,
     min4h,
     max4h,
@@ -182,6 +221,24 @@ export async function fetch4HourPriceMovement(
         updatedDaily.isBullish = updatedDaily.close >= updatedDaily.open;
       }
 
+      let updated5m = cached.data.candle5m ? { ...cached.data.candle5m } : undefined;
+      if (updated5m) {
+        updated5m.close = livePrice;
+        updated5m.high = Math.max(updated5m.high, livePrice);
+        updated5m.low = Math.min(updated5m.low, livePrice);
+        updated5m.changePct = updated5m.open > 0 ? ((livePrice - updated5m.open) / updated5m.open) * 100 : 0;
+        updated5m.isBullish = updated5m.close >= updated5m.open;
+      }
+
+      let updated15m = cached.data.candle15m ? { ...cached.data.candle15m } : undefined;
+      if (updated15m) {
+        updated15m.close = livePrice;
+        updated15m.high = Math.max(updated15m.high, livePrice);
+        updated15m.low = Math.min(updated15m.low, livePrice);
+        updated15m.changePct = updated15m.open > 0 ? ((livePrice - updated15m.open) / updated15m.open) * 100 : 0;
+        updated15m.isBullish = updated15m.close >= updated15m.open;
+      }
+
       const min4h = Math.min(...updatedCandles.map((c) => c.low));
       const max4h = Math.max(...updatedCandles.map((c) => c.high));
       const netChange = livePrice - updatedCandles[0].open;
@@ -190,6 +247,8 @@ export async function fetch4HourPriceMovement(
       return {
         ...cached.data,
         candles: updatedCandles,
+        candle5m: updated5m,
+        candle15m: updated15m,
         dailyCandle: updatedDaily,
         endPrice: livePrice,
         min4h,
@@ -222,8 +281,22 @@ export async function fetch4HourPriceMovement(
         `https://data-api.binance.vision/api/v3/klines?symbol=${cleanSymbol}&interval=1d&limit=2`,
       ];
 
+      const urls5m = [
+        `https://fapi.binance.com/fapi/v1/klines?symbol=${cleanSymbol}&interval=5m&limit=2`,
+        `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=5m&limit=2`,
+        `https://data-api.binance.vision/api/v3/klines?symbol=${cleanSymbol}&interval=5m&limit=2`,
+      ];
+
+      const urls15m = [
+        `https://fapi.binance.com/fapi/v1/klines?symbol=${cleanSymbol}&interval=15m&limit=2`,
+        `https://api.binance.com/api/v3/klines?symbol=${cleanSymbol}&interval=15m&limit=2`,
+        `https://data-api.binance.vision/api/v3/klines?symbol=${cleanSymbol}&interval=15m&limit=2`,
+      ];
+
       let rawKlines: any[] | null = null;
       let raw1dKlines: any[] | null = null;
+      let raw5mKlines: any[] | null = null;
+      let raw15mKlines: any[] | null = null;
 
       // Fetch 1h klines
       for (const url of urls1h) {
@@ -255,6 +328,34 @@ export async function fetch4HourPriceMovement(
         } catch {
           // Continue
         }
+      }
+
+      // Fetch 5m klines
+      for (const url5 of urls5m) {
+        try {
+          const res5 = await binanceFetch(url5);
+          if (res5 && res5.ok) {
+            const d5 = await res5.json();
+            if (Array.isArray(d5) && d5.length >= 1) {
+              raw5mKlines = d5;
+              break;
+            }
+          }
+        } catch {}
+      }
+
+      // Fetch 15m klines
+      for (const url15 of urls15m) {
+        try {
+          const res15 = await binanceFetch(url15);
+          if (res15 && res15.ok) {
+            const d15 = await res15.json();
+            if (Array.isArray(d15) && d15.length >= 1) {
+              raw15mKlines = d15;
+              break;
+            }
+          }
+        } catch {}
       }
 
       if (!rawKlines || rawKlines.length < 3) {
@@ -373,9 +474,103 @@ export async function fetch4HourPriceMovement(
         };
       }
 
+      // 5M candle processing
+      let candle5m: HourlyCandle;
+      if (raw5mKlines && raw5mKlines.length > 0) {
+        const raw5 = raw5mKlines[raw5mKlines.length - 1];
+        const open5 = parseFloat(raw5[1]);
+        let high5 = parseFloat(raw5[2]);
+        let low5 = parseFloat(raw5[3]);
+        let close5 = parseFloat(raw5[4]);
+        if (livePrice && livePrice > 0) {
+          close5 = livePrice;
+          high5 = Math.max(high5, livePrice);
+          low5 = Math.min(low5, livePrice);
+        }
+        candle5m = {
+          openTime: Number(raw5[0]),
+          closeTime: Number(raw5[6]) || Number(raw5[0]) + 300000,
+          open: open5,
+          high: high5,
+          low: low5,
+          close: close5,
+          volume: parseFloat(raw5[5]) || 0,
+          changePct: open5 > 0 ? ((close5 - open5) / open5) * 100 : 0,
+          isBullish: close5 >= open5,
+          label: '5M',
+          shortHour: formatHour(Number(raw5[0])),
+          isDaily: false,
+        };
+      } else {
+        const pRef = livePrice && livePrice > 0 ? livePrice : endPrice;
+        const o5 = pRef * (1 - 0.0015);
+        candle5m = {
+          openTime: now - 300000,
+          closeTime: now,
+          open: o5,
+          high: Math.max(o5, pRef) * 1.001,
+          low: Math.min(o5, pRef) * 0.999,
+          close: pRef,
+          volume: 2500,
+          changePct: o5 > 0 ? ((pRef - o5) / o5) * 100 : 0,
+          isBullish: pRef >= o5,
+          label: '5M',
+          shortHour: formatHour(now - 300000),
+          isDaily: false,
+        };
+      }
+
+      // 15M candle processing
+      let candle15m: HourlyCandle;
+      if (raw15mKlines && raw15mKlines.length > 0) {
+        const raw15 = raw15mKlines[raw15mKlines.length - 1];
+        const open15 = parseFloat(raw15[1]);
+        let high15 = parseFloat(raw15[2]);
+        let low15 = parseFloat(raw15[3]);
+        let close15 = parseFloat(raw15[4]);
+        if (livePrice && livePrice > 0) {
+          close15 = livePrice;
+          high15 = Math.max(high15, livePrice);
+          low15 = Math.min(low15, livePrice);
+        }
+        candle15m = {
+          openTime: Number(raw15[0]),
+          closeTime: Number(raw15[6]) || Number(raw15[0]) + 900000,
+          open: open15,
+          high: high15,
+          low: low15,
+          close: close15,
+          volume: parseFloat(raw15[5]) || 0,
+          changePct: open15 > 0 ? ((close15 - open15) / open15) * 100 : 0,
+          isBullish: close15 >= open15,
+          label: '15M',
+          shortHour: formatHour(Number(raw15[0])),
+          isDaily: false,
+        };
+      } else {
+        const pRef = livePrice && livePrice > 0 ? livePrice : endPrice;
+        const o15 = pRef * (1 - 0.003);
+        candle15m = {
+          openTime: now - 900000,
+          closeTime: now,
+          open: o15,
+          high: Math.max(o15, pRef) * 1.002,
+          low: Math.min(o15, pRef) * 0.998,
+          close: pRef,
+          volume: 6800,
+          changePct: o15 > 0 ? ((pRef - o15) / o15) * 100 : 0,
+          isBullish: pRef >= o15,
+          label: '15M',
+          shortHour: formatHour(now - 900000),
+          isDaily: false,
+        };
+      }
+
       const result: FourHourPriceMovement = {
         symbol: cleanSymbol,
         candles,
+        candle5m,
+        candle15m,
         dailyCandle,
         min4h,
         max4h,

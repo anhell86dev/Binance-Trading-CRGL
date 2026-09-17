@@ -1166,7 +1166,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                       </td>
                     </tr>
 
-                    {/* Subfila: Barra Horizontal de Precios (Niveles vs. Precio Live + Precio de Entrada) */}
+                    {/* Subfila: Barra Horizontal de Precios (Niveles vs. Precio Live + Precio de Entrada + Órdenes SL, TP y Limit) */}
                     <tr className="bg-neutral-950/70 border-b border-neutral-800">
                       <td colSpan={10} className="px-3 pt-1 pb-3">
                         <StrategyPriceLine
@@ -1183,6 +1183,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                           isInDangerZone={isInDangerZone}
                           isLong={isLong}
                           symbol={pos.symbol}
+                          openOrders={openOrders}
                         />
                       </td>
                     </tr>

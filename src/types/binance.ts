@@ -9,8 +9,11 @@ export type OrderType =
   | 'MARKET'
   | 'STOP'
   | 'STOP_MARKET'
+  | 'STOP_LOSS'
+  | 'STOP_LOSS_LIMIT'
   | 'TAKE_PROFIT'
   | 'TAKE_PROFIT_MARKET'
+  | 'TAKE_PROFIT_LIMIT'
   | 'TRAILING_STOP_MARKET'
   | 'LIQUIDATION'
   | 'SCALED';

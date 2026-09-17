@@ -11,6 +11,9 @@ import {
   TrendingDown,
   ChevronDown,
   ChevronUp,
+  SlidersHorizontal,
+  BookmarkCheck,
+  Shield,
 } from 'lucide-react';
 import { formatPrice as formatPriceUtil } from '../utils/priceFormatter';
 import {
@@ -18,6 +21,8 @@ import {
   createSynthetic4HMovement,
   FourHourPriceMovement,
 } from '../services/hourlyPriceHistoryService';
+import { OpenOrder } from '../types/binance';
+import { classifyBinanceOrder, ClassifiedOrder } from '../utils/orderClassifier';
 
 export interface StrategyPriceLineProps {
   livePrice: number;
@@ -38,6 +43,7 @@ export interface StrategyPriceLineProps {
   isLong?: boolean;
   symbol?: string;
   show4HourMovement?: boolean;
+  openOrders?: OpenOrder[];
 }
 
 export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
@@ -59,6 +65,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   isLong = true,
   symbol,
   show4HourMovement = true,
+  openOrders = [],
 }) => {
   // 4-Hour Movement State - initialize immediately so there is never a blank wait
   const [fourHourData, setFourHourData] = useState<FourHourPriceMovement | null>(() => {
@@ -135,17 +142,62 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
   const tp3 = tpFinalPrice && tpFinalPrice > 0 ? tpFinalPrice : 0;
   const entryP = actualEntryPrice && actualEntryPrice > 0 ? actualEntryPrice : 0;
 
+  // Classify and extract active orders (SL, TP, and LIMIT) for this symbol
+  const [showOrdersOnTrack, setShowOrdersOnTrack] = useState<boolean>(true);
+  const cleanSym = (symbol || '').replace(/[^A-Z0-9]/g, '').toUpperCase();
+  const symbolOpenOrders = openOrders.filter((o) => {
+    if (!o || o.status === 'CANCELED' || o.status === 'EXPIRED' || o.status === 'FILLED') return false;
+    const s = (o.symbol || '').replace(/[^A-Z0-9]/g, '').toUpperCase();
+    return s === cleanSym;
+  });
+
+  const classifiedOrders: ClassifiedOrder[] = symbolOpenOrders.map((o) =>
+    classifyBinanceOrder(o, entryP > 0 ? entryP : livePrice)
+  );
+
+  const activeSLOrders = classifiedOrders.filter((c) => c.isStopLoss);
+  const activeTPOrders = classifiedOrders.filter((c) => c.isTakeProfit);
+  const activeLimitOrders = classifiedOrders.filter((c) => c.isLimit);
+
+  // Proximity to open orders (SL, TP, and Limit) within 0.5%
+  const ordersNearLivePrice = livePrice > 0
+    ? classifiedOrders
+        .filter((c) => c.effectivePrice > 0)
+        .map((c) => {
+          const diffPct = Math.abs(livePrice - c.effectivePrice) / c.effectivePrice;
+          return {
+            ...c,
+            diffPct,
+            diffPctStr: (diffPct * 100).toFixed(2),
+          };
+        })
+        .filter((c) => c.diffPct <= 0.005)
+    : [];
+
   // Build levels array with distinct handling for real Entry Price vs Strategy entries
   const rawLevels: Array<{
     key: string;
     label: string;
     price: number;
-    type: 'SL' | 'ENTRY' | 'ACTUAL_ENTRY' | 'TP';
+    type: 'SL' | 'ENTRY' | 'ACTUAL_ENTRY' | 'TP' | 'LIMIT_ORDER';
     isHit?: boolean;
+    orderInfo?: ClassifiedOrder;
   }> = [];
 
+  // 1. If explicit orders exist for SL / TP, prioritize their exact activation / limit price
   if (slPrice > 0) {
     rawLevels.push({ key: 'SL', label: 'SL', price: slPrice, type: 'SL', isHit: hasHitSL });
+  } else if (activeSLOrders.length > 0) {
+    activeSLOrders.forEach((slOrd, i) => {
+      rawLevels.push({
+        key: `SL_ORD_${slOrd.order.orderId || i}`,
+        label: activeSLOrders.length > 1 ? `SL #${i + 1}` : 'SL',
+        price: slOrd.effectivePrice,
+        type: 'SL',
+        isHit: hasHitSL,
+        orderInfo: slOrd,
+      });
+    });
   }
 
   if (e3 > 0) {
@@ -179,9 +231,21 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
     rawLevels.push({ key: 'E1', label: 'E1', price: entry1Price, type: 'ENTRY' });
   }
 
+  // TP levels
   if (tp1Price > 0) {
     rawLevels.push({ key: 'TP1', label: 'TP1', price: tp1Price, type: 'TP' });
+  } else if (activeTPOrders.length > 0) {
+    activeTPOrders.forEach((tpOrd, i) => {
+      rawLevels.push({
+        key: `TP_ORD_${tpOrd.order.orderId || i}`,
+        label: activeTPOrders.length > 1 ? `TP #${i + 1}` : 'TP',
+        price: tpOrd.effectivePrice,
+        type: 'TP',
+        orderInfo: tpOrd,
+      });
+    });
   }
+
   if (tp2 > 0) {
     rawLevels.push({ key: 'TP2', label: 'TP2', price: tp2, type: 'TP' });
   }
@@ -189,10 +253,36 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
     rawLevels.push({ key: 'TP3', label: 'TP3', price: tp3, type: 'TP' });
   }
 
-  // Include 4h candles (open, close, high, low) and daily candle in the horizontal track scale
-  const candlePrices = fourHourData?.candles?.length
-    ? fourHourData.candles.flatMap((c) => [c.open, c.close, c.high, c.low])
-    : [];
+  // 2. Add open LIMIT orders onto the track if toggled
+  if (showOrdersOnTrack && activeLimitOrders.length > 0) {
+    activeLimitOrders.forEach((limOrd, i) => {
+      const p = limOrd.effectivePrice;
+      // Avoid duplicate marker if it's already an E1/E2/E3
+      const isAlreadyOnTrack = rawLevels.some((lvl) => Math.abs(lvl.price - p) / (p || 1) < 0.0005);
+      if (!isAlreadyOnTrack && p > 0) {
+        rawLevels.push({
+          key: `LIM_${limOrd.order.orderId || i}`,
+          label: `LIMIT ${limOrd.order.side === 'BUY' ? 'COMPRA' : 'VENTA'}`,
+          price: p,
+          type: 'LIMIT_ORDER',
+          orderInfo: limOrd,
+        });
+      }
+    });
+  }
+
+  // Include 4h candles (open, close, high, low), 5m, 15m and daily candle in the horizontal track scale
+  const candlePrices = [
+    ...(fourHourData?.candles?.length
+      ? fourHourData.candles.flatMap((c) => [c.open, c.close, c.high, c.low])
+      : []),
+    ...(fourHourData?.candle5m
+      ? [fourHourData.candle5m.open, fourHourData.candle5m.close, fourHourData.candle5m.high, fourHourData.candle5m.low]
+      : []),
+    ...(fourHourData?.candle15m
+      ? [fourHourData.candle15m.open, fourHourData.candle15m.close, fourHourData.candle15m.high, fourHourData.candle15m.low]
+      : []),
+  ];
 
   const dailyPrices = fourHourData?.dailyCandle
     ? [fourHourData.dailyCandle.open, fourHourData.dailyCandle.close, fourHourData.dailyCandle.high, fourHourData.dailyCandle.low]
@@ -275,7 +365,36 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
             </span>
           )}
 
-          {/* Badge Resumen 4H y Diario con botón para colapsar/expandir */}
+          {/* Badge Resumen de Órdenes Abiertas (SL, TP, LIMIT) */}
+          {symbolOpenOrders.length > 0 && (
+            <button
+              onClick={() => setShowOrdersOnTrack(!showOrdersOnTrack)}
+              className={`ml-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-mono text-[10px] font-bold cursor-pointer transition-all hover:scale-105 ${
+                showOrdersOnTrack
+                  ? 'bg-cyan-950/80 text-cyan-300 border-cyan-600/70 shadow-xs'
+                  : 'bg-neutral-900 text-neutral-400 border-neutral-700'
+              }`}
+              title="Haz clic para mostrar u ocultar la proyección de órdenes activas (SL, TP y Limit) en la barra"
+            >
+              <SlidersHorizontal className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span>Órdenes:</span>
+              {activeSLOrders.length > 0 && (
+                <span className="px-1 rounded bg-rose-900/80 text-rose-200 text-[9px] border border-rose-700/60 font-bold">
+                  {activeSLOrders.length} SL
+                </span>
+              )}
+              {activeTPOrders.length > 0 && (
+                <span className="px-1 rounded bg-emerald-900/80 text-emerald-200 text-[9px] border border-emerald-700/60 font-bold">
+                  {activeTPOrders.length} TP
+                </span>
+              )}
+              {activeLimitOrders.length > 0 && (
+                <span className="px-1 rounded bg-cyan-900/80 text-cyan-200 text-[9px] border border-cyan-700/60 font-bold">
+                  {activeLimitOrders.length} Limit
+                </span>
+              )}
+            </button>
+          )}
           {fourHourData && (
             <button
               onClick={() => setIs4hExpanded(!is4hExpanded)}
@@ -297,11 +416,37 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
               ) : (
                 <TrendingDown className="w-3 h-3 text-rose-400 shrink-0" />
               )}
+              {fourHourData.candle5m && (
+                <span
+                  className={`ml-1 px-1 rounded text-[9px] font-black ${
+                    fourHourData.candle5m.isBullish
+                      ? 'bg-teal-900/90 text-teal-200 border border-teal-700/60'
+                      : 'bg-rose-900/90 text-rose-200 border border-rose-700/60'
+                  }`}
+                  title={`Variación 5m: ${fourHourData.candle5m.changePct >= 0 ? '+' : ''}${fourHourData.candle5m.changePct.toFixed(2)}%`}
+                >
+                  5m: {fourHourData.candle5m.changePct >= 0 ? '+' : ''}
+                  {fourHourData.candle5m.changePct.toFixed(1)}%
+                </span>
+              )}
+              {fourHourData.candle15m && (
+                <span
+                  className={`ml-1 px-1 rounded text-[9px] font-black ${
+                    fourHourData.candle15m.isBullish
+                      ? 'bg-emerald-900/90 text-emerald-200 border border-emerald-700/60'
+                      : 'bg-rose-900/90 text-rose-200 border border-rose-700/60'
+                  }`}
+                  title={`Variación 15m: ${fourHourData.candle15m.changePct >= 0 ? '+' : ''}${fourHourData.candle15m.changePct.toFixed(2)}%`}
+                >
+                  15m: {fourHourData.candle15m.changePct >= 0 ? '+' : ''}
+                  {fourHourData.candle15m.changePct.toFixed(1)}%
+                </span>
+              )}
               {fourHourData.dailyCandle && (
                 <span
                   className={`ml-1 px-1 rounded text-[9px] font-black ${
                     fourHourData.dailyCandle.isBullish
-                      ? 'bg-emerald-900/90 text-emerald-200 border border-emerald-700/60'
+                      ? 'bg-indigo-900/90 text-indigo-200 border border-indigo-700/60'
                       : 'bg-rose-900/90 text-rose-200 border border-rose-700/60'
                   }`}
                   title={`Variación diaria (24h/Hoy): ${fourHourData.dailyCandle.changePct >= 0 ? '+' : ''}${fourHourData.dailyCandle.changePct.toFixed(2)}%`}
@@ -357,6 +502,40 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
         </div>
       </div>
 
+      {/* Visual notification banner when live price is within < 0.5% of an open order (SL, TP, Limit) */}
+      {ordersNearLivePrice.length > 0 && (
+        <div className="mb-2 p-2 rounded-lg bg-amber-950/50 border border-amber-500/80 text-amber-200 flex flex-col gap-1 shadow-md animate-pulse">
+          <div className="flex items-center justify-between text-[11px] font-bold">
+            <span className="flex items-center gap-1.5 text-amber-300">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>ALERTA DE PROXIMIDAD DE ÓRDENES (&lt; 0.5% del Precio LIVE)</span>
+            </span>
+            <span className="text-[9px] bg-amber-900/80 text-amber-200 px-1.5 py-0.5 rounded font-mono border border-amber-600/60">
+              LIVE: {fmtPrice(livePrice)}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[10px]">
+            {ordersNearLivePrice.map((ord, idx) => (
+              <span
+                key={`near-ord-${ord.order.orderId || idx}`}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border font-mono font-bold ${
+                  ord.isStopLoss
+                    ? 'bg-rose-950/90 text-rose-200 border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]'
+                    : ord.isTakeProfit
+                    ? 'bg-emerald-950/90 text-emerald-200 border-emerald-500 shadow-[0_0_8px_rgba(52,211,153,0.4)]'
+                    : 'bg-cyan-950/90 text-cyan-200 border-cyan-500 shadow-[0_0_8px_rgba(34,211,238,0.4)]'
+                }`}
+              >
+                <span>{ord.isStopLoss ? '⚠️' : ord.isTakeProfit ? '🎯' : '🔔'}</span>
+                <span>{ord.categoryLabel}:</span>
+                <strong className="text-white">{fmtPrice(ord.effectivePrice)}</strong>
+                <span className="opacity-90">({ord.diffPctStr}% dist.)</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* CONTINUOUS HORIZONTAL PRICE TRACK BAR (NIVELES PRINCIPALES) */}
       <div className="relative w-full pt-8 pb-9 px-2 my-1">
         {/* Track Line Background */}
@@ -384,24 +563,30 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
           </div>
         )}
 
-        {/* PRICE LEVEL NODES ALONG THE TRACK */}
+        {/* PRICE LEVEL NODES ALONG THE TRACK (SL, TP, ENTRADAS, ORDENES LIMIT) */}
         {rawLevels.map((lvl) => {
           const posPct = getTrackPos(lvl.price);
           const distPct = calcPct(lvl.price);
           const isSL = lvl.type === 'SL';
           const isTP = lvl.type === 'TP';
           const isActualEntry = lvl.type === 'ACTUAL_ENTRY';
+          const isLimitOrder = lvl.type === 'LIMIT_ORDER';
 
           let nodeColor = 'bg-amber-400 border-amber-300 text-amber-300';
           if (isSL) {
             nodeColor = lvl.isHit
-              ? 'bg-rose-500 border-rose-300 text-rose-200 animate-bounce'
-              : 'bg-rose-500 border-rose-400 text-rose-400';
+              ? 'bg-rose-500 border-rose-300 text-rose-200 animate-bounce shadow-[0_0_12px_rgba(244,63,94,0.9)]'
+              : 'bg-rose-500 border-rose-400 text-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
           } else if (isTP) {
-            nodeColor = 'bg-emerald-400 border-emerald-300 text-emerald-400';
+            nodeColor = 'bg-emerald-400 border-emerald-300 text-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]';
           } else if (isActualEntry) {
             nodeColor =
               'bg-sky-400 border-white text-sky-200 ring-2 ring-sky-400/80 shadow-[0_0_12px_rgba(56,189,248,0.9)]';
+          } else if (isLimitOrder) {
+            const isBuy = lvl.orderInfo?.order.side === 'BUY';
+            nodeColor = isBuy
+              ? 'bg-cyan-500 border-cyan-300 text-cyan-200 shadow-[0_0_8px_rgba(6,182,212,0.7)]'
+              : 'bg-purple-500 border-purple-300 text-purple-200 shadow-[0_0_8px_rgba(168,85,247,0.7)]';
           }
 
           return (
@@ -409,13 +594,18 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
               key={lvl.key}
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex flex-col items-center group cursor-pointer z-10"
               style={{ left: `${posPct}%` }}
-              title={`${lvl.label}: ${fmtPrice(lvl.price)} (${fmtPct(distPct)} vs Live)`}
+              title={`${lvl.label}: ${fmtPrice(lvl.price)} (${fmtPct(distPct)} vs Live)${
+                lvl.orderInfo ? ` [Orden ID: ${lvl.orderInfo.order.orderId || '-'}, Tipo: ${lvl.orderInfo.order.type}]` : ''
+              }`}
             >
               {/* TOP LABEL (Name & Price) */}
               <div className="absolute -top-7 flex flex-col items-center pointer-events-none whitespace-nowrap">
                 <span className="text-[9px] font-extrabold uppercase tracking-tighter flex items-center gap-0.5">
                   {lvl.isHit && <Skull className="w-2.5 h-2.5 text-rose-400" />}
                   {isActualEntry && <MapPin className="w-2.5 h-2.5 text-sky-400" />}
+                  {isLimitOrder && <SlidersHorizontal className="w-2.5 h-2.5 text-cyan-400" />}
+                  {isSL && !lvl.isHit && <Shield className="w-2.5 h-2.5 text-rose-400" />}
+                  {isTP && <BookmarkCheck className="w-2.5 h-2.5 text-emerald-400" />}
                   <span
                     className={
                       isSL
@@ -424,6 +614,10 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                         ? 'text-emerald-400'
                         : isActualEntry
                         ? 'text-sky-300 font-black'
+                        : isLimitOrder
+                        ? lvl.orderInfo?.order.side === 'BUY'
+                          ? 'text-cyan-300'
+                          : 'text-purple-300'
                         : 'text-amber-300'
                     }
                   >
@@ -432,7 +626,11 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                 </span>
                 <span
                   className={`text-[10px] font-bold leading-tight ${
-                    isActualEntry ? 'text-sky-100 font-black' : 'text-white'
+                    isActualEntry
+                      ? 'text-sky-100 font-black'
+                      : isLimitOrder
+                      ? 'text-cyan-100 font-bold'
+                      : 'text-white'
                   }`}
                 >
                   {fmtPrice(lvl.price)}
@@ -450,6 +648,8 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                   className={`text-[9px] font-bold px-1 py-0.2 rounded ${
                     isActualEntry
                       ? 'text-sky-300 bg-sky-950/90 border border-sky-700/80'
+                      : isLimitOrder
+                      ? 'text-cyan-300 bg-cyan-950/90 border border-cyan-700/80'
                       : (distPct || 0) >= 0
                       ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-800/50'
                       : 'text-rose-400 bg-rose-950/80 border border-rose-800/50'
@@ -499,14 +699,14 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
         </div>
       </div>
 
-      {/* LÍNEAS GRÁFICAS DE PRECIOS JUNTAS (1H/Actual, 2h, 3h, 4h y Diario en una SOLA pista gráfica) */}
-      {show4HourMovement && fourHourData && is4hExpanded && (fourHourData.candles.length > 0 || fourHourData.dailyCandle) && (
+      {/* LÍNEAS GRÁFICAS DE PRECIOS JUNTAS (5M, 15M, 1H/Actual, 2h, 3h, 4h y Diario en una SOLA pista gráfica) */}
+      {show4HourMovement && fourHourData && is4hExpanded && (fourHourData.candles.length > 0 || fourHourData.dailyCandle || fourHourData.candle5m || fourHourData.candle15m) && (
         <div className="mt-3 pt-2.5 border-t border-neutral-800/80">
-          {/* Header del desglose horario y diario */}
+          {/* Header del desglose horario, 5M, 15M y diario */}
           <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-2 px-1">
             <span className="flex items-center gap-1.5 font-bold text-neutral-300">
               <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-              <span>Líneas Gráficas de Precios Juntas (1H / Actual, 2h, 3h, 4h y Diario en una sola escala)</span>
+              <span>Líneas Gráficas de Precios Juntas (5M, 15M, 1H / Actual, 2h, 3h, 4h y Diario en una sola escala)</span>
             </span>
             <span className="text-[9px] text-neutral-400 flex items-center gap-2">
               <span className="flex items-center gap-1">
@@ -531,6 +731,32 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
               isLive: boolean;
               isDaily: boolean;
             }> = [];
+
+            // 0. 5M (Vela actual / reciente de 5 minutos)
+            if (fourHourData.candle5m) {
+              barsToRender.push({
+                key: 'bar-5m',
+                candle: fourHourData.candle5m,
+                badgeLabel: '5M',
+                badgeClass: 'bg-teal-950 text-teal-300 border border-teal-600/80 font-black',
+                subHour: fourHourData.candle5m.shortHour || '5m',
+                isLive: true,
+                isDaily: false,
+              });
+            }
+
+            // 0.1 15M (Vela actual / reciente de 15 minutos)
+            if (fourHourData.candle15m) {
+              barsToRender.push({
+                key: 'bar-15m',
+                candle: fourHourData.candle15m,
+                badgeLabel: '15M',
+                badgeClass: 'bg-emerald-950 text-emerald-300 border border-emerald-600/80 font-black',
+                subHour: fourHourData.candle15m.shortHour || '15m',
+                isLive: true,
+                isDaily: false,
+              });
+            }
 
             if (fourHourData.candles.length > 0) {
               // 1. 1h / Actual (la hora más reciente en curso)
@@ -604,7 +830,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
             return (
               <div className="rounded-xl bg-neutral-950/95 border border-neutral-800/90 p-3 shadow-inner">
                 {/* 1. ÚNICA PISTA GRÁFICA COMPARTIDA CON TODAS LAS LÍNEAS DE PRECIO JUNTAS Y ENLACES ENTRE HORAS */}
-                <div className="relative w-full h-40 bg-neutral-900/90 rounded-lg border border-neutral-800/90 overflow-hidden select-none">
+                <div className="relative w-full h-52 bg-neutral-900/90 rounded-lg border border-neutral-800/90 overflow-hidden select-none">
                   {/* Rejilla de fondo */}
                   <div className="absolute inset-0 bg-[linear-gradient(to_right,#26262615_1px,transparent_1px)] bg-[size:40px_100%] pointer-events-none" />
 
@@ -797,7 +1023,7 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
                 </div>
 
                 {/* 2. TABLA COMPACTA DE VALORES (EMPEZÓ ➔ TERMINÓ) ALINEADA DIRECTAMENTE ABAJO */}
-                <div className="mt-2 grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-[9px] font-mono">
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-1.5 text-[9px] font-mono">
                   {barsToRender.map((item) => {
                     const isBull = item.candle.isBullish;
                     return (
