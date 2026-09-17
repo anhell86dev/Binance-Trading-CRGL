@@ -654,8 +654,8 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                   <span># RANK &amp; PAR</span>
                 </div>
               </th>
-              <th className="py-3 px-3.5" title="Estrategia vinculada y Nivel de Confluencia técnica e institucional (10 Factores)">
-                Estrategia &amp; Confluencia (10F)
+              <th className="py-3 px-3.5" title="Nombre de la estrategia vinculada">
+                Nombre
               </th>
               <th className="py-3 px-3.5" title="Calidad integral del trade y Ratio Riesgo / Beneficio">
                 Calidad &amp; Ratio R:B
@@ -868,70 +868,56 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
 
                       {/* 2. Estrategia & Confluencia (10F) */}
                       <td className="py-3.5 px-3.5">
-                        <div className="flex flex-col gap-1.5 min-w-[140px]">
-                          {/* Fila superior: ID de Estrategia y botón Hitos */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {scored.strategyId ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLinkPos(pos);
-                                }}
-                                title={`Estrategia: ${scored.strategyId}${
-                                  scored.strategy ? ` (${scored.strategy.nombreEstrategia})` : ''
-                                } - Clic para cambiar`}
-                                className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-[10px] font-bold font-mono flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                                <span className="truncate max-w-[110px]">{scored.strategyId}</span>
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setLinkPos(pos);
-                                }}
-                                className="px-2 py-0.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border border-neutral-700 text-[10px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
-                              >
-                                <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
-                                <span>Ligar Estrategia</span>
-                              </button>
-                            )}
-
+                        <div className="flex items-center gap-1.5 min-w-[150px]">
+                          {scored.strategy ? (
                             <button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleExpand(pos.symbol);
+                                setLinkPos(pos);
                               }}
-                              title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL) y recomendaciones"
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer ${
-                                isExpanded
-                                  ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
-                                  : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
-                              }`}
+                              title={`Estrategia: ${scored.strategy.nombreEstrategia} (${scored.strategy.noEstrategia}) - Clic para cambiar`}
+                              className="px-2 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-neutral-200 hover:text-amber-300 border border-amber-500/20 text-left transition-colors cursor-pointer flex-1 truncate"
                             >
-                              <Layers className="w-2.5 h-2.5" />
-                              <span>Hitos</span>
-                              {isExpanded ? (
-                                <ChevronUp className="w-2.5 h-2.5" />
-                              ) : (
-                                <ChevronDown className="w-2.5 h-2.5" />
-                              )}
+                              <span className="font-semibold text-xs text-white block truncate max-w-[150px]">
+                                {scored.strategy.nombreEstrategia || scored.strategyId}
+                              </span>
                             </button>
-                          </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLinkPos(pos);
+                              }}
+                              className="px-2 py-1 rounded bg-neutral-800/80 hover:bg-neutral-700 text-neutral-400 hover:text-neutral-200 border border-neutral-700/60 text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              <LinkIcon className="w-2.5 h-2.5 text-neutral-400" />
+                              <span>{scored.strategyId || 'Sin vincular'}</span>
+                            </button>
+                          )}
 
-                          {/* Fila inferior: Indicador visual de Confluencia de Estrategia */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <StrategyConfluenceStatusBadge
-                              strategy={scored.strategy}
-                              confluence={scored.confluence}
-                              hasPosition={true}
-                              compact={true}
-                            />
-                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpand(pos.symbol);
+                            }}
+                            title="Desplegar seguimiento visual de hitos (E1, E2, E3, TP1, TP2, SL)"
+                            className={`px-1.5 py-1 rounded text-[10px] font-bold flex items-center gap-0.5 border transition-all cursor-pointer shrink-0 ${
+                              isExpanded
+                                ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold shadow-xs'
+                                : 'bg-neutral-800/90 hover:bg-neutral-700 text-amber-300 border-amber-500/30'
+                            }`}
+                          >
+                            <Layers className="w-2.5 h-2.5" />
+                            <span>Hitos</span>
+                            {isExpanded ? (
+                              <ChevronUp className="w-2.5 h-2.5" />
+                            ) : (
+                              <ChevronDown className="w-2.5 h-2.5" />
+                            )}
+                          </button>
                         </div>
                       </td>
 
