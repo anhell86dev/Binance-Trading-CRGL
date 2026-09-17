@@ -207,11 +207,11 @@ const StrategyRowPriceBar: React.FC<StrategyRowPriceBarProps> = ({
         <div
           className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-mono transition-all ${
             isGlow
-              ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-neutral-950 font-black shadow-[0_0_10px_rgba(250,204,21,0.8)] animate-pulse'
+              ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-neutral-950 font-black shadow-[0_0_8px_rgba(250,204,21,0.5)]'
               : 'bg-amber-400/20 border border-amber-400/50 text-amber-300 font-bold'
           }`}
         >
-          <Radio className={`w-2.5 h-2.5 ${isGlow ? 'text-neutral-950 animate-ping' : 'text-amber-400 animate-pulse'}`} />
+          <Radio className={`w-2.5 h-2.5 ${isGlow ? 'text-neutral-950' : 'text-amber-400'}`} />
           <span>LIVE: ${livePrice.toFixed(decimalPlaces)}</span>
           <span
             className={`text-[9px] font-bold flex items-center ${

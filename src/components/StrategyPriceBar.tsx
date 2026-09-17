@@ -464,7 +464,7 @@ export const StrategyPriceBar: React.FC<StrategyPriceBarProps> = ({
         >
           {/* Live Price Tag Above: PRECIO LIVE */}
           <div className="absolute -top-7 whitespace-nowrap bg-amber-400 text-neutral-950 font-black px-1.5 py-0.2 rounded text-[9px] font-mono shadow-md ring-1 ring-amber-300 flex items-center gap-1">
-            <Radio className="w-2 h-2 animate-ping text-neutral-950" />
+            <Radio className="w-2 h-2 text-neutral-950" />
             <span>LIVE ${currentPrice.toFixed(decimalPlaces)}</span>
           </div>
 

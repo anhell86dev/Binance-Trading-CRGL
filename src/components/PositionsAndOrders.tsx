@@ -40,6 +40,8 @@ import { auditOrderRisk } from '../utils/riskAuditor';
 import { RiskAuditModal } from './RiskAuditModal';
 import { LinkStrategyModal } from './LinkStrategyModal';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
+import { TrailingStopOrderCard } from './TrailingStopOrderCard';
+import { trailingStopService } from '../services/trailingStopService';
 
 interface PositionsAndOrdersProps {
   defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines';
@@ -53,7 +55,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
   onSelectPosition,
 }) => {
   const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines'>(defaultTab);
-  const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional'>('all');
+  const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional' | 'trailing'>('all');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
   const [history, setHistory] = useState<TradeHistoryItem[]>(binanceWs.getTradeHistory());
@@ -357,6 +359,17 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
 
       {/* Tab 2: Órdenes Abiertas */}
       {tab === 'orders' && (() => {
+        const trailingOrders = orders.filter(ord => {
+          const typeStr = String(ord.type || '').toUpperCase();
+          const clientOrderId = String(ord.clientOrderId || '').toUpperCase();
+          return (
+            typeStr.includes('TRAILING') ||
+            clientOrderId.includes('TS-') ||
+            clientOrderId.includes('TRAILING') ||
+            (Boolean(ord.callbackRate) && ord.callbackRate! > 0)
+          );
+        });
+
         const conditionalOrders = orders.filter(ord => {
           const typeStr = String(ord.type || '').toUpperCase();
           const clientOrderId = String(ord.clientOrderId || '').toUpperCase();
@@ -367,6 +380,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
             clientOrderId.includes('TP-') ||
             clientOrderId.includes('SL-') ||
             clientOrderId.includes('CLS-') ||
+            clientOrderId.includes('TS-') ||
             Boolean((ord as any).reduceOnly) ||
             Boolean(ord.isReduceOnly) ||
             (ord.stopPrice && ord.stopPrice > 0)
@@ -378,16 +392,18 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
           ? limitOrders
           : orderFilter === 'conditional'
           ? conditionalOrders
+          : orderFilter === 'trailing'
+          ? trailingOrders
           : orders;
 
         return (
           <div className="flex flex-col w-full min-h-[260px]">
             {/* Subfiltros de Órdenes */}
             <div className="flex flex-wrap items-center justify-between px-3 py-2 bg-neutral-950/90 border-b border-neutral-800 gap-2">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   onClick={() => setOrderFilter('all')}
-                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'all'
                       ? 'bg-amber-500 text-neutral-950 font-bold'
                       : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
@@ -399,8 +415,22 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
                   </span>
                 </button>
                 <button
+                  onClick={() => setOrderFilter('trailing')}
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                    orderFilter === 'trailing'
+                      ? 'bg-sky-500 text-neutral-950 font-bold'
+                      : 'bg-sky-950/40 text-sky-300 border border-sky-800/60 hover:bg-sky-900/60'
+                  }`}
+                >
+                  <Zap className="w-3 h-3 text-sky-400 fill-sky-400/20" />
+                  <span>Trailing Stop ATR</span>
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/30 font-mono">
+                    {trailingOrders.length}
+                  </span>
+                </button>
+                <button
                   onClick={() => setOrderFilter('conditional')}
-                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'conditional'
                       ? 'bg-amber-500 text-neutral-950 font-bold'
                       : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
@@ -414,7 +444,7 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
                 </button>
                 <button
                   onClick={() => setOrderFilter('limit')}
-                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 ${
+                  className={`px-3 py-1 text-xs rounded-lg font-semibold transition-colors flex items-center gap-1.5 cursor-pointer ${
                     orderFilter === 'limit'
                       ? 'bg-amber-500 text-neutral-950 font-bold'
                       : 'bg-neutral-800/80 text-neutral-400 hover:text-white'
@@ -429,6 +459,9 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
 
               {conditionalOrders.length > 0 && (
                 <div className="flex items-center gap-2 text-xs font-mono">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950/60 border border-sky-800/60 text-sky-400 font-bold text-[11px]">
+                    TS: {trailingOrders.length}
+                  </span>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/60 text-emerald-400 font-bold text-[11px]">
                     TPs: {conditionalOrders.filter(o => o.clientOrderId?.includes('TP-') || o.type?.includes('TAKE_PROFIT')).length}
                   </span>
@@ -439,33 +472,61 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
               )}
             </div>
 
+            {/* SECCIÓN ESPECIALIZADA: Trailing Stops Activos con Tarjetas Dinámicas */}
+            {trailingOrders.length > 0 && (orderFilter === 'all' || orderFilter === 'trailing' || orderFilter === 'conditional') && (
+              <div className="p-3 bg-neutral-950/60 border-b border-neutral-800 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-sky-400 uppercase tracking-wider font-mono">
+                    <Zap className="w-4 h-4 text-sky-400 fill-sky-400/20" />
+                    <span>Seguimiento Dinámico de Trailing Stop (Binance Futures)</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-neutral-400">
+                    Reajuste en tiempo real con velas 5m y ATR
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {trailingOrders.map(ord => (
+                    <TrailingStopOrderCard
+                      key={`ts-card-${ord.orderId}`}
+                      order={ord}
+                      onCancel={(id) => binanceWs.cancelOrder(id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="overflow-x-auto flex-1">
               {displayedOrders.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
                   <Layers className="w-10 h-10 text-neutral-600 mb-3" />
                   <p className="font-semibold text-neutral-200 text-sm">
-                    {orderFilter === 'conditional'
+                    {orderFilter === 'trailing'
+                      ? 'No hay órdenes de Trailing Stop ATR activas'
+                      : orderFilter === 'conditional'
                       ? 'No hay órdenes condicionales de protección (TP / SL)'
                       : orderFilter === 'limit'
                       ? 'No hay órdenes límite activas'
                       : 'No hay órdenes abiertas en Binance'}
                   </p>
                   <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
-                    {orderFilter === 'conditional'
+                    {orderFilter === 'trailing'
+                      ? 'Activa un Trailing Stop ATR desde la tabla de Posiciones Activas para proteger ganancias dinámicamente.'
+                      : orderFilter === 'conditional'
                       ? 'Configura un Take Profit o Stop Loss desde la tabla de Posiciones Activas para proteger tu capital con órdenes condicionales.'
                       : 'Crea órdenes desde el modal de Nueva Orden o despacha estrategias automáticas.'}
                   </p>
                   <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
                     <button
                       onClick={() => setTab('positions')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
-                      Ver Posiciones y Configurar TP/SL
+                      Ver Posiciones y Configurar Trailing Stop / TP / SL
                     </button>
                     {mode === 'simulation' && (
                       <button
                         onClick={() => binanceWs.loadSimulationDemoData()}
-                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition-colors"
+                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition-colors cursor-pointer"
                       >
                         Recargar Órdenes Demo
                       </button>
@@ -559,9 +620,17 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
                                   {ord.type === 'STOP' ? 'STOP LIMIT' : 'STOP LOSS (SL)'}
                                 </span>
                               ) : isTrailing ? (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/80 text-blue-400 font-bold text-[10px]">
-                                  TRAILING ({ord.callbackRate || 1}%)
-                                </span>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-sky-950/90 border border-sky-500/80 text-sky-300 font-bold text-[10px] shadow-xs">
+                                    <Zap className="w-2.5 h-2.5 text-sky-400 fill-sky-400/20" />
+                                    <span>TRAILING ({ord.callbackRate || 1.5}%)</span>
+                                  </span>
+                                  {ord.activationPrice && ord.activationPrice > 0 && (
+                                    <span className="text-[9px] font-mono text-sky-400/90">
+                                      Act: ${ord.activationPrice.toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
                               ) : ord.parentScaledId ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/80 text-purple-400 font-bold text-[10px]">
                                   ESCALONADA
@@ -620,7 +689,26 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
 
                           {/* Precio / Condición de Activación */}
                           <td className="py-3 px-3 font-mono">
-                            {isConditional ? (
+                            {isTrailing ? (() => {
+                              const rt = trailingStopService.getRuntimeState(ord.orderId);
+                              const dynStop = rt ? rt.dynamicStopPrice : (ord.stopPrice || orderPrice);
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1 text-sky-300 font-bold text-xs">
+                                    <span>Stop Dinámico:</span>
+                                    <span>${dynStop.toFixed(2)}</span>
+                                  </div>
+                                  <div className="text-[10px] text-neutral-400">
+                                    Pico: ${rt ? rt.extremePrice.toFixed(2) : '-'} ({ord.callbackRate || 1.5}%)
+                                  </div>
+                                  {ord.activationPrice && ord.activationPrice > 0 && (
+                                    <div className="text-[9px] text-amber-400">
+                                      Act: ${ord.activationPrice.toFixed(2)} {rt?.isActivated ? '✅' : '⏳'}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })() : isConditional ? (
                               <div className="flex flex-col">
                                 <span className="font-bold text-amber-300 text-xs">
                                   Stop: ${(ord.stopPrice || orderPrice).toFixed(2)}

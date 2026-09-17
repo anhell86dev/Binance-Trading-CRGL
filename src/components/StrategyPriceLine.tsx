@@ -721,13 +721,13 @@ export const StrategyPriceLine: React.FC<StrategyPriceLineProps> = ({
           <div
             className={`absolute -top-8 border px-2 py-0.5 rounded-md font-extrabold text-[10px] flex items-center gap-1 whitespace-nowrap ${
               isInDangerZone
-                ? 'bg-rose-950/95 text-rose-200 border-rose-400 shadow-[0_0_14px_rgba(244,63,94,0.8)] animate-bounce'
-                : 'bg-cyan-950/95 text-cyan-300 border-cyan-400/90 shadow-[0_0_12px_rgba(34,211,238,0.5)] animate-pulse'
+                ? 'bg-rose-950/95 text-rose-200 border-rose-400 shadow-[0_0_10px_rgba(244,63,94,0.6)]'
+                : 'bg-cyan-950/95 text-cyan-300 border-cyan-400/90 shadow-[0_0_8px_rgba(34,211,238,0.4)]'
             }`}
           >
             <span
               className={`w-1.5 h-1.5 rounded-full ${
-                isInDangerZone ? 'bg-rose-400 animate-ping' : 'bg-cyan-400 animate-ping'
+                isInDangerZone ? 'bg-rose-400' : 'bg-cyan-400'
               }`}
             />
             <span>LIVE: {fmtPrice(livePrice)}</span>

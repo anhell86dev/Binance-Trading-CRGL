@@ -1492,6 +1492,24 @@ class BinanceWsEngine {
   }
 
   /**
+   * Create or register any open order directly
+   */
+  public createOrder(order: OpenOrder): OpenOrder {
+    const existingIdx = this.openOrders.findIndex(
+      (o) => o.orderId === order.orderId || (order.clientOrderId && o.clientOrderId === order.clientOrderId)
+    );
+    if (existingIdx >= 0) {
+      this.openOrders[existingIdx] = { ...this.openOrders[existingIdx], ...order };
+    } else {
+      this.openOrders.unshift(order);
+    }
+    this.recalculateAccountStats();
+    this.persistState();
+    this.notify();
+    return order;
+  }
+
+  /**
    * Cancel single order
    */
   public async cancelOrder(orderId: string): Promise<boolean> {

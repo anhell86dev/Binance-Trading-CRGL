@@ -496,37 +496,59 @@ export const OrderForm: React.FC<OrderFormProps> = ({ isModal = false, onClose, 
 
         {/* Trailing Stop Inputs */}
         {orderType === 'TRAILING_STOP_MARKET' && (
-          <div className="flex flex-col gap-2.5 bg-neutral-950/60 p-3 rounded-lg border border-neutral-800">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-neutral-400">Tasa de Retorno (Callback Rate):</span>
-              <span className="text-amber-400 font-mono font-bold">{trailingCallback}%</span>
+          <div className="flex flex-col gap-2.5 bg-sky-950/20 p-3 rounded-lg border border-sky-800/50">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400 font-mono">
+                <Zap className="w-3.5 h-3.5 text-sky-400 fill-sky-400/20" />
+                <span>Trailing Stop ATR Dinámico</span>
+              </div>
+              <span className="text-[10px] font-mono text-sky-300 font-bold px-1.5 py-0.5 rounded bg-sky-950/80 border border-sky-700/60">
+                Callback: {trailingCallback}%
+              </span>
             </div>
-            <input
-              type="range"
-              min="0.2"
-              max="5.0"
-              step="0.1"
-              value={trailingCallback}
-              onChange={(e) => setTrailingCallback(parseFloat(e.target.value))}
-              className="w-full accent-amber-500 h-1.5 bg-neutral-800 rounded cursor-pointer"
-            />
-            <div className="flex justify-between text-[10px] text-neutral-500 font-mono">
-              <span>0.2%</span>
-              <span>1.0%</span>
-              <span>2.5%</span>
-              <span>5.0%</span>
+
+            <div className="text-[10px] text-neutral-400 bg-black/40 p-2 rounded border border-neutral-800/80 font-mono">
+              <span className="text-sky-300 font-semibold">Fórmula ATR:</span> Callback Rate (%) = (Mult × ATR / Precio) × 100
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-neutral-400 text-[11px]">Tasa de Retorno (Callback Rate):</span>
+                <span className="text-sky-400 font-mono font-bold">{trailingCallback}%</span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="5.0"
+                step="0.1"
+                value={trailingCallback}
+                onChange={(e) => setTrailingCallback(parseFloat(e.target.value))}
+                className="w-full accent-sky-500 h-1.5 bg-neutral-800 rounded cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-neutral-500 font-mono">
+                <span>0.2%</span>
+                <span>1.5% (Estándar ATR)</span>
+                <span>3.0%</span>
+                <span>5.0%</span>
+              </div>
             </div>
 
             <div>
-              <label className="text-[11px] text-neutral-400 block mb-1">Precio de Activación (Opcional)</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] text-neutral-300 block font-semibold">Precio de Activación (Opcional)</label>
+                <span className="text-[9px] text-neutral-500 font-mono">Condicional de disparo</span>
+              </div>
               <input
                 type="number"
                 step="any"
                 value={trailingActivation}
                 onChange={(e) => setTrailingActivation(e.target.value)}
-                className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded px-2.5 py-1.5 text-xs font-mono text-white focus:border-sky-500 focus:outline-none"
                 placeholder={`Vacío = Inmediato ($${formatCoinPrice(ticker.lastPrice)})`}
               />
+              <p className="text-[9px] text-neutral-400 mt-1">
+                El Trailing Stop empezará a rastrear el precio una vez alcanzado este umbral.
+              </p>
             </div>
           </div>
         )}

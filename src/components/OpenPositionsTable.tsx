@@ -49,6 +49,7 @@ import { rankAndSortPositions, PositionSortMode, ScoredPosition } from '../utils
 import { PositionQualityBadge } from './PositionQualityBadge';
 import { StrategyPriceLine } from './StrategyPriceLine';
 import { AdvancedConfluenceCell } from './AdvancedConfluenceCell';
+import { TrailingStopConfigModal } from './TrailingStopConfigModal';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -78,6 +79,7 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
   const [editingPos, setEditingPos] = useState<PositionRisk | null>(null);
   const [editTp, setEditTp] = useState<string>('');
   const [editSl, setEditSl] = useState<string>('');
+  const [trailingPos, setTrailingPos] = useState<PositionRisk | null>(null);
 
   // Fast filter & search state
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -1036,6 +1038,20 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                               <Edit2 className="w-2.5 h-2.5" />
                             </button>
 
+                            {/* Trailing Stop ATR Configuration Button */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setTrailingPos(pos);
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-sky-950/80 hover:bg-sky-900 text-sky-300 border border-sky-600/60 text-[9px] font-bold transition-all ml-1 cursor-pointer active:scale-95 shadow-xs flex items-center gap-1"
+                              title="Configurar Trailing Stop dinámico por Volatilidad ATR (Binance Futures)"
+                            >
+                              <Zap className="w-2.5 h-2.5 text-sky-400 fill-sky-400/30" />
+                              <span>TS-ATR</span>
+                            </button>
+
                             {/* Quick Breakeven button if in profit */}
                             {isProfit && pos.entryPrice > 0 && (
                               <button
@@ -1272,6 +1288,17 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
         onClose={() => setLinkPos(null)}
         position={linkPos}
       />
+
+      {/* Trailing Stop Config Modal */}
+      {trailingPos && (
+        <TrailingStopConfigModal
+          position={trailingPos}
+          onClose={() => setTrailingPos(null)}
+          onSuccess={() => {
+            setOpenOrders(binanceWs.getOpenOrders());
+          }}
+        />
+      )}
     </div>
   );
 };
