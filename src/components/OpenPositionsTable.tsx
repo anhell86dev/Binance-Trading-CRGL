@@ -48,6 +48,7 @@ import { notificationService } from '../services/notifications';
 import { rankAndSortPositions, PositionSortMode, ScoredPosition } from '../utils/positionRanker';
 import { PositionQualityBadge } from './PositionQualityBadge';
 import { StrategyPriceLine } from './StrategyPriceLine';
+import { AdvancedConfluenceCell } from './AdvancedConfluenceCell';
 
 interface OpenPositionsTableProps {
   onSelectPosition?: (pos: PositionRisk) => void;
@@ -650,7 +651,9 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
               <th className="py-3 px-3.5">Precio Entrada</th>
               <th className="py-3 px-3.5">Precio de Mercado</th>
               <th className="py-3 px-3.5">PnL</th>
-              <th className="py-3 px-3.5 text-center">Seguimiento &amp; Sparkline</th>
+              <th className="py-3 px-3.5 text-center" title="Confluencia Avanzada: RSI 14, ATR 14, EMA 50, EMA 200, Semáforo 4 Capas y Dimensionamiento Óptimo ATR (Análisis Permanente cada 15s)">
+                Confluencia Avanzada
+              </th>
               <th className="py-3 px-3.5 text-right">Estado del trade</th>
             </tr>
           </thead>
@@ -1051,71 +1054,15 @@ export const OpenPositionsTable: React.FC<OpenPositionsTableProps> = ({ onSelect
                         </div>
                       </td>
 
-                      {/* 9. Seguimiento Táctico & Sparkline integrado */}
+                      {/* 9. Confluencia Avanzada (RSI 14, ATR 14, EMA 50, EMA 200, Semáforo y Sizing ATR) */}
                       <td className="py-3 px-3 font-mono">
-                        {(() => {
-                          const tradeStatus = getTradeStatusAndPhase(pos, openOrders);
-                          const hist = tradePriceHistoryService.getHistory(pos.symbol, pos.entryPrice);
-                          return (
-                            <div className="flex flex-col items-center gap-1 min-w-[130px]">
-                              <TradePriceSparkline
-                                history={hist}
-                                entryPrice={pos.entryPrice}
-                                currentPrice={effectiveMarketPrice}
-                                isLong={isLong}
-                                symbol={pos.symbol}
-                                height={28}
-                                showLabels={false}
-                                className="w-full"
-                              />
-
-                              {/* Indicador de Hito Cruzado si ocurrió recientemente */}
-                              {latestMilestoneAlert && (
-                                <div
-                                  className={`w-full px-1.5 py-0.5 rounded text-[9px] font-mono font-bold border flex items-center justify-between shadow-2xs ${
-                                    latestMilestoneAlert.milestone === 'SL'
-                                      ? 'bg-rose-950/90 text-rose-300 border-rose-600 animate-pulse'
-                                      : latestMilestoneAlert.milestone.startsWith('TP')
-                                      ? 'bg-emerald-950/90 text-emerald-300 border-emerald-600'
-                                      : 'bg-amber-950/90 text-amber-300 border-amber-600'
-                                  }`}
-                                  title={`Hito alcanzado: ${latestMilestoneAlert.message}`}
-                                >
-                                  <span className="flex items-center gap-1">
-                                    <Volume2 className="w-2.5 h-2.5 text-amber-400" />
-                                    <span>{latestMilestoneAlert.milestone} Cruzado</span>
-                                  </span>
-                                  <span className="text-[8px] opacity-80 font-normal">
-                                    ${latestMilestoneAlert.triggerPrice.toFixed(2)}
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="flex items-center justify-between w-full text-[9px]">
-                                {tradeStatus.multiPathState === 'TP1_ROUTE_DCA_CANCELED' ? (
-                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-700/80 flex items-center gap-1">
-                                    <span>TP1 • X=E2 ❌</span>
-                                  </span>
-                                ) : tradeStatus.multiPathState === 'E2_ROUTE_ACTIVE' ? (
-                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-amber-950/90 text-amber-300 border border-amber-700/80 flex items-center gap-1">
-                                    <span>E1 ➔ E2 DCA</span>
-                                  </span>
-                                ) : tradeStatus.multiPathState === 'SL_ROUTE_HIT' ? (
-                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-rose-950/90 text-rose-300 border border-rose-700/80 flex items-center gap-1">
-                                    <span>🛑 SL Tocado</span>
-                                  </span>
-                                ) : (
-                                  <span className="px-1.5 py-0.2 rounded font-mono font-bold bg-sky-950/90 text-sky-300 border border-sky-700/80 flex items-center gap-1">
-                                    <span>E1 ⇄ [TP1 | E2]</span>
-                                  </span>
-                                )}
-                                <span className="text-neutral-400 font-mono text-[9px]">
-                                  {isExpanded ? '▲ Detalle' : '▼ Táctico'}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <AdvancedConfluenceCell
+                          symbol={pos.symbol}
+                          isLong={isLong}
+                          positionAmt={pos.positionAmt}
+                          entryPrice={pos.entryPrice}
+                          markPrice={effectiveMarketPrice}
+                        />
                       </td>
 
                       {/* 10. Estado del trade */}
