@@ -38,6 +38,7 @@ import {
   Building2,
   Flame,
   AlertTriangle,
+  BarChart2,
 } from 'lucide-react';
 import { binanceWs } from '../services/binanceWs';
 import { notificationService } from '../services/notifications';
@@ -305,6 +306,16 @@ export const AdminLTELayout: React.FC<AdminLTELayoutProps> = ({
           badgeColor: 'bg-amber-500 text-neutral-950 font-bold',
           category: 'Intradía',
           description: 'Confirmación múltiple: EMA 15m, MACD 5m, RSI 5m y Ruptura de Volumen',
+        },
+        {
+          id: 'backtesting' as NavTab,
+          label: 'Backtesting Cuantitativo (Klines Binance)',
+          shortLabel: 'Backtesting',
+          icon: BarChart2,
+          badge: 'OPTIMIZADOR',
+          badgeColor: 'bg-purple-600 text-white font-bold',
+          category: 'Simulación',
+          description: 'Simula estrategias con klines de Binance y ajusta ATR/EMAs con Grid Search',
         },
       ],
     },

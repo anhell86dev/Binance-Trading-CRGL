@@ -13,6 +13,7 @@ import { TopOperacionesView } from './TopOperacionesView';
 import { GestionTradesView } from './GestionTradesView';
 import { MarketsView } from './MarketsView';
 import { DayTradingView } from './DayTradingView';
+import { BacktestingView } from './BacktestingView';
 import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 import { PnlSimulatorModal } from './PnlSimulatorModal';
 import { ConsolidatedNotificationsModal } from './ConsolidatedNotificationsModal';
@@ -138,6 +139,13 @@ export default function TerminalLayout() {
             onNavigateToFutures={() => setActiveTab('futuros')}
             onNavigateToGestionTrades={() => setActiveTab('gestion-trades')}
           />
+        </div>
+      )}
+
+      {/* 8. Pestaña: Backtesting Cuantitativo (Simulación & Calibración ATR/EMAs sobre Klines) */}
+      {activeTab === 'backtesting' && (
+        <div className="w-full h-full p-2 sm:p-4 lg:p-6 overflow-y-auto">
+          <BacktestingView initialSymbol={binanceWs.getCurrentSymbol()} />
         </div>
       )}
 

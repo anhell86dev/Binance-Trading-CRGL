@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   TrendingUp,
   Filter,
+  BarChart2,
 } from 'lucide-react';
 import { CandidateTradeOperation } from './TopOperacionesView';
 import { GoogleSheetStrategyRow } from '../types/strategy';
@@ -33,6 +34,7 @@ interface StrategySummaryTableProps {
   onOpenDetails: (strategy: GoogleSheetStrategyRow) => void;
   onNavigateToGestionTrades?: (symbol?: string) => void;
   onNavigateToFutures?: (symbol?: string) => void;
+  onNavigateToBacktest?: (symbol?: string) => void;
 }
 
 type SortField =
@@ -64,6 +66,7 @@ export const StrategySummaryTable: React.FC<StrategySummaryTableProps> = ({
   onOpenDetails,
   onNavigateToGestionTrades,
   onNavigateToFutures,
+  onNavigateToBacktest,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('ALL');
@@ -887,6 +890,16 @@ export const StrategySummaryTable: React.FC<StrategySummaryTableProps> = ({
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
+
+                          {onNavigateToBacktest && (
+                            <button
+                              onClick={() => onNavigateToBacktest(op.strategy.par)}
+                              className="p-1.5 rounded-lg bg-neutral-950 hover:bg-neutral-800 text-purple-400 hover:text-purple-300 border border-neutral-800 hover:border-purple-500/40 transition-colors cursor-pointer"
+                              title={`Simular estrategia en Backtesting (${op.strategy.par})`}
+                            >
+                              <BarChart2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

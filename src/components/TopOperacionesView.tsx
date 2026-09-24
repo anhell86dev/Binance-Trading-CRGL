@@ -75,6 +75,7 @@ interface TopOperacionesViewProps {
   onOpenOrderModal?: () => void;
   onNavigateToFutures?: () => void;
   onNavigateToGestionTrades?: (symbol?: string) => void;
+  onNavigateToBacktest?: (symbol?: string) => void;
 }
 
 export interface CandidateTradeOperation {
@@ -122,6 +123,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
   onOpenOrderModal,
   onNavigateToFutures,
   onNavigateToGestionTrades,
+  onNavigateToBacktest,
 }) => {
   const [strategies, setStrategies] = useState<GoogleSheetStrategyRow[]>(() =>
     strategyService.getStrategies()
@@ -1297,6 +1299,7 @@ export const TopOperacionesView: React.FC<TopOperacionesViewProps> = ({
           onOpenDetails={(strat) => setSelectedStrategyForModal(strat)}
           onNavigateToGestionTrades={onNavigateToGestionTrades}
           onNavigateToFutures={onNavigateToFutures}
+          onNavigateToBacktest={onNavigateToBacktest}
         />
       ) : viewLayout === 'GRID' ? (
         /* VISTA TARJETAS BENTO TÁCTICAS CON FLASH NOTIFICACIÓN */

@@ -28,7 +28,7 @@ import { SecurityBadge } from './SecurityBadge';
 import { useTheme } from '../context/ThemeContext';
 import { MarketSessionClocks } from './MarketSessionClocks';
 
-export type NavTab = 'billetera' | 'mercados' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros' | 'day-trading';
+export type NavTab = 'billetera' | 'mercados' | 'estrategias' | 'top-operaciones' | 'gestion-trades' | 'futuros' | 'day-trading' | 'backtesting';
 
 interface NavbarProps {
   activeTab: NavTab;
@@ -247,6 +247,24 @@ export const Navbar: React.FC<NavbarProps> = ({
           <span>Day Trading</span>
           <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
             5m/15m
+          </span>
+        </button>
+
+        {/* Tab 7: Backtesting Cuantitativo (Simulador de Estrategias & Optimización ATR/EMAs) */}
+        <button
+          type="button"
+          id="nav-tab-backtesting"
+          onClick={() => onSelectTab('backtesting')}
+          className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+            activeTab === 'backtesting'
+              ? 'bg-neutral-800 text-purple-300 font-bold shadow-xs'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <BarChart2 className={`w-3.5 h-3.5 ${activeTab === 'backtesting' ? 'text-purple-400' : 'text-neutral-500'}`} />
+          <span>Backtesting</span>
+          <span className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 font-bold border border-purple-500/30">
+            ATR/EMAs
           </span>
         </button>
       </nav>
