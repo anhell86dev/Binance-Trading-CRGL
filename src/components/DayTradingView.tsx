@@ -230,7 +230,7 @@ export const DayTradingView: React.FC<DayTradingViewProps> = ({
   return (
     <div id="day-trading-view" className="w-full flex flex-col gap-5 text-neutral-100 font-sans max-w-7xl mx-auto">
       
-      {/* 1. Header Banner with Clocks & System Overview */}
+      {/* 1. Header Banner with System Overview */}
       <div className="bg-[#14181d] border border-[#262c36] rounded-2xl p-4 sm:p-5 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -250,9 +250,12 @@ export const DayTradingView: React.FC<DayTradingViewProps> = ({
           </p>
         </div>
 
-        {/* Live Market Clocks in Day Trading Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full lg:w-auto">
-          <MarketSessionClocks />
+        {/* Live Market Clocks compact badge in header */}
+        <div className="flex items-center gap-2 w-full lg:w-auto shrink-0">
+          <div className="flex items-center gap-2 bg-neutral-950/80 px-3 py-1.5 rounded-xl border border-neutral-800 text-xs font-mono text-neutral-300">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Monitoreo Global en Vivo</span>
+          </div>
         </div>
       </div>
 
@@ -414,11 +417,11 @@ export const DayTradingView: React.FC<DayTradingViewProps> = ({
         </div>
       </div>
 
-      {/* 3. Main Workspace: Asset Selector & Live Signal Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* 3. Main Workspace: Asset Selector, Vertically Stacked Market Clocks & Live Signal Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         
-        {/* Left Col (1 span): Watchlist & Indicator Controls */}
-        <div className="bg-[#14181d] border border-[#262c36] rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
+        {/* Col 1 (3-4 spans): Watchlist & Indicator Controls */}
+        <div className="lg:col-span-12 xl:col-span-3 bg-[#14181d] border border-[#262c36] rounded-2xl p-4 flex flex-col gap-4 shadow-xl">
           <div className="flex items-center justify-between border-b border-[#262c36] pb-2.5">
             <span className="text-xs font-bold text-neutral-200 uppercase font-mono flex items-center gap-1.5">
               <Sliders className="w-4 h-4 text-amber-400" />
@@ -502,8 +505,13 @@ export const DayTradingView: React.FC<DayTradingViewProps> = ({
           </div>
         </div>
 
-        {/* Right Col (2 spans): Active Confluence Analysis & Execution */}
-        <div className="lg:col-span-2 bg-[#14181d] border border-[#262c36] rounded-2xl p-5 flex flex-col gap-5 shadow-xl">
+        {/* Col 2 (4 spans): Relojes de las Bolsas en Tarjetas Individuales Apiladas Verticalmente */}
+        <div className="lg:col-span-6 xl:col-span-4 bg-[#14181d] border border-[#262c36] rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
+          <MarketSessionClocks layout="stacked-vertical" showTitle={true} />
+        </div>
+
+        {/* Col 3 (5 spans): Active Confluence Analysis & Execution */}
+        <div className="lg:col-span-6 xl:col-span-5 bg-[#14181d] border border-[#262c36] rounded-2xl p-5 flex flex-col gap-5 shadow-xl">
           
           {/* Top Panel: Confluence Meter & Decision */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-[#262c36] pb-4">
