@@ -19,6 +19,7 @@ import {
   Copy,
   Check,
   RefreshCw,
+  Search,
 } from 'lucide-react';
 import {
   BacktestCandle,
@@ -38,6 +39,7 @@ import { BacktestEquityChart } from './BacktestEquityChart';
 import { BacktestCandleChart } from './BacktestCandleChart';
 import { BacktestTradeLogTable } from './BacktestTradeLogTable';
 import { BacktestOptimizerModal } from './BacktestOptimizerModal';
+import { marketsService, MarketPair } from '../services/marketsService';
 import { BINANCE_POPULAR_PAIRS } from '../data/binancePairs';
 
 interface BacktestingViewProps {
@@ -60,6 +62,7 @@ export const BacktestingView: React.FC<BacktestingViewProps> = ({
   const [showAdvancedParams, setShowAdvancedParams] = useState(false);
   const [copiedReport, setCopiedReport] = useState(false);
   const [dataSourceNotice, setDataSourceNotice] = useState<string | null>(null);
+  const [symbolFilterSearch, setSymbolFilterSearch] = useState<string>('');
 
   // Load Klines and Run Simulation
   const executeSimulation = useCallback(
@@ -160,8 +163,47 @@ export const BacktestingView: React.FC<BacktestingViewProps> = ({
     setTimeout(() => setCopiedReport(false), 2000);
   };
 
-  const popularSymbols = useMemo(() => {
-    return BINANCE_POPULAR_PAIRS.slice(0, 10).map((p) => p.symbol);
+  // Grouped all available market pairs (Crypto + TradFi)
+  const groupedSymbols = useMemo(() => {
+    const all = marketsService.getAllPairs();
+    
+    // Categorize
+    const tradFiMetals = all.filter((p) => p.isTradFi && p.tradFiType === 'metals_commodities');
+    const tradFiForex = all.filter((p) => p.isTradFi && p.tradFiType === 'forex_fiat');
+    const tradFiRwa = all.filter((p) => p.isTradFi && (p.tradFiType === 'rwa_treasury' || p.tradFiType === 'synthetic_tradfi' || p.tradFiType === 'institutional_credit'));
+    
+    const cryptoMajors = all.filter((p) => !p.isTradFi && ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'AVAXUSDT', 'LTCUSDT', 'DOTUSDT'].includes(p.symbol));
+    const cryptoDeFi = all.filter((p) => !p.isTradFi && ['AAVEUSDT', 'LINKUSDT', 'UNIUSDT', 'INJUSDT', 'PENDLEUSDT', 'CRVUSDT', 'MKRUSDT', 'SNXUSDT', 'JUPUSDT', 'DYDXUSDT'].includes(p.symbol));
+    const cryptoL1L2 = all.filter((p) => !p.isTradFi && ['SUIUSDT', 'APTUSDT', 'SEIUSDT', 'TIAUSDT', 'ARBUSDT', 'OPUSDT', 'MATICUSDT', 'KASUSDT', 'FTMUSDT', 'ATOMUSDT', 'NEARUSDT'].includes(p.symbol));
+    const cryptoAI = all.filter((p) => !p.isTradFi && ['TAOUSDT', 'FETUSDT', 'RENDERUSDT', 'WLDUSDT', 'ARKMUSDT', 'IOUSDT'].includes(p.symbol));
+    const cryptoMemes = all.filter((p) => !p.isTradFi && ['1000PEPEUSDT', '1000PUMPUSDT', '1000SHIBUSDT', '1000BONKUSDT', '1000FLOKIUSDT', 'WIFUSDT', 'BOMEUSDT'].includes(p.symbol));
+
+    // Other remaining pairs
+    const categorizedSymbols = new Set([
+      ...tradFiMetals.map((p) => p.symbol),
+      ...tradFiForex.map((p) => p.symbol),
+      ...tradFiRwa.map((p) => p.symbol),
+      ...cryptoMajors.map((p) => p.symbol),
+      ...cryptoDeFi.map((p) => p.symbol),
+      ...cryptoL1L2.map((p) => p.symbol),
+      ...cryptoAI.map((p) => p.symbol),
+      ...cryptoMemes.map((p) => p.symbol),
+    ]);
+
+    const otherPairs = all.filter((p) => !categorizedSymbols.has(p.symbol));
+
+    return {
+      cryptoMajors,
+      tradFiMetals,
+      tradFiForex,
+      tradFiRwa,
+      cryptoDeFi,
+      cryptoL1L2,
+      cryptoAI,
+      cryptoMemes,
+      otherPairs,
+      all,
+    };
   }, []);
 
   return (
@@ -175,14 +217,14 @@ export const BacktestingView: React.FC<BacktestingViewProps> = ({
                 <BarChart3 className="w-3.5 h-3.5" /> MOTOR DE BACKTESTING LOCAL
               </span>
               <span className="badge bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono text-[11px] px-2 py-0.5 rounded-md font-bold">
-                BINANCE KLINES HISTÓRICOS
+                MERCADOS CRIPTO & TRADFI BINANCE
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2 m-0">
               <span>Simulación Cuantitativa & Calibración de ATR y EMAs</span>
             </h2>
             <p className="text-xs text-neutral-400 max-w-3xl mt-1 mb-0 leading-relaxed">
-              Descarga series históricas de velas directamente desde los servidores de Binance Futures y simula la estrategia bar-by-bar con ejecución sin sesgo de anticipación, apalancamiento seguro 1-5x Isolated, comisiones y slippage.
+              Descarga series históricas de velas directamente desde los servidores de Binance Futures (Cripto y Pares TradFi) y simula la estrategia bar-by-bar con ejecución sin sesgo de anticipación, apalancamiento seguro 1-5x Isolated, comisiones y slippage.
             </p>
           </div>
 
@@ -285,9 +327,12 @@ export const BacktestingView: React.FC<BacktestingViewProps> = ({
 
         {/* Primary Controls Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {/* Symbol */}
+          {/* Symbol Selector - All Markets & TradFi Pairs */}
           <div className="space-y-1">
-            <label className="text-[10px] font-mono uppercase text-neutral-400">Símbolo Binance</label>
+            <label className="text-[10px] font-mono uppercase text-neutral-400 flex items-center justify-between">
+              <span>Símbolo Mercado</span>
+              <span className="text-[9px] text-amber-400 font-bold">Cripto & TradFi</span>
+            </label>
             <select
               value={params.symbol}
               onChange={(e) => {
@@ -297,11 +342,79 @@ export const BacktestingView: React.FC<BacktestingViewProps> = ({
               }}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:border-amber-500 focus:outline-hidden"
             >
-              {popularSymbols.map((sym) => (
-                <option key={sym} value={sym}>
-                  {sym}
-                </option>
-              ))}
+              <optgroup label="🔥 Top Cripto Majors">
+                {groupedSymbols.cryptoMajors.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="🏛️ Pares TradFi: Metales & Commodities">
+                {groupedSymbols.tradFiMetals.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="💱 Pares TradFi: Forex & Divisas Fiduciarias">
+                {groupedSymbols.tradFiForex.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="🏦 Pares TradFi: RWA & Crédito Institucional">
+                {groupedSymbols.tradFiRwa.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="⚡ DeFi & Infraestructura">
+                {groupedSymbols.cryptoDeFi.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="⛓️ Layer 1 / Layer 2">
+                {groupedSymbols.cryptoL1L2.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="🤖 Cripto IA & Big Data">
+                {groupedSymbols.cryptoAI.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              <optgroup label="🚀 Memecoins & Alta Volatilidad">
+                {groupedSymbols.cryptoMemes.map((p) => (
+                  <option key={p.symbol} value={p.symbol}>
+                    {p.symbol} ({p.displayName})
+                  </option>
+                ))}
+              </optgroup>
+
+              {groupedSymbols.otherPairs.length > 0 && (
+                <optgroup label="🌐 Otros Pares Binance Futuros">
+                  {groupedSymbols.otherPairs.map((p) => (
+                    <option key={p.symbol} value={p.symbol}>
+                      {p.symbol} ({p.displayName})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 

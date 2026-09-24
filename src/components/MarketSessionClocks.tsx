@@ -48,6 +48,14 @@ export interface MarketSessionDetail {
   accentGradient: string;
   borderAccent: string;
   description: string;
+  // Dynamic time indicators & 1-hour critical alerts
+  isFirstHour: boolean;
+  isLastHour: boolean;
+  isCriticalHour: boolean;
+  criticalHourLabel: string;
+  elapsedStr: string;
+  timeUntilCloseStr: string;
+  timeUntilOpenStr: string;
 }
 
 interface MarketSessionClocksProps {
@@ -164,9 +172,17 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
 
     let status: 'OPEN' | 'PRE' | 'CLOSED' = 'CLOSED';
     let statusLabel = 'CERRADA';
-    let countdownLabel = 'Abre en';
+    let countdownLabel = 'Falta para abrir';
     let countdownStr = '';
     let progressPct = 0;
+
+    let isFirstHour = false;
+    let isLastHour = false;
+    let isCriticalHour = false;
+    let criticalHourLabel = '';
+    let elapsedStr = '';
+    let timeUntilCloseStr = '';
+    let timeUntilOpenStr = '';
 
     // Handle normal intra-day sessions (e.g. 09:30 to 16:00) vs overnight spanning
     const isOvernight = closeMins < openMins;
@@ -182,46 +198,67 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
       if (isOpenNow) {
         status = 'OPEN';
         statusLabel = 'ABIERTA';
-        countdownLabel = 'Cierra en';
+        countdownLabel = 'Falta para cerrar';
 
         let minsLeft = 0;
         let totalDuration = 0;
-        let elapsed = 0;
+        let elapsedMins = 0;
 
         if (!isOvernight) {
           minsLeft = closeMins - currentMins;
           totalDuration = closeMins - openMins;
-          elapsed = currentMins - openMins;
+          elapsedMins = currentMins - openMins;
         } else {
           totalDuration = 24 * 60 - openMins + closeMins;
           if (currentMins >= openMins) {
-            elapsed = currentMins - openMins;
+            elapsedMins = currentMins - openMins;
             minsLeft = 24 * 60 - currentMins + closeMins;
           } else {
-            elapsed = 24 * 60 - openMins + currentMins;
+            elapsedMins = 24 * 60 - openMins + currentMins;
             minsLeft = closeMins - currentMins;
           }
         }
 
-        const h = Math.floor(minsLeft / 60);
-        const m = minsLeft % 60;
-        const s = 59 - curS;
-        countdownStr = `${h}h ${m}m ${s < 10 ? '0' : ''}${s}s`;
-        progressPct = Math.min(100, Math.max(0, Math.round((elapsed / totalDuration) * 100)));
+        const hLeft = Math.floor(minsLeft / 60);
+        const mLeft = minsLeft % 60;
+        const sLeft = 59 - curS;
+        countdownStr = `${hLeft}h ${mLeft}m ${sLeft < 10 ? '0' : ''}${sLeft}s`;
+        timeUntilCloseStr = `${hLeft}h ${mLeft}m`;
+
+        const hElapsed = Math.floor(elapsedMins / 60);
+        const mElapsed = elapsedMins % 60;
+        elapsedStr = `${hElapsed}h ${mElapsed}m`;
+
+        progressPct = Math.min(100, Math.max(0, Math.round((elapsedMins / totalDuration) * 100)));
+
+        // CRITICAL 1-HOUR RULE:
+        // 1. First hour of opening (0 <= elapsedMins < 60) -> RED ALERT
+        if (elapsedMins < 60) {
+          isFirstHour = true;
+          isCriticalHour = true;
+          criticalHourLabel = '🚨 1ª HORA APERTURA (ALTA VOLATILIDAD)';
+        }
+        // 2. Last hour before closing (minsLeft <= 60 && minsLeft > 0) -> RED ALERT
+        else if (minsLeft <= 60 && minsLeft > 0) {
+          isLastHour = true;
+          isCriticalHour = true;
+          criticalHourLabel = '🚨 1H PARA EL CIERRE (BALANCING INSTITUCIONAL)';
+        }
       } else if (isPreNow) {
         status = 'PRE';
         statusLabel = 'PRE-MERCADO';
-        countdownLabel = 'Abre en';
+        countdownLabel = 'Falta para abrir';
         const minsLeft = openMins - currentMins;
         const h = Math.floor(minsLeft / 60);
         const m = minsLeft % 60;
         const s = 59 - curS;
         countdownStr = `${h}h ${m}m ${s < 10 ? '0' : ''}${s}s`;
+        timeUntilOpenStr = `${h}h ${m}m`;
         progressPct = 0;
       } else {
         status = 'CLOSED';
         statusLabel = 'CERRADA';
-        countdownLabel = 'Abre en';
+        countdownLabel = 'Falta para abrir';
 
         let minsUntilOpen = 0;
         if (currentMins < openMins) {
@@ -232,6 +269,7 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
         const h = Math.floor(minsUntilOpen / 60);
         const m = minsUntilOpen % 60;
         countdownStr = `${h}h ${m}m`;
+        timeUntilOpenStr = `${h}h ${m}m`;
         progressPct = 0;
       }
     } else {
@@ -239,6 +277,7 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
       statusLabel = 'FIN DE SEMANA';
       countdownLabel = 'Abre Lunes';
       countdownStr = `${openH < 10 ? '0' : ''}${openH}:${openM < 10 ? '0' : ''}${openM} ${timeZoneCode}`;
+      timeUntilOpenStr = `Lunes ${openH < 10 ? '0' : ''}${openH}:${openM < 10 ? '0' : ''}${openM}`;
       progressPct = 0;
     }
 
@@ -275,6 +314,13 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
       accentGradient,
       borderAccent,
       description,
+      isFirstHour,
+      isLastHour,
+      isCriticalHour,
+      criticalHourLabel,
+      elapsedStr,
+      timeUntilCloseStr,
+      timeUntilOpenStr,
     };
   };
 
@@ -383,6 +429,197 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
 
   const allSessions: MarketSessionDetail[] = [ny, london, tokyo, sydney];
 
+  // Helper function to render a single session card with full red 1-hour rules
+  const renderStackedCard = (session: MarketSessionDetail) => {
+    const isOpen = session.status === 'OPEN';
+    const isPre = session.status === 'PRE';
+    const isCritical = session.isCriticalHour;
+
+    return (
+      <div
+        key={session.id}
+        id={`session-card-${session.id}`}
+        onClick={() => {
+          setSelectedSessionModal(session.id);
+          setShowDetailsModal(true);
+        }}
+        className={`group relative p-3.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${
+          isCritical
+            ? 'bg-gradient-to-r from-rose-950/95 via-red-950/80 to-neutral-950 border-rose-500/90 shadow-[0_0_16px_rgba(244,63,94,0.35)] animate-pulse'
+            : isOpen
+            ? `bg-gradient-to-r ${session.accentGradient} border-emerald-500/70 hover:border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.15)]`
+            : isPre
+            ? 'bg-gradient-to-r from-amber-950/70 via-neutral-900 to-neutral-950 border-amber-500/60 hover:border-amber-400'
+            : 'bg-[#14181d] border-[#262c36] hover:border-neutral-700 hover:bg-[#181d24]'
+        }`}
+      >
+        {/* Critical 1-Hour Banner if active */}
+        {isCritical && (
+          <div className="mb-2 px-2.5 py-1 rounded-md bg-rose-500/25 border border-rose-500/60 flex items-center justify-between">
+            <span className="text-[10px] font-mono font-black text-rose-300 flex items-center gap-1.5">
+              <Flame className="w-3.5 h-3.5 text-rose-400 fill-rose-400" />
+              {session.criticalHourLabel}
+            </span>
+            <span className="text-[9px] font-mono text-rose-200 font-bold bg-rose-900/80 px-1.5 py-0.2 rounded">
+              {session.isFirstHour ? `Lleva: ${session.elapsedStr}` : `Cierra en: ${session.timeUntilCloseStr}`}
+            </span>
+          </div>
+        )}
+
+        {/* Top Row: Flag, Name, Exchange & Status Badge */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xl leading-none">{session.flag}</span>
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className={`font-black text-xs tracking-tight truncate ${isCritical ? 'text-rose-200' : 'text-white'}`}>
+                  {session.name}
+                </span>
+                <span className="text-[9px] font-mono text-neutral-400 truncate">
+                  ({session.exchange})
+                </span>
+              </div>
+              <span className="text-[9px] text-neutral-400 font-mono">
+                {session.currentDateStr}
+              </span>
+            </div>
+          </div>
+
+          {/* Status Indicator & Badge */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="relative flex h-2.5 w-2.5">
+              {isCritical ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-90" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+                </>
+              ) : isOpen ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
+                </>
+              ) : isPre ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-400" />
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-neutral-600" />
+              )}
+            </span>
+
+            <span
+              className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${
+                isCritical
+                  ? 'bg-rose-500/25 text-rose-300 border-rose-500/60 animate-pulse'
+                  : isOpen
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : isPre
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  : 'bg-neutral-800/80 text-neutral-400 border-neutral-700'
+              }`}
+            >
+              {isCritical ? (session.isFirstHour ? '1ª HORA ROJO' : 'ÚLTIMA 1H ROJO') : session.statusLabel}
+            </span>
+          </div>
+        </div>
+
+        {/* Middle Row: Digital Live Clock & Timers */}
+        <div className={`flex flex-col gap-2 p-2.5 rounded-lg border mb-2 ${
+          isCritical ? 'bg-rose-950/40 border-rose-900/60' : 'bg-neutral-950/70 border-neutral-800/80'
+        }`}>
+          <div className="flex items-baseline justify-between">
+            <div className="flex flex-col">
+              <span className="text-[9px] font-mono text-neutral-400 uppercase">
+                Hora Local ({session.timeZoneCode})
+              </span>
+              <div className="flex items-baseline gap-1">
+                <span className="text-base font-black font-mono text-white tracking-tight">
+                  {session.currentTimeStr}
+                </span>
+                <span className="text-[9px] font-mono font-bold text-neutral-400">
+                  {session.timeZoneCode}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-mono text-neutral-400 uppercase">
+                {session.countdownLabel}
+              </span>
+              <span
+                className={`text-xs font-bold font-mono ${
+                  isCritical
+                    ? 'text-rose-400'
+                    : isOpen
+                    ? 'text-emerald-400'
+                    : isPre
+                    ? 'text-amber-400'
+                    : 'text-neutral-300'
+                }`}
+              >
+                {session.countdownStr}
+              </span>
+            </div>
+          </div>
+
+          {/* Time Elapsed and Time Remaining Indicators (when open) */}
+          {isOpen && (
+            <div className="pt-2 border-t border-neutral-800/80 grid grid-cols-2 gap-2 text-[10px] font-mono">
+              <div className="flex items-center gap-1.5 text-neutral-300">
+                <Clock className={`w-3 h-3 ${isCritical && session.isFirstHour ? 'text-rose-400' : 'text-amber-400'}`} />
+                <span className="text-neutral-400">Lleva abierta:</span>
+                <span className={`font-bold ${isCritical && session.isFirstHour ? 'text-rose-300' : 'text-amber-300'}`}>
+                  {session.elapsedStr}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-1.5 text-neutral-300">
+                <span className="text-neutral-400">Falta cerrar:</span>
+                <span className={`font-bold ${isCritical && session.isLastHour ? 'text-rose-300' : 'text-emerald-400'}`}>
+                  {session.timeUntilCloseStr}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Session Progress Bar (when open) */}
+        {isOpen && (
+          <div className="flex flex-col gap-1 mb-2">
+            <div className="flex justify-between text-[9px] font-mono text-neutral-400">
+              <span>Progreso de Sesión</span>
+              <span className={`font-bold ${isCritical ? 'text-rose-400' : 'text-emerald-400'}`}>
+                {session.progressPct}%
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isCritical
+                    ? 'bg-gradient-to-r from-rose-500 to-red-400'
+                    : 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                }`}
+                style={{ width: `${session.progressPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Bottom Row: Official Trading Hours & Volatility Rating */}
+        <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-800/60">
+          <div className="flex items-center gap-1">
+            <span className="text-neutral-500">Horario:</span>
+            <span className="text-neutral-200 font-semibold">{session.openLocalStr} - {session.closeLocalStr}</span>
+          </div>
+          <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold border ${session.volatilityColor}`}>
+            Volatilidad {session.volatilityLevel}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   // =========================================================================
   // RENDER OPTION A: STACKED VERTICAL CARDS (Individual Cards Stacked Vertically)
   // Specific for Day Trading View tab
@@ -446,140 +683,9 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
           </p>
         </div>
 
-        {/* 2. TARJETAS INDIVIDUALES APILADAS VERTICALMENTE PARA CADA BOLSA */}
+        {/* 2. TARJETAS INDIVIDUALES APILADAS VERTICALMENTE (Separadas: NY, Londres, Asia/Tokio, Sydney) */}
         <div className="flex flex-col gap-2.5">
-          {allSessions.map((session) => {
-            const isOpen = session.status === 'OPEN';
-            const isPre = session.status === 'PRE';
-
-            return (
-              <div
-                key={session.id}
-                id={`session-card-${session.id}`}
-                onClick={() => {
-                  setSelectedSessionModal(session.id);
-                  setShowDetailsModal(true);
-                }}
-                className={`group relative p-3.5 rounded-xl border transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md ${
-                  isOpen
-                    ? `bg-gradient-to-r ${session.accentGradient} border-emerald-500/70 hover:border-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.15)]`
-                    : isPre
-                    ? 'bg-gradient-to-r from-amber-950/70 via-neutral-900 to-neutral-950 border-amber-500/60 hover:border-amber-400'
-                    : 'bg-[#14181d] border-[#262c36] hover:border-neutral-700 hover:bg-[#181d24]'
-                }`}
-              >
-                {/* Top Row: Flag, Name, Exchange & Status Badge */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-lg leading-none">{session.flag}</span>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-black text-xs text-white tracking-tight truncate">
-                          {session.name}
-                        </span>
-                        <span className="text-[9px] font-mono text-neutral-400 truncate">
-                          ({session.exchange})
-                        </span>
-                      </div>
-                      <span className="text-[9px] text-neutral-400 font-mono">
-                        {session.currentDateStr}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Status Indicator & Badge */}
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="relative flex h-2 w-2">
-                      {isOpen && (
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                      )}
-                      {isPre && (
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                      )}
-                      <span
-                        className={`relative inline-flex rounded-full h-2 w-2 ${
-                          isOpen ? 'bg-emerald-400' : isPre ? 'bg-amber-400' : 'bg-neutral-600'
-                        }`}
-                      />
-                    </span>
-
-                    <span
-                      className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-wider border ${
-                        isOpen
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : isPre
-                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                          : 'bg-neutral-800/80 text-neutral-400 border-neutral-700'
-                      }`}
-                    >
-                      {session.statusLabel}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Middle Row: Digital Live Clock & Countdown */}
-                <div className="flex items-baseline justify-between bg-neutral-950/70 p-2.5 rounded-lg border border-neutral-800/80 mb-2">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-mono text-neutral-400 uppercase">
-                      Hora Local ({session.timeZoneCode})
-                    </span>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-base font-black font-mono text-white tracking-tight">
-                        {session.currentTimeStr}
-                      </span>
-                      <span className="text-[9px] font-mono font-bold text-neutral-400">
-                        {session.timeZoneCode}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-mono text-neutral-400 uppercase">
-                      {session.countdownLabel}
-                    </span>
-                    <span
-                      className={`text-xs font-bold font-mono ${
-                        isOpen
-                          ? 'text-emerald-400'
-                          : isPre
-                          ? 'text-amber-400'
-                          : 'text-neutral-300'
-                      }`}
-                    >
-                      {session.countdownStr}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Session Progress Bar (when open) */}
-                {isOpen && (
-                  <div className="flex flex-col gap-1 mb-2">
-                    <div className="flex justify-between text-[9px] font-mono text-neutral-400">
-                      <span>Progreso de Sesión</span>
-                      <span className="text-emerald-400 font-bold">{session.progressPct}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all duration-500"
-                        style={{ width: `${session.progressPct}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Bottom Row: Official Trading Hours & Volatility Rating */}
-                <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 pt-1 border-t border-neutral-800/60">
-                  <div className="flex items-center gap-1">
-                    <span className="text-neutral-500">Horario:</span>
-                    <span className="text-neutral-200 font-semibold">{session.openLocalStr} - {session.closeLocalStr}</span>
-                  </div>
-                  <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold border ${session.volatilityColor}`}>
-                    Volatilidad {session.volatilityLevel}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          {allSessions.map((session) => renderStackedCard(session))}
         </div>
 
         {/* Global Modal for detailed session breakdown */}
@@ -589,8 +695,105 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
   }
 
   // =========================================================================
-  // RENDER OPTION B: INLINE COMPACT (For Navbar or Top Headers)
+  // RENDER OPTION B: INLINE COMPACT (For Navbar with Separate London & Asia Clocks)
   // =========================================================================
+  const renderInlineClock = (session: MarketSessionDetail, shortName: string) => {
+    const isOpen = session.status === 'OPEN';
+    const isPre = session.status === 'PRE';
+    const isCritical = session.isCriticalHour;
+
+    return (
+      <div
+        key={session.id}
+        onClick={() => {
+          setSelectedSessionModal(session.id);
+          setShowDetailsModal(true);
+        }}
+        className={`group flex items-center gap-2 px-2.5 py-1 rounded-lg border transition-all cursor-pointer shadow-xs ${
+          isCritical
+            ? 'bg-gradient-to-r from-rose-950/95 to-neutral-900/90 border-rose-500/90 hover:border-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.3)] animate-pulse'
+            : isOpen
+            ? 'bg-gradient-to-r from-emerald-950/90 to-neutral-900/90 border-emerald-500/80 hover:border-emerald-400 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+            : isPre
+            ? 'bg-gradient-to-r from-amber-950/80 to-neutral-900/90 border-amber-500/70 hover:border-amber-400'
+            : 'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
+        }`}
+        title={`${session.name} (${session.openLocalStr} - ${session.closeLocalStr}). ${
+          isCritical ? session.criticalHourLabel : isOpen ? `Lleva abierta: ${session.elapsedStr} | Falta cerrar: ${session.timeUntilCloseStr}` : `Falta abrir: ${session.timeUntilOpenStr}`
+        }`}
+      >
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="relative flex h-2 w-2">
+            {isCritical ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-90" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500" />
+              </>
+            ) : isOpen ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              </>
+            ) : isPre ? (
+              <>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+              </>
+            ) : (
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-neutral-500" />
+            )}
+          </span>
+          <div className="flex flex-col">
+            <span className="text-[9px] font-mono uppercase font-black tracking-wider text-neutral-400 group-hover:text-neutral-200 transition-colors flex items-center gap-1">
+              <span>{session.flag} {shortName}</span>
+              <span
+                className={`px-1 rounded text-[8px] font-bold ${
+                  isCritical
+                    ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60 animate-pulse'
+                    : isOpen
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : isPre
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-neutral-800 text-neutral-400'
+                }`}
+              >
+                {isCritical ? (session.isFirstHour ? '1ª HORA' : '1H CIERRE') : session.statusLabel}
+              </span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end leading-tight font-mono">
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-black text-white tracking-tight">
+              {session.currentTimeStr}
+            </span>
+            <span className="text-[8px] text-neutral-400 font-bold">{session.timeZoneCode}</span>
+          </div>
+          <span
+            className={`text-[8px] font-bold tracking-tight truncate max-w-[130px] ${
+              isCritical
+                ? 'text-rose-400 font-black'
+                : isOpen
+                ? 'text-emerald-400'
+                : isPre
+                ? 'text-amber-400'
+                : 'text-neutral-400'
+            }`}
+          >
+            {isOpen
+              ? session.isFirstHour
+                ? `🔴 Abierta hace ${session.elapsedStr}`
+                : session.isLastHour
+                ? `🔴 Cierra en ${session.timeUntilCloseStr}`
+                : `Abierta ${session.elapsedStr}`
+              : `Abre en ${session.timeUntilOpenStr}`}
+          </span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <div
@@ -598,153 +801,13 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
         className={`flex items-center gap-1.5 sm:gap-2 select-none ${className}`}
       >
         {/* RELOJ 1: NUEVA YORK */}
-        <div
-          onClick={() => {
-            setSelectedSessionModal('ny');
-            setShowDetailsModal(true);
-          }}
-          className={`group flex items-center gap-2 px-2.5 py-1 rounded-lg border transition-all cursor-pointer shadow-xs ${
-            ny.status === 'OPEN'
-              ? 'bg-gradient-to-r from-emerald-950/90 to-neutral-900/90 border-emerald-500/80 hover:border-emerald-400 hover:shadow-[0_0_12px_rgba(16,185,129,0.3)]'
-              : ny.status === 'PRE'
-              ? 'bg-gradient-to-r from-amber-950/80 to-neutral-900/90 border-amber-500/70 hover:border-amber-400'
-              : 'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
-          }`}
-          title="Sesión Nueva York (09:30 - 16:00 EDT). Clic para ver horarios mundiales."
-        >
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="relative flex h-2 w-2">
-              {ny.status === 'OPEN' && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              )}
-              {ny.status === 'PRE' && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  ny.status === 'OPEN'
-                    ? 'bg-emerald-400'
-                    : ny.status === 'PRE'
-                    ? 'bg-amber-400'
-                    : 'bg-neutral-500'
-                }`}
-              />
-            </span>
-            <div className="flex flex-col">
-              <span className="text-[9px] font-mono uppercase font-black tracking-wider text-neutral-400 group-hover:text-neutral-200 transition-colors flex items-center gap-1">
-                <span>🇺🇸 NY</span>
-                <span
-                  className={`px-1 rounded text-[8px] font-bold ${
-                    ny.status === 'OPEN'
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                      : ny.status === 'PRE'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'bg-neutral-800 text-neutral-400'
-                  }`}
-                >
-                  {ny.statusLabel}
-                </span>
-              </span>
-            </div>
-          </div>
+        {renderInlineClock(ny, 'NY')}
 
-          <div className="flex flex-col items-end leading-tight font-mono">
-            <div className="flex items-center gap-1">
-              <span className="text-xs font-black text-white tracking-tight">
-                {ny.currentTimeStr}
-              </span>
-              <span className="text-[8px] text-neutral-400 font-bold">EDT</span>
-            </div>
-            <span
-              className={`text-[8px] font-semibold tracking-tight ${
-                ny.status === 'OPEN'
-                  ? 'text-emerald-400'
-                  : ny.status === 'PRE'
-                  ? 'text-amber-400'
-                  : 'text-neutral-400'
-              }`}
-            >
-              {ny.countdownLabel}: {ny.countdownStr}
-            </span>
-          </div>
-        </div>
+        {/* RELOJ 2: LONDRES (SEPARADO) */}
+        {renderInlineClock(london, 'LON')}
 
-        {/* RELOJ 2: LONDRES & ASIA */}
-        <div
-          onClick={() => {
-            setSelectedSessionModal('london');
-            setShowDetailsModal(true);
-          }}
-          className={`group flex items-center gap-2 px-2.5 py-1 rounded-lg border transition-all cursor-pointer shadow-xs ${
-            isLondonNYOverlap
-              ? 'bg-gradient-to-r from-amber-950/90 via-orange-950/60 to-neutral-900 border-amber-500/90 hover:border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse'
-              : london.status === 'OPEN'
-              ? 'bg-gradient-to-r from-sky-950/90 to-neutral-900/90 border-sky-500/80 hover:border-sky-400'
-              : tokyo.status === 'OPEN'
-              ? 'bg-gradient-to-r from-indigo-950/90 to-neutral-900/90 border-indigo-500/80 hover:border-indigo-400'
-              : 'bg-neutral-900/90 border-neutral-800 hover:border-neutral-700'
-          }`}
-          title="Sesiones Londres & Asia. Clic para detalles."
-        >
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="relative flex h-2 w-2">
-              {(london.status === 'OPEN' || tokyo.status === 'OPEN') && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-              )}
-              <span
-                className={`relative inline-flex rounded-full h-2 w-2 ${
-                  isLondonNYOverlap
-                    ? 'bg-amber-400'
-                    : london.status === 'OPEN'
-                    ? 'bg-sky-400'
-                    : tokyo.status === 'OPEN'
-                    ? 'bg-indigo-400'
-                    : 'bg-neutral-500'
-                }`}
-              />
-            </span>
-            <div className="flex flex-col">
-              <span className="text-[9px] font-mono uppercase font-black tracking-wider text-neutral-400 group-hover:text-neutral-200 transition-colors flex items-center gap-1">
-                <span>🇬🇧 LON / 🇯🇵 ASIA</span>
-                {london.status === 'OPEN' && (
-                  <span className="px-1 rounded text-[8px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
-                    LON
-                  </span>
-                )}
-                {tokyo.status === 'OPEN' && (
-                  <span className="px-1 rounded text-[8px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                    ASIA
-                  </span>
-                )}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex flex-col items-end leading-tight font-mono">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-black text-white tracking-tight" title="Hora Londres">
-                {london.currentTimeStr} <span className="text-[8px] text-neutral-400">LON</span>
-              </span>
-              <span className="text-neutral-600">|</span>
-              <span className="hidden sm:inline text-xs font-bold text-neutral-300 tracking-tight" title="Hora Tokio">
-                {tokyo.currentTimeStr} <span className="text-[8px] text-neutral-400">TOK</span>
-              </span>
-            </div>
-            <span
-              className={`text-[8px] font-bold tracking-tight truncate max-w-[140px] sm:max-w-[170px] ${
-                isLondonNYOverlap
-                  ? 'text-amber-300'
-                  : london.status === 'OPEN'
-                  ? 'text-sky-300'
-                  : tokyo.status === 'OPEN'
-                  ? 'text-indigo-300'
-                  : 'text-neutral-400'
-              }`}
-            >
-              {isLondonNYOverlap ? '🔥 SOLAPAMIENTO NY+LON' : london.status === 'OPEN' ? 'LONDRES ABIERTO' : tokyo.status === 'OPEN' ? 'TOKIO ABIERTO' : `${london.countdownLabel} ${london.countdownStr}`}
-            </span>
-          </div>
-        </div>
+        {/* RELOJ 3: ASIA / TOKIO (SEPARADO) */}
+        {renderInlineClock(tokyo, 'ASIA')}
       </div>
 
       {showDetailsModal && renderModal()}
@@ -773,7 +836,7 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
                   <span>Sesiones Mundiales & Relojes de Apertura</span>
                 </h3>
                 <p className="text-xs text-neutral-400 font-medium">
-                  Horarios de mayor liquidez, volumen y volatilidad para Day Trading
+                  Horarios de mayor liquidez, volumen y regla crítica de alerta en rojo para la 1ª hora y última 1 hora
                 </p>
               </div>
             </div>
@@ -784,6 +847,17 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+
+          {/* Regla de Alerta en Rojo Explicativa */}
+          <div className="p-3.5 rounded-xl border bg-rose-950/40 border-rose-500/50 flex flex-col gap-1.5">
+            <div className="flex items-center gap-2 text-rose-300 font-bold text-xs">
+              <Flame className="w-4 h-4 text-rose-400 shrink-0" />
+              <span>Regla Institucional: Alerta en Rojo (1ª Hora de Apertura y Última Hora de Cierre)</span>
+            </div>
+            <p className="text-[11px] text-neutral-300 leading-relaxed">
+              Cuando una bolsa <strong>lleva abierta su primera hora</strong>, los relojes se iluminan en <strong className="text-rose-400">ROJO</strong> debido a la ejecución agresiva de órdenes institucionales y alta volatilidad. Del mismo modo, si <strong>falta menos de 1 hora para su cierre</strong>, se activa la alerta en <strong className="text-rose-400">ROJO</strong> por fijación de precios (Fixing) y liquidación de posiciones intradiarias.
+            </p>
           </div>
 
           {/* Solapamiento Highlight */}
@@ -814,7 +888,9 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
               <div
                 key={session.id}
                 className={`p-3.5 rounded-xl border flex flex-col gap-2 ${
-                  session.status === 'OPEN'
+                  session.isCriticalHour
+                    ? 'bg-rose-950/50 border-rose-500/80 shadow-[0_0_10px_rgba(244,63,94,0.25)]'
+                    : session.status === 'OPEN'
                     ? 'bg-emerald-950/40 border-emerald-500/60'
                     : session.status === 'PRE'
                     ? 'bg-amber-950/40 border-amber-500/60'
@@ -828,14 +904,16 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
                   </div>
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      session.status === 'OPEN'
+                      session.isCriticalHour
+                        ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60 animate-pulse'
+                        : session.status === 'OPEN'
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                         : session.status === 'PRE'
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                         : 'bg-neutral-800 text-neutral-400'
                     }`}
                   >
-                    {session.statusLabel}
+                    {session.isCriticalHour ? session.criticalHourLabel : session.statusLabel}
                   </span>
                 </div>
 
@@ -853,10 +931,24 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
                     <span className="text-neutral-400">Cierre Oficial:</span>
                     <span className="font-bold text-neutral-200 font-mono">{session.closeLocalStr} ({session.closeUtcStr})</span>
                   </div>
-                  <div className="flex justify-between text-emerald-400 font-semibold pt-1 border-t border-neutral-800/80">
-                    <span>Estado:</span>
-                    <span>{session.countdownLabel} {session.countdownStr}</span>
-                  </div>
+
+                  {session.status === 'OPEN' ? (
+                    <>
+                      <div className="flex justify-between text-amber-300 font-semibold pt-1 border-t border-neutral-800/80">
+                        <span>Lleva abierta:</span>
+                        <span className="font-mono font-bold">{session.elapsedStr}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-400 font-semibold">
+                        <span>Falta para cerrar:</span>
+                        <span className="font-mono font-bold">{session.timeUntilCloseStr}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-neutral-300 font-semibold pt-1 border-t border-neutral-800/80">
+                      <span>Falta para abrir:</span>
+                      <span className="font-mono font-bold text-amber-300">{session.timeUntilOpenStr}</span>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-[10px] text-neutral-400 leading-tight">
@@ -885,3 +977,4 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
     );
   }
 };
+
