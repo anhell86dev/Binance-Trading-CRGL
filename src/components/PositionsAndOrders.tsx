@@ -44,20 +44,24 @@ import { TradingDisciplinesModal } from './TradingDisciplinesModal';
 import { TrailingStopOrderCard } from './TrailingStopOrderCard';
 import { trailingStopService } from '../services/trailingStopService';
 import { HistoricalStatsDashboard } from './HistoricalStatsDashboard';
+import { ClosedOrdersHistoryTable } from './ClosedOrdersHistoryTable';
 
 interface PositionsAndOrdersProps {
   defaultTab?: 'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines' | 'historical_stats';
   onOpenOrderModal?: () => void;
   onSelectPosition?: (pos: PositionRisk) => void;
+  onSelectStrategy?: (strategyId: string) => void;
 }
 
 export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
   defaultTab = 'positions',
   onOpenOrderModal,
   onSelectPosition,
+  onSelectStrategy,
 }) => {
   const [tab, setTab] = useState<'positions' | 'orders' | 'history' | 'alerts' | 'strategy_journal' | 'disciplines' | 'historical_stats'>(defaultTab);
   const [orderFilter, setOrderFilter] = useState<'all' | 'limit' | 'conditional' | 'trailing'>('all');
+  const [historySubTab, setHistorySubTab] = useState<'sheets' | 'binance_ws'>('sheets');
   const [positions, setPositions] = useState<PositionRisk[]>(binanceWs.getPositions());
   const [orders, setOrders] = useState<OpenOrder[]>(binanceWs.getOpenOrders());
   const [history, setHistory] = useState<TradeHistoryItem[]>(binanceWs.getTradeHistory());
@@ -931,123 +935,164 @@ export const PositionsAndOrders: React.FC<PositionsAndOrdersProps> = ({
         </div>
       )}
 
-      {/* Tab 3: Historial de Trades */}
-      {tab === 'history' && (() => {
-        const winningTrades = history.filter(h => h.realizedPnl > 0).length;
-        const losingTrades = history.filter(h => h.realizedPnl < 0).length;
-        const totalRealizedPnl = history.reduce((acc, h) => acc + (h.realizedPnl || 0), 0);
-        const totalCommission = history.reduce((acc, h) => acc + (h.commission || 0), 0);
-        const winRate = history.length > 0 ? ((winningTrades / history.length) * 100).toFixed(1) : '0.0';
-
-        return (
-          <div className="overflow-x-auto min-h-[220px] flex flex-col">
-            {history.length > 0 && (
-              <div className="p-3 bg-neutral-950 border-b border-neutral-800 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-neutral-400 font-mono">Trades Ejecutados</span>
-                  <span className="text-sm font-bold text-white font-mono">{history.length}</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-neutral-400 font-mono">Win Rate</span>
-                  <span className="text-sm font-bold text-amber-300 font-mono">{winRate}% ({winningTrades}W / {losingTrades}L)</span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-neutral-400 font-mono">PnL Neto Realizado</span>
-                  <span className={`text-sm font-bold font-mono ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {totalRealizedPnl >= 0 ? '+' : ''}${totalRealizedPnl.toFixed(2)} USDT
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-neutral-400 font-mono">Comisiones Totales</span>
-                  <span className="text-sm font-bold text-neutral-300 font-mono">${totalCommission.toFixed(3)} USDT</span>
-                </div>
-              </div>
-            )}
-
-            <div className="p-3 bg-neutral-950/70 border-b border-neutral-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span className="text-xs text-neutral-300 font-mono">
-                  ¿Deseas ver el cálculo de <strong className="text-amber-300">Win Rate</strong>, <strong className="text-emerald-300">Profit Factor</strong> y <strong className="text-rose-300">Drawdown Acumulado</strong> desde Google Sheets?
-                </span>
-              </div>
+      {/* Tab 3: Historial de Órdenes Cerradas & Estrategias */}
+      {tab === 'history' && (
+        <div className="p-2 sm:p-4 flex flex-col gap-4">
+          
+          {/* Sub-tab Switcher: Google Sheets vs Raw WebSocket */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-neutral-950 p-2.5 rounded-xl border border-neutral-800">
+            <div className="flex items-center gap-1.5">
               <button
-                onClick={() => setTab('historical_stats')}
-                className="px-3 py-1 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setHistorySubTab('sheets')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  historySubTab === 'sheets'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                }`}
               >
-                <span>Abrir Panel Estadísticas Históricas</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Órdenes Cerradas de Estrategias (Google Sheets)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setHistorySubTab('binance_ws')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  historySubTab === 'binance_ws'
+                    ? 'bg-amber-500 text-neutral-950 shadow-md font-black'
+                    : 'bg-neutral-900 text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Ejecuciones en Vivo Binance WSS ({history.length})</span>
               </button>
             </div>
 
-            {history.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
-                <Clock className="w-10 h-10 text-neutral-600 mb-3" />
-                <p className="font-semibold text-neutral-200 text-sm">Aún no hay ejecuciones registradas</p>
-                <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
-                  Los trades y ejecuciones de tu cuenta de Binance se reflejan en tiempo real.
-                </p>
-                {mode === 'simulation' && (
-                  <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
-                    <button
-                      onClick={() => binanceWs.loadSimulationDemoData()}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors"
-                    >
-                      Cargar Trades Demo
-                    </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTab('historical_stats')}
+                className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-emerald-300 border border-emerald-800/80 text-xs font-mono font-bold flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <BarChart3 className="w-3 h-3 text-emerald-400" />
+                <span>Métricas & Drawdown</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Render Active Sub Tab */}
+          {historySubTab === 'sheets' ? (
+            <ClosedOrdersHistoryTable
+              showTitle={false}
+              onSelectStrategy={(stratId) => {
+                if (onSelectStrategy) {
+                  onSelectStrategy(stratId);
+                }
+              }}
+            />
+          ) : (() => {
+            const winningTrades = history.filter(h => h.realizedPnl > 0).length;
+            const losingTrades = history.filter(h => h.realizedPnl < 0).length;
+            const totalRealizedPnl = history.reduce((acc, h) => acc + (h.realizedPnl || 0), 0);
+            const totalCommission = history.reduce((acc, h) => acc + (h.commission || 0), 0);
+            const winRate = history.length > 0 ? ((winningTrades / history.length) * 100).toFixed(1) : '0.0';
+
+            return (
+              <div className="overflow-x-auto min-h-[220px] flex flex-col bg-neutral-950 rounded-xl border border-neutral-800">
+                {history.length > 0 && (
+                  <div className="p-3 bg-neutral-950 border-b border-neutral-800 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-neutral-400 font-mono">Trades Ejecutados WSS</span>
+                      <span className="text-sm font-bold text-white font-mono">{history.length}</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-neutral-400 font-mono">Win Rate</span>
+                      <span className="text-sm font-bold text-amber-300 font-mono">{winRate}% ({winningTrades}W / {losingTrades}L)</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-neutral-400 font-mono">PnL Neto Realizado</span>
+                      <span className={`text-sm font-bold font-mono ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {totalRealizedPnl >= 0 ? '+' : ''}${totalRealizedPnl.toFixed(2)} USDT
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-neutral-400 font-mono">Comisiones Totales</span>
+                      <span className="text-sm font-bold text-neutral-300 font-mono">${totalCommission.toFixed(3)} USDT</span>
+                    </div>
                   </div>
                 )}
-              </div>
-            ) : (
-              <table className="w-full text-left text-xs font-mono">
-                <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800">
-                  <tr>
-                    <th className="py-2.5 px-3">Hora</th>
-                    <th className="py-2.5 px-3">Símbolo</th>
-                    <th className="py-2.5 px-3">Lado</th>
-                    <th className="py-2.5 px-3">Precio Ejecución</th>
-                    <th className="py-2.5 px-3">Cantidad</th>
-                    <th className="py-2.5 px-3">Nocional</th>
-                    <th className="py-2.5 px-3">PnL Realizado</th>
-                    <th className="py-2.5 px-3">Comisión</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-800/60">
-                  {history.map(item => {
-                    const isProfit = item.realizedPnl > 0;
-                    return (
-                      <tr key={item.id} className="hover:bg-neutral-800/30 transition-colors">
-                        <td className="py-2.5 px-3 text-neutral-400">
-                          {new Date(item.time).toLocaleTimeString()}
-                        </td>
-                        <td className="py-2.5 px-3 font-bold text-white">{item.symbol}</td>
-                        <td className="py-2.5 px-3">
-                          <span className={item.side === 'BUY' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                            {item.side}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-neutral-200">${(item.price || 0).toFixed(2)}</td>
-                        <td className="py-2.5 px-3 text-neutral-300">{item.quantity}</td>
-                        <td className="py-2.5 px-3 text-neutral-400">${(item.notional || 0).toFixed(2)}</td>
-                        <td className="py-2.5 px-3 font-bold">
-                          {item.realizedPnl !== 0 ? (
-                            <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
-                              {isProfit ? '+' : ''}${(item.realizedPnl || 0).toFixed(2)}
-                            </span>
-                          ) : (
-                            <span className="text-neutral-500">-</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3 text-neutral-400">${(item.commission || 0).toFixed(3)}</td>
+
+                {history.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-neutral-400 text-xs">
+                    <Clock className="w-10 h-10 text-neutral-600 mb-3" />
+                    <p className="font-semibold text-neutral-200 text-sm">Aún no hay ejecuciones registradas en Binance WebSocket</p>
+                    <p className="text-[11px] text-neutral-500 mt-1 max-w-md">
+                      Las órdenes cerradas y ejecuciones de tu cuenta de Binance se reflejan en tiempo real aquí.
+                    </p>
+                    {mode === 'simulation' && (
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                        <button
+                          onClick={() => binanceWs.loadSimulationDemoData()}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Cargar Trades Demo
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="bg-neutral-950 text-neutral-400 border-b border-neutral-800">
+                      <tr>
+                        <th className="py-2.5 px-3">Hora</th>
+                        <th className="py-2.5 px-3">Símbolo</th>
+                        <th className="py-2.5 px-3">Lado</th>
+                        <th className="py-2.5 px-3">Precio Ejecución</th>
+                        <th className="py-2.5 px-3">Cantidad</th>
+                        <th className="py-2.5 px-3">Nocional</th>
+                        <th className="py-2.5 px-3">PnL Realizado</th>
+                        <th className="py-2.5 px-3">Comisión</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        );
-      })()}
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800/60">
+                      {history.map(item => {
+                        const isProfit = item.realizedPnl > 0;
+                        return (
+                          <tr key={item.id} className="hover:bg-neutral-800/30 transition-colors">
+                            <td className="py-2.5 px-3 text-neutral-400">
+                              {new Date(item.time).toLocaleTimeString()}
+                            </td>
+                            <td className="py-2.5 px-3 font-bold text-white">{item.symbol}</td>
+                            <td className="py-2.5 px-3">
+                              <span className={item.side === 'BUY' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
+                                {item.side}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-neutral-200">${(item.price || 0).toFixed(2)}</td>
+                            <td className="py-2.5 px-3 text-neutral-300">{item.quantity}</td>
+                            <td className="py-2.5 px-3 text-neutral-400">${(item.notional || 0).toFixed(2)}</td>
+                            <td className="py-2.5 px-3 font-bold">
+                              {item.realizedPnl !== 0 ? (
+                                <span className={isProfit ? 'text-emerald-400' : 'text-rose-400'}>
+                                  {isProfit ? '+' : ''}${(item.realizedPnl || 0).toFixed(2)}
+                                </span>
+                              ) : (
+                                <span className="text-neutral-500">-</span>
+                              )}
+                            </td>
+                            <td className="py-2.5 px-3 text-neutral-400">${(item.commission || 0).toFixed(3)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Tab 3.5: Panel de Estadísticas Históricas Google Sheets */}
       {tab === 'historical_stats' && (

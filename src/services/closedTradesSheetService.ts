@@ -463,6 +463,19 @@ class ClosedTradesSheetService {
   }
 
   /**
+   * Exports closed trades to Markdown Table format
+   */
+  public exportClosedTradesMarkdown(tradesToExport?: ClosedTradeSheetItem[]): string {
+    const list = tradesToExport || this.trades;
+    const header = '| ID | Salida | Estrategia | Par | Lado | Entrada | Salida | PnL ($) | ROE % | Motivo | Duración |';
+    const separator = '|:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|:---|';
+    const rows = list.map((t) =>
+      `| ${t.id} | ${t.exitDate} | ${t.strategyName || t.strategyId} | ${t.symbol} | ${t.side} | $${t.entryPrice.toFixed(4)} | $${t.exitPrice.toFixed(4)} | ${t.realizedPnl >= 0 ? '+' : ''}$${t.realizedPnl.toFixed(2)} | ${t.pnlPercent >= 0 ? '+' : ''}${t.pnlPercent.toFixed(2)}% | ${t.exitReason} | ${t.duration} |`
+    );
+    return [header, separator, ...rows].join('\n');
+  }
+
+  /**
    * Filters trades based on interactive filter criteria
    */
   public filterTrades(trades: ClosedTradeSheetItem[], filter: HistoricalStatsFilter): ClosedTradeSheetItem[] {
