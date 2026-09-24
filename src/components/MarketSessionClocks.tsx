@@ -424,10 +424,25 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
     'Inicia la semana financiera global los domingos por la tarde. Clave para gaps de fin de semana.'
   );
 
-  // Check Overlap (Londres + NY) -> 13:30 - 16:30 BST / 08:30 - 11:30 EDT
+  // 5. Guatemala Local Time (America/Guatemala, UTC-6 CST)
+  const guatemalaTimeStr = getTimeInZone('America/Guatemala');
+  const guatemalaDateStr = getDayInZone('America/Guatemala');
+
+  // Check Overlaps (Entrelazamiento / Solapamiento de Bolsas)
+  // A. Londres + Nueva York (13:30 - 16:30 BST / 08:30 - 11:30 EDT / 06:30 - 09:30 Guatemala CST) -> 70% Global Volume
   const isLondonNYOverlap = london.status === 'OPEN' && ny.status === 'OPEN';
 
+  // B. Tokio + Sydney (00:00 - 06:00 UTC / 18:00 - 00:00 Guatemala CST) -> Asia-Pacífico Liquidity
+  const isTokyoSydneyOverlap = tokyo.status === 'OPEN' && sydney.status === 'OPEN';
+
+  // C. Asia Handover to London (07:00 - 09:00 UTC / 01:00 - 03:00 Guatemala CST)
+  const isTokyoLondonHandover = tokyo.status === 'OPEN' && london.status === 'OPEN';
+
   const allSessions: MarketSessionDetail[] = [ny, london, tokyo, sydney];
+
+  // Current UTC Hour Float for 24h Overlap Timeline (0 - 24)
+  const currentUtcHourFloat = now.getUTCHours() + now.getUTCMinutes() / 60 + now.getUTCSeconds() / 3600;
+  const currentGuateHourFloat = (currentUtcHourFloat - 6 + 24) % 24;
 
   // Helper function to render a single session card with full red 1-hour rules
   const renderStackedCard = (session: MarketSessionDetail) => {
@@ -647,43 +662,203 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
           </div>
         )}
 
-        {/* 1. TARJETA INDIVIDUAL: SOLAPAMIENTO DE MÁXIMA LIQUIDEZ (LONDRES + NY) */}
-        <div
-          onClick={() => setShowDetailsModal(true)}
-          className={`p-3.5 rounded-xl border transition-all cursor-pointer shadow-md ${
-            isLondonNYOverlap
-              ? 'bg-gradient-to-r from-amber-950/80 via-orange-950/50 to-neutral-950 border-amber-500/80 shadow-[0_0_15px_rgba(245,158,11,0.25)] animate-pulse'
-              : 'bg-[#14181d] border-neutral-800 hover:border-neutral-700'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <Flame className={`w-4 h-4 ${isLondonNYOverlap ? 'text-amber-400 fill-amber-400' : 'text-neutral-500'}`} />
-              <span className="text-xs font-extrabold text-white font-mono tracking-tight">
-                Ventana de Máxima Liquidez
-              </span>
+        {/* 1. TARJETA MAESTRA: HORA ACTUAL DE GUATEMALA Y CRONOGRAMA LOCAL */}
+        <div className="p-3.5 rounded-xl border bg-gradient-to-r from-sky-950/70 via-neutral-900 to-neutral-950 border-sky-500/50 shadow-sm flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl leading-none">🇬🇹</span>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-extrabold text-xs text-white tracking-tight font-mono">
+                    HORA ACTUAL EN GUATEMALA (CST / UTC-6)
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40 font-mono">
+                    HORA LOCAL
+                  </span>
+                </div>
+                <span className="text-[10px] text-neutral-400 font-mono">
+                  {guatemalaDateStr} • Referencia Central para Cripto & Day Trading
+                </span>
+              </div>
             </div>
-            <span
-              className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border ${
-                isLondonNYOverlap
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
-                  : 'bg-neutral-800 text-neutral-400 border-neutral-700'
-              }`}
-            >
-              {isLondonNYOverlap ? '🔥 SOLAPAMIENTO ACTIVO (70% VOLUMEN)' : 'FUERA DE SOLAPAMIENTO'}
-            </span>
+
+            <div className="flex flex-col items-end font-mono">
+              <span className="text-lg font-black text-white tracking-tight flex items-center gap-1">
+                <Clock className="w-4 h-4 text-sky-400" />
+                {guatemalaTimeStr}
+              </span>
+              <span className="text-[9px] text-sky-300/80 font-bold">CST (UTC -6h)</span>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] font-mono text-neutral-300">
-            <span className="text-neutral-400">Londres (BST) + NY (EDT):</span>
-            <span className="font-bold text-amber-300">13:30 - 16:30 BST / 08:30 - 11:30 EDT</span>
+          {/* Horarios de Bolsas en Horario de Guatemala */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-2 border-t border-neutral-800/80 text-[10px] font-mono">
+            <div className="bg-neutral-950/80 p-2 rounded-lg border border-neutral-800/60 flex flex-col">
+              <span className="text-neutral-400 flex items-center gap-1">
+                <span>🇺🇸 NY (NYSE)</span>
+              </span>
+              <span className="font-bold text-emerald-400">07:30 - 14:00</span>
+              <span className="text-[8px] text-neutral-500">Hora Guatemala</span>
+            </div>
+
+            <div className="bg-neutral-950/80 p-2 rounded-lg border border-neutral-800/60 flex flex-col">
+              <span className="text-neutral-400 flex items-center gap-1">
+                <span>🇬🇧 Londres (LSE)</span>
+              </span>
+              <span className="font-bold text-sky-400">01:00 - 09:30</span>
+              <span className="text-[8px] text-neutral-500">Hora Guatemala</span>
+            </div>
+
+            <div className="bg-neutral-950/80 p-2 rounded-lg border border-neutral-800/60 flex flex-col">
+              <span className="text-neutral-400 flex items-center gap-1">
+                <span>🇯🇵 Tokio (TSE)</span>
+              </span>
+              <span className="font-bold text-indigo-400">18:00 - 03:00</span>
+              <span className="text-[8px] text-neutral-500">Hora Guatemala</span>
+            </div>
+
+            <div className="bg-neutral-950/80 p-2 rounded-lg border border-neutral-800/60 flex flex-col">
+              <span className="text-neutral-400 flex items-center gap-1">
+                <span>🇦🇺 Sydney (ASX)</span>
+              </span>
+              <span className="font-bold text-teal-400">18:00 - 00:00</span>
+              <span className="text-[8px] text-neutral-500">Hora Guatemala</span>
+            </div>
           </div>
-          <p className="text-[10px] text-neutral-400 mt-1 leading-snug">
-            Momento clave para rupturas en 5m/15m confirmadas con volumen institucional.
-          </p>
         </div>
 
-        {/* 2. TARJETAS INDIVIDUALES APILADAS VERTICALMENTE (Separadas: NY, Londres, Asia/Tokio, Sydney) */}
+        {/* 2. BARRA VISUAL 24H DE ENTRELAZAMIENTO / SOLAPAMIENTO DE BOLSAS (OVERLAP RADAR) */}
+        <div className="p-3.5 rounded-xl border bg-[#14181d] border-[#262c36] shadow-sm flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-amber-400" />
+              <span className="text-xs font-black text-white uppercase tracking-wider font-mono">
+                Mapa Visual 24h de Entrelazamiento y Solapamiento
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {isLondonNYOverlap && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 animate-pulse flex items-center gap-1">
+                  <Flame className="w-3 h-3 text-amber-400" />
+                  <span>SOLAPAMIENTO NY + LON ACTIVO (70% VOL)</span>
+                </span>
+              )}
+              {isTokyoSydneyOverlap && !isLondonNYOverlap && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-teal-500/20 text-teal-300 border border-teal-500/50 animate-pulse flex items-center gap-1">
+                  <Globe className="w-3 h-3 text-teal-400" />
+                  <span>SOLAPAMIENTO TOKIO + SYDNEY ACTIVO</span>
+                </span>
+              )}
+              {!isLondonNYOverlap && !isTokyoSydneyOverlap && (
+                <span className="text-[9px] font-mono text-neutral-400 bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+                  Flujo Simple Sin Entrelazamiento
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Timeline Visual Container */}
+          <div className="flex flex-col gap-1.5 bg-neutral-950/90 p-3 rounded-xl border border-neutral-800/80">
+            {/* Hour Markers (UTC & Guate CST) */}
+            <div className="flex justify-between text-[8px] font-mono text-neutral-500 px-1">
+              <span>00:00 UTC (18h GT)</span>
+              <span>06:00 UTC (00h GT)</span>
+              <span>12:00 UTC (06h GT)</span>
+              <span>18:00 UTC (12h GT)</span>
+              <span>24:00 UTC (18h GT)</span>
+            </div>
+
+            {/* 24h Visual Multi-Track Graph with Current Time Cursor */}
+            <div className="relative w-full h-24 bg-neutral-900/90 rounded-lg p-2 flex flex-col justify-between overflow-hidden border border-neutral-800">
+              {/* Overlap Highlights (Background shaded areas where overlaps occur) */}
+              {/* London + NY Overlap (13:30 - 16:30 UTC -> 56.25% to 68.75% of 24h) */}
+              <div
+                className="absolute top-0 bottom-0 bg-amber-500/15 border-x border-amber-500/40 pointer-events-none"
+                style={{ left: `${(13.5 / 24) * 100}%`, width: `${(3 / 24) * 100}%` }}
+                title="Zona de Solapamiento Londres + NY (13:30 a 16:30 UTC / 07:30 a 10:30 Guate)"
+              >
+                <span className="absolute top-0.5 left-1 text-[7px] font-mono font-bold text-amber-300 uppercase tracking-tighter opacity-80">
+                  🔥 Solapamiento NY+LON
+                </span>
+              </div>
+
+              {/* Tokyo + Sydney Overlap (00:00 - 06:00 UTC -> 0% to 25% of 24h) */}
+              <div
+                className="absolute top-0 bottom-0 bg-teal-500/10 border-r border-teal-500/30 pointer-events-none"
+                style={{ left: '0%', width: `${(6 / 24) * 100}%` }}
+                title="Zona de Solapamiento Asia + Pacífico (00:00 a 06:00 UTC / 18:00 a 00:00 Guate)"
+              >
+                <span className="absolute bottom-0.5 left-1 text-[7px] font-mono font-bold text-teal-300 uppercase tracking-tighter opacity-80">
+                  🌏 Solapamiento Asia-Pacífico
+                </span>
+              </div>
+
+              {/* Bar 1: Sydney (00:00 - 06:00 UTC) */}
+              <div className="relative w-full h-3.5 bg-neutral-800/60 rounded flex items-center">
+                <div
+                  className="absolute h-full rounded bg-gradient-to-r from-teal-600 to-teal-500 flex items-center px-1.5 text-[8px] font-mono text-white font-bold"
+                  style={{ left: '0%', width: `${(6 / 24) * 100}%` }}
+                >
+                  🇦🇺 SYD (00-06 UTC)
+                </div>
+              </div>
+
+              {/* Bar 2: Tokyo / Asia (00:00 - 09:00 UTC) */}
+              <div className="relative w-full h-3.5 bg-neutral-800/60 rounded flex items-center">
+                <div
+                  className="absolute h-full rounded bg-gradient-to-r from-indigo-600 to-indigo-500 flex items-center px-1.5 text-[8px] font-mono text-white font-bold"
+                  style={{ left: '0%', width: `${(9 / 24) * 100}%` }}
+                >
+                  🇯🇵 TOKIO (00-09 UTC)
+                </div>
+              </div>
+
+              {/* Bar 3: London / Europe (07:00 - 15:30 UTC) */}
+              <div className="relative w-full h-3.5 bg-neutral-800/60 rounded flex items-center">
+                <div
+                  className="absolute h-full rounded bg-gradient-to-r from-sky-600 via-amber-600 to-sky-500 flex items-center px-1.5 text-[8px] font-mono text-white font-bold"
+                  style={{ left: `${(7 / 24) * 100}%`, width: `${(8.5 / 24) * 100}%` }}
+                >
+                  🇬🇧 LON (07-15:30 UTC)
+                </div>
+              </div>
+
+              {/* Bar 4: New York (13:30 - 20:00 UTC) */}
+              <div className="relative w-full h-3.5 bg-neutral-800/60 rounded flex items-center">
+                <div
+                  className="absolute h-full rounded bg-gradient-to-r from-emerald-600 to-emerald-500 flex items-center px-1.5 text-[8px] font-mono text-white font-bold"
+                  style={{ left: `${(13.5 / 24) * 100}%`, width: `${(6.5 / 24) * 100}%` }}
+                >
+                  🇺🇸 NY (13:30-20 UTC)
+                </div>
+              </div>
+
+              {/* CURRENT TIME NEEDLE / CURSOR */}
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-rose-500 z-20 shadow-[0_0_8px_#f43f5e] pointer-events-none"
+                style={{ left: `${(currentUtcHourFloat / 24) * 100}%` }}
+              >
+                <div className="absolute -top-1 -left-2 px-1 py-0.2 bg-rose-600 text-[8px] font-mono font-bold text-white rounded shadow-sm whitespace-nowrap">
+                  📍 AHORA ({guatemalaTimeStr.slice(0, 5)} GT)
+                </div>
+              </div>
+            </div>
+
+            {/* Overlap Summary Footer */}
+            <div className="flex flex-wrap items-center justify-between text-[10px] font-mono text-neutral-400 pt-1">
+              <span className="flex items-center gap-1">
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-amber-300 font-bold">Ventana de Oro (NY + LON):</span>
+                <span>06:30 - 09:30 CST (Guate) / 13:30 - 16:30 BST</span>
+              </span>
+              <span className="text-neutral-500 text-[9px]">
+                Mayor profundidad de libro en Binance Futuros
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 3. TARJETAS INDIVIDUALES APILADAS VERTICALMENTE (Separadas: NY, Londres, Asia/Tokio, Sydney) */}
         <div className="flex flex-col gap-2.5">
           {allSessions.map((session) => renderStackedCard(session))}
         </div>
@@ -798,8 +973,39 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
     <>
       <div
         id="market-session-clocks-container"
-        className={`flex items-center gap-1.5 sm:gap-2 select-none ${className}`}
+        className={`flex items-center gap-1.5 sm:gap-2 select-none flex-wrap ${className}`}
       >
+        {/* RELOJ 0: GUATEMALA (HORA LOCAL CST UTC-6) */}
+        <div
+          onClick={() => setShowDetailsModal(true)}
+          className="group flex items-center gap-2 px-2.5 py-1 rounded-lg border bg-gradient-to-r from-sky-950/80 to-neutral-900/90 border-sky-500/60 hover:border-sky-400 hover:shadow-[0_0_12px_rgba(56,189,248,0.25)] transition-all cursor-pointer shadow-xs"
+          title={`Hora Actual de Guatemala: ${guatemalaTimeStr} CST (UTC -6h). Clic para ver cronograma y solapamientos.`}
+        >
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-sm">🇬🇹</span>
+            <div className="flex flex-col">
+              <span className="text-[9px] font-mono uppercase font-black tracking-wider text-sky-400 flex items-center gap-1">
+                <span>GUATE</span>
+                <span className="px-1 rounded text-[8px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                  CST
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end leading-tight font-mono">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-black text-white tracking-tight">
+                {guatemalaTimeStr}
+              </span>
+              <span className="text-[8px] text-sky-400 font-bold">UTC-6</span>
+            </div>
+            <span className="text-[8px] font-semibold text-sky-300 tracking-tight">
+              {guatemalaDateStr}
+            </span>
+          </div>
+        </div>
+
         {/* RELOJ 1: NUEVA YORK */}
         {renderInlineClock(ny, 'NY')}
 
@@ -808,6 +1014,31 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
 
         {/* RELOJ 3: ASIA / TOKIO (SEPARADO) */}
         {renderInlineClock(tokyo, 'ASIA')}
+
+        {/* INDICADOR ACTIVO DE SOLAPAMIENTO DE BOLSAS (SI ESTÁ ACTIVO) */}
+        {isLondonNYOverlap && (
+          <div
+            onClick={() => setShowDetailsModal(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border bg-amber-500/20 border-amber-500/60 text-amber-300 cursor-pointer animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.3)] text-[9px] font-mono font-black"
+            title="Solapamiento Londres + Nueva York activo: 70% del volumen mundial concentrado."
+          >
+            <Flame className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+            <span className="hidden sm:inline">SOLAPAMIENTO NY+LON</span>
+            <span className="sm:hidden">NY+LON</span>
+          </div>
+        )}
+
+        {isTokyoSydneyOverlap && !isLondonNYOverlap && (
+          <div
+            onClick={() => setShowDetailsModal(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg border bg-teal-500/20 border-teal-500/60 text-teal-300 cursor-pointer animate-pulse shadow-[0_0_10px_rgba(20,184,166,0.3)] text-[9px] font-mono font-black"
+            title="Solapamiento Asia-Pacífico activo (Tokio + Sydney)."
+          >
+            <Globe className="w-3.5 h-3.5 text-teal-400" />
+            <span className="hidden sm:inline">SOLAPAMIENTO ASIA+PACÍFICO</span>
+            <span className="sm:hidden">ASIA+SYD</span>
+          </div>
+        )}
       </div>
 
       {showDetailsModal && renderModal()}
@@ -833,10 +1064,10 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-extrabold text-white flex items-center gap-2">
-                  <span>Sesiones Mundiales & Relojes de Apertura</span>
+                  <span>Sesiones Mundiales, Solapamientos & Hora Guatemala</span>
                 </h3>
                 <p className="text-xs text-neutral-400 font-medium">
-                  Horarios de mayor liquidez, volumen y regla crítica de alerta en rojo para la 1ª hora y última 1 hora
+                  Horarios de mayor liquidez, entrelazamiento de bolsas y hora local de referencia
                 </p>
               </div>
             </div>
@@ -847,6 +1078,21 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+
+          {/* Hora de Guatemala Banner */}
+          <div className="p-3 rounded-xl border bg-gradient-to-r from-sky-950/70 via-neutral-900 to-neutral-950 border-sky-500/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">🇬🇹</span>
+              <div>
+                <span className="text-xs font-bold text-sky-300 font-mono">Hora Actual de Guatemala (CST / UTC-6)</span>
+                <p className="text-[11px] text-neutral-300">{guatemalaDateStr}</p>
+              </div>
+            </div>
+            <div className="font-mono text-right">
+              <span className="text-base font-black text-white">{guatemalaTimeStr}</span>
+              <span className="block text-[9px] text-sky-400">Hora Estándar Central</span>
+            </div>
           </div>
 
           {/* Regla de Alerta en Rojo Explicativa */}
@@ -865,7 +1111,7 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
                 <Flame className="w-4 h-4 text-amber-400 shrink-0" />
-                <span>Solapamiento Clave: Londres + Nueva York</span>
+                <span>Solapamiento Clave: Londres + Nueva York (Ventana de Oro)</span>
               </div>
               <span
                 className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold border ${
@@ -878,84 +1124,90 @@ export const MarketSessionClocks: React.FC<MarketSessionClocksProps> = ({
               </span>
             </div>
             <p className="text-[11px] text-neutral-300 leading-relaxed">
-              Entre las <strong>13:30 y 16:30 BST</strong> (08:30 y 11:30 EDT) coinciden los mercados de Londres y Nueva York, concentrando el <strong>70% del volumen intradiario mundial</strong>. Momento ideal para confirmar rupturas de volumen y confluencias en 5m/15m.
+              Entre las <strong>13:30 y 16:30 BST</strong> (08:30 y 11:30 EDT / <strong>06:30 y 09:30 Hora Guatemala</strong>) coinciden los mercados de Londres y Nueva York, concentrando el <strong>70% del volumen intradiario mundial</strong>. Momento ideal para confirmar rupturas de volumen y confluencias en 5m/15m.
             </p>
           </div>
 
           {/* Sessions Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {allSessions.map((session) => (
-              <div
-                key={session.id}
-                className={`p-3.5 rounded-xl border flex flex-col gap-2 ${
-                  session.isCriticalHour
-                    ? 'bg-rose-950/50 border-rose-500/80 shadow-[0_0_10px_rgba(244,63,94,0.25)]'
-                    : session.status === 'OPEN'
-                    ? 'bg-emerald-950/40 border-emerald-500/60'
-                    : session.status === 'PRE'
-                    ? 'bg-amber-950/40 border-amber-500/60'
-                    : 'bg-neutral-900/60 border-neutral-800'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-base">{session.flag}</span>
-                    <span className="font-bold text-white text-sm">{session.name}</span>
-                  </div>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      session.isCriticalHour
-                        ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60 animate-pulse'
-                        : session.status === 'OPEN'
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                        : session.status === 'PRE'
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                        : 'bg-neutral-800 text-neutral-400'
-                    }`}
-                  >
-                    {session.isCriticalHour ? session.criticalHourLabel : session.statusLabel}
-                  </span>
-                </div>
+            {allSessions.map((session) => {
+              // Calculate Guatemala local open/close string for this session
+              const guateOpenStr = session.id === 'ny' ? '07:30 CST' : session.id === 'london' ? '01:00 CST' : session.id === 'tokyo' ? '18:00 CST' : '18:00 CST';
+              const guateCloseStr = session.id === 'ny' ? '14:00 CST' : session.id === 'london' ? '09:30 CST' : session.id === 'tokyo' ? '03:00 CST' : '00:00 CST';
 
-                <div className="flex items-baseline justify-between font-mono">
-                  <span className="text-xs text-neutral-400">Hora Local ({session.timeZoneCode}):</span>
-                  <span className="text-sm font-black text-white">{session.currentTimeStr}</span>
-                </div>
-
-                <div className="text-[11px] text-neutral-300 bg-neutral-950/70 p-2 rounded-lg border border-neutral-800 flex flex-col gap-1">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-400">Apertura Oficial:</span>
-                    <span className="font-bold text-amber-300 font-mono">{session.openLocalStr} ({session.openUtcStr})</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-400">Cierre Oficial:</span>
-                    <span className="font-bold text-neutral-200 font-mono">{session.closeLocalStr} ({session.closeUtcStr})</span>
-                  </div>
-
-                  {session.status === 'OPEN' ? (
-                    <>
-                      <div className="flex justify-between text-amber-300 font-semibold pt-1 border-t border-neutral-800/80">
-                        <span>Lleva abierta:</span>
-                        <span className="font-mono font-bold">{session.elapsedStr}</span>
-                      </div>
-                      <div className="flex justify-between text-emerald-400 font-semibold">
-                        <span>Falta para cerrar:</span>
-                        <span className="font-mono font-bold">{session.timeUntilCloseStr}</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex justify-between text-neutral-300 font-semibold pt-1 border-t border-neutral-800/80">
-                      <span>Falta para abrir:</span>
-                      <span className="font-mono font-bold text-amber-300">{session.timeUntilOpenStr}</span>
+              return (
+                <div
+                  key={session.id}
+                  className={`p-3.5 rounded-xl border flex flex-col gap-2 ${
+                    session.isCriticalHour
+                      ? 'bg-rose-950/50 border-rose-500/80 shadow-[0_0_10px_rgba(244,63,94,0.25)]'
+                      : session.status === 'OPEN'
+                      ? 'bg-emerald-950/40 border-emerald-500/60'
+                      : session.status === 'PRE'
+                      ? 'bg-amber-950/40 border-amber-500/60'
+                      : 'bg-neutral-900/60 border-neutral-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">{session.flag}</span>
+                      <span className="font-bold text-white text-sm">{session.name}</span>
                     </div>
-                  )}
-                </div>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        session.isCriticalHour
+                          ? 'bg-rose-500/30 text-rose-300 border border-rose-500/60 animate-pulse'
+                          : session.status === 'OPEN'
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                          : session.status === 'PRE'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-neutral-800 text-neutral-400'
+                      }`}
+                    >
+                      {session.isCriticalHour ? session.criticalHourLabel : session.statusLabel}
+                    </span>
+                  </div>
 
-                <p className="text-[10px] text-neutral-400 leading-tight">
-                  {session.description}
-                </p>
-              </div>
-            ))}
+                  <div className="flex items-baseline justify-between font-mono">
+                    <span className="text-xs text-neutral-400">Hora Local ({session.timeZoneCode}):</span>
+                    <span className="text-sm font-black text-white">{session.currentTimeStr}</span>
+                  </div>
+
+                  <div className="text-[11px] text-neutral-300 bg-neutral-950/70 p-2 rounded-lg border border-neutral-800 flex flex-col gap-1">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Horario Oficial:</span>
+                      <span className="font-bold text-amber-300 font-mono">{session.openLocalStr} - {session.closeLocalStr}</span>
+                    </div>
+                    <div className="flex justify-between text-sky-400">
+                      <span className="text-neutral-400">Horario en Guatemala:</span>
+                      <span className="font-bold font-mono">{guateOpenStr} - {guateCloseStr}</span>
+                    </div>
+
+                    {session.status === 'OPEN' ? (
+                      <>
+                        <div className="flex justify-between text-amber-300 font-semibold pt-1 border-t border-neutral-800/80">
+                          <span>Lleva abierta:</span>
+                          <span className="font-mono font-bold">{session.elapsedStr}</span>
+                        </div>
+                        <div className="flex justify-between text-emerald-400 font-semibold">
+                          <span>Falta para cerrar:</span>
+                          <span className="font-mono font-bold">{session.timeUntilCloseStr}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex justify-between text-neutral-300 font-semibold pt-1 border-t border-neutral-800/80">
+                        <span>Falta para abrir:</span>
+                        <span className="font-mono font-bold text-amber-300">{session.timeUntilOpenStr}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[10px] text-neutral-400 leading-tight">
+                    {session.description}
+                  </p>
+                </div>
+              );
+            })}
           </div>
 
           {/* Modal Footer */}
